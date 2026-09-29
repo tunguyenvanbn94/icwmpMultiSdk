@@ -115,7 +115,7 @@ static char *sect_opt(struct uci_section *s, char *option)
 
 static char *entry_opt(void *data, char *option)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 
 	return e ? sect_opt(e->s, option) : "";
 }
@@ -205,7 +205,7 @@ static int wan_ubus_set(int index, const char *action, const char *param, const 
 }
 
 /* every "modify" of the shell: ubus first, reload only when it succeeded */
-static int wan_modify(const struct wan_entry *e, const char *param, const char *value)
+static int wan_modify(struct wan_entry *e, const char *param, const char *value)
 {
 	if (wan_ubus_set(e->idx, "modify", param, value) != 0)
 		return FAULT_9002;
@@ -290,7 +290,7 @@ static int get_conn_enable(char *refparam, struct dmctx *ctx, void *data, char *
 
 static int set_conn_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	int b = mtk_parse_bool(value);
 
 	if (!e)
@@ -306,7 +306,7 @@ static int set_conn_enable(char *refparam, struct dmctx *ctx, void *data, char *
  * only looked at the "active" flag, there is no L3 to ask */
 static int get_conn_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	char *v4, *v6 = NULL;
 	json_object *res, *a;
 
@@ -335,7 +335,7 @@ static int get_possible_types(char *refparam, struct dmctx *ctx, void *data, cha
 
 static int get_conn_type(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 
 	*value = (e && e->bridge) ? "IP_Bridged" : "IP_Routed";
 	return 0;
@@ -345,7 +345,7 @@ static int get_conn_type(char *refparam, struct dmctx *ctx, void *data, char *in
  * instance number because that number comes from "id", not from the mode */
 static int set_conn_type(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 
 	if (!e)
 		return FAULT_9002;
@@ -366,7 +366,7 @@ static int get_conn_name(char *refparam, struct dmctx *ctx, void *data, char *in
  * same, there is no hni.wan action for the display name */
 static int set_conn_name(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 
 	if (!e)
 		return FAULT_9002;
@@ -379,7 +379,7 @@ static int set_conn_name(char *refparam, struct dmctx *ctx, void *data, char *in
 /* service_type -> the operator's alias; a bridge is always "cpe-other" */
 static int get_conn_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	char *svc = entry_opt(data, "service_type");
 
 	if (e && e->bridge) {
@@ -399,7 +399,7 @@ static int get_conn_alias(char *refparam, struct dmctx *ctx, void *data, char *i
 
 static int get_conn_uptime(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	json_object *res;
 	char *v;
 
@@ -427,7 +427,7 @@ static int get_last_error(char *refparam, struct dmctx *ctx, void *data, char *i
 
 static int get_nat_enabled(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 
 	if (e && e->bridge)
 		*value = "false";
@@ -438,7 +438,7 @@ static int get_nat_enabled(char *refparam, struct dmctx *ctx, void *data, char *
 
 static int set_nat_enabled(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	int b = mtk_parse_bool(value);
 
 	if (!e)
@@ -454,7 +454,7 @@ static int set_nat_enabled(char *refparam, struct dmctx *ctx, void *data, char *
 
 static int get_addressing_type(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 
 	if (e && e->bridge)
 		*value = "";
@@ -465,7 +465,7 @@ static int get_addressing_type(char *refparam, struct dmctx *ctx, void *data, ch
 
 static int set_addressing_type(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 
 	if (!e)
 		return FAULT_9002;
@@ -485,7 +485,7 @@ static int set_addressing_type(char *refparam, struct dmctx *ctx, void *data, ch
  * the LAN address -- see the header comment */
 static int get_external_ip(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 
 	if (!e)
 		return 0;
@@ -506,7 +506,7 @@ static int get_external_ip(char *refparam, struct dmctx *ctx, void *data, char *
 /* v4_mode 0 is DHCP: the shell refused to write a static address over it */
 static int set_external_ip(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	unsigned int tmp;
 
 	if (!e)
@@ -520,7 +520,7 @@ static int set_external_ip(char *refparam, struct dmctx *ctx, void *data, char *
 	if (entry_opt_is(data, "v4_mode", "0"))
 		return FAULT_9001;
 	dmuci_set_value_by_section(e->s, "v4_ip", value);
-	dmuci_set_value("network", (char *)e->if4, "ipaddr", value);
+	dmuci_set_value("network", e->if4, "ipaddr", value);
 	wan_reload();
 	return 0;
 }
@@ -528,7 +528,7 @@ static int set_external_ip(char *refparam, struct dmctx *ctx, void *data, char *
 /* ipv4-address[0].mask is a prefix length, cidr_to_string() of the shell */
 static int get_subnet_mask(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	json_object *res, *a;
 	char *mask;
 	long cidr = 0;
@@ -555,7 +555,7 @@ static int get_subnet_mask(char *refparam, struct dmctx *ctx, void *data, char *
 
 static int set_subnet_mask(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	unsigned int tmp;
 
 	if (!e)
@@ -569,7 +569,7 @@ static int set_subnet_mask(char *refparam, struct dmctx *ctx, void *data, char *
 	if (entry_opt_is(data, "v4_mode", "0"))
 		return FAULT_9001;
 	dmuci_set_value_by_section(e->s, "v4_mask", value);
-	dmuci_set_value("network", (char *)e->if4, "netmask", value);
+	dmuci_set_value("network", e->if4, "netmask", value);
 	wan_reload();
 	return 0;
 }
@@ -578,7 +578,7 @@ static int set_subnet_mask(char *refparam, struct dmctx *ctx, void *data, char *
  * reports the gateway it was configured with */
 static int get_default_gateway(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	json_object *res, *r;
 	char *gw = NULL;
 
@@ -607,7 +607,7 @@ static int get_default_gateway(char *refparam, struct dmctx *ctx, void *data, ch
 
 static int set_default_gateway(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	unsigned int tmp;
 
 	if (!e)
@@ -621,7 +621,7 @@ static int set_default_gateway(char *refparam, struct dmctx *ctx, void *data, ch
 	if (entry_opt_is(data, "v4_mode", "0"))
 		return FAULT_9001;
 	dmuci_set_value_by_section(e->s, "v4_gw", value);
-	dmuci_set_value("network", (char *)e->if4, "gateway", value);
+	dmuci_set_value("network", e->if4, "gateway", value);
 	wan_reload();
 	return 0;
 }
@@ -643,7 +643,7 @@ static int set_accept_and_drop(char *refparam, struct dmctx *ctx, void *data, ch
 
 static int get_dns_override(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 
 	if (e && e->bridge)
 		*value = "false";
@@ -655,7 +655,7 @@ static int get_dns_override(char *refparam, struct dmctx *ctx, void *data, char 
 /* static addressing with dynamic DNS is refused by the product */
 static int set_dns_override(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	int b = mtk_parse_bool(value);
 
 	if (!e)
@@ -674,7 +674,7 @@ static int set_dns_override(char *refparam, struct dmctx *ctx, void *data, char 
 /* the first three dns-server entries of the interface, comma separated */
 static int get_dns_servers(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	json_object *res, *arr = NULL;
 	char buf[256];
 	size_t len = 0;
@@ -709,7 +709,7 @@ static int get_dns_servers(char *refparam, struct dmctx *ctx, void *data, char *
 
 static int set_dns_servers(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 
 	if (!e)
 		return FAULT_9002;
@@ -727,11 +727,11 @@ static int set_dns_servers(char *refparam, struct dmctx *ctx, void *data, char *
 /* ------------------------------------------------------------------ */
 
 /* network.<iface>.device is the netdev the logical interface runs on */
-static char *entry_netdev(const struct wan_entry *e)
+static char *entry_netdev(struct wan_entry *e)
 {
 	if (!e)
 		return "";
-	return mtk_uci("network", (char *)e->if4, "device");
+	return mtk_uci("network", e->if4, "device");
 }
 
 /* the "config device" section whose name is that netdev */
@@ -750,7 +750,7 @@ static struct uci_section *netdev_section(const char *name)
 
 static int get_max_mtu(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	char path[128];
 	char *dev = entry_netdev(e);
 
@@ -769,7 +769,7 @@ static int get_max_mtu(char *refparam, struct dmctx *ctx, void *data, char *inst
  */
 static int set_max_mtu(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	struct uci_section *d;
 	long mtu = 0;
 
@@ -812,7 +812,7 @@ static int is_valid_mac(const char *m)
 
 static int get_conn_mac(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	char path[128];
 	char *dev = entry_netdev(e);
 
@@ -828,7 +828,7 @@ static int get_conn_mac(char *refparam, struct dmctx *ctx, void *data, char *ins
  * explicit opt-in on this product */
 static int set_conn_mac(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	struct uci_section *d;
 
 	if (!e)
@@ -862,7 +862,7 @@ static int get_mac_override(char *refparam, struct dmctx *ctx, void *data, char 
 
 static int set_mac_override(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	int b = mtk_parse_bool(value);
 
 	if (!e)
@@ -890,7 +890,7 @@ static int get_vlan_enable(char *refparam, struct dmctx *ctx, void *data, char *
 
 static int set_vlan_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	int b = mtk_parse_bool(value);
 
 	if (!e)
@@ -912,7 +912,7 @@ static int get_vlan_id(char *refparam, struct dmctx *ctx, void *data, char *inst
 
 static int set_vlan_id(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	long id = 0;
 
 	if (!e)
@@ -941,7 +941,7 @@ static int get_vlan_priority(char *refparam, struct dmctx *ctx, void *data, char
  */
 static int set_vlan_priority(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	struct uci_section *d;
 	char map[16];
 	long prio = 0;
@@ -975,7 +975,7 @@ static int get_x_default_route(char *refparam, struct dmctx *ctx, void *data, ch
 
 static int set_x_default_route(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	int b = mtk_parse_bool(value);
 
 	if (!e)
@@ -1005,7 +1005,7 @@ static int get_x_ip_mode(char *refparam, struct dmctx *ctx, void *data, char *in
 
 static int set_x_ip_mode(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	const char *version;
 
 	if (!e)
@@ -1071,7 +1071,7 @@ static int get_x_lan_interface(char *refparam, struct dmctx *ctx, void *data, ch
  */
 static int set_x_lan_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	char list[512];
 	char *copy, *tok, *save = NULL;
 	size_t len = 0;
@@ -1115,7 +1115,7 @@ static int set_x_lan_interface(char *refparam, struct dmctx *ctx, void *data, ch
  */
 static char *stat_of(void *data, const char *counter)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 	char path[128];
 	char *dev;
 
@@ -1189,7 +1189,7 @@ static int add_ipconn_instance(char *refparam, struct dmctx *ctx, void *data, ch
 
 static int del_ipconn_instance(char *refparam, struct dmctx *ctx, void *data, char *instance, unsigned char del_action)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 
 	if (del_action != DEL_INST)
 		return FAULT_9005;	/* the shell had no "delete all" here */
@@ -1209,7 +1209,7 @@ static int del_ipconn_instance(char *refparam, struct dmctx *ctx, void *data, ch
  */
 static unsigned char extip_forced_inform(char *refparam, struct dmctx *dmctx, void *data, char *instance)
 {
-	const struct wan_entry *e = (const struct wan_entry *)data;
+	struct wan_entry *e = (struct wan_entry *)data;
 
 	if (!e)
 		return 0;

@@ -21,11 +21,12 @@
 
 /* Config ------------------------------------------------------------ */
 /* Never NULL: an unset option reads as "". */
-char *mtk_uci(char *package, char *section, char *option);
+char *mtk_uci(const char *package, const char *section, const char *option);
 /* /var/state, what the shell calls $UCI_GET_VARSTATE / $UCI_SET_VARSTATE:
  * runtime values that must not survive a reboot. */
-char *mtk_varstate(char *package, char *section, char *option);
-int mtk_varstate_set(char *package, char *section, char *option, char *value);
+char *mtk_varstate(const char *package, const char *section, const char *option);
+int mtk_varstate_set(const char *package, const char *section, const char *option,
+                     const char *value);
 
 /* System ------------------------------------------------------------ */
 /* First line of a file, trimmed, dm-allocated, "" when unreadable. */
@@ -57,7 +58,7 @@ void mtk_run_apply_service(void);
 
 /* Factory defaults, what the shell calls $UCI_GET_DEFAULT
  * ("uci -q -c /rom/etc/config get").  Never NULL. */
-char *mtk_uci_default(char *package, char *section, char *option);
+char *mtk_uci_default(const char *package, const char *section, const char *option);
 
 /* IPv4 --------------------------------------------------------------- */
 /* Dotted quad -> host order integer, mirroring is_valid_ipv4 + ipstr2int

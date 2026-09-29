@@ -27,23 +27,23 @@
 
 #define APPLY_SERVICE_FILE	"/tmp/.easycwmp_apply_service"
 
-char *mtk_uci(char *package, char *section, char *option)
+char *mtk_uci(const char *package, const char *section, const char *option)
 {
 	char *v = NULL;
 
-	dmuci_get_option_value_string(package, section, option, &v);
+	dmuci_get_option_value_string((char *)package, (char *)section, (char *)option, &v);
 	return v ? v : "";
 }
 
-char *mtk_varstate(char *package, char *section, char *option)
+char *mtk_varstate(const char *package, const char *section, const char *option)
 {
 	char *v = NULL;
 
-	dmuci_get_varstate_string(package, section, option, &v);
+	dmuci_get_varstate_string((char *)package, (char *)section, (char *)option, &v);
 	return v ? v : "";
 }
 
-int mtk_varstate_set(char *package, char *section, char *option, char *value)
+int mtk_varstate_set(const char *package, const char *section, const char *option, const char *value)
 {
 	struct uci_ptr ptr = {0};
 
@@ -51,7 +51,8 @@ int mtk_varstate_set(char *package, char *section, char *option, char *value)
 		return -1;
 	uci_add_delta_path(uci_varstate_ctx, uci_varstate_ctx->savedir);
 	uci_set_savedir(uci_varstate_ctx, VARSTATE_CONFIG);
-	if (dmuci_lookup_ptr(uci_varstate_ctx, &ptr, package, section, option, value))
+	if (dmuci_lookup_ptr(uci_varstate_ctx, &ptr, (char *)package, (char *)section,
+			     (char *)option, (char *)value))
 		return -1;
 	if (uci_set(uci_varstate_ctx, &ptr) != UCI_OK)
 		return -1;
@@ -65,7 +66,7 @@ int mtk_varstate_set(char *package, char *section, char *option, char *value)
  * its own uci context -- the engine's is bound to /etc/config.  Opened once and
  * kept: set_LanHostConfig_DHCPServerConfigurable() needs it for every "false".
  */
-char *mtk_uci_default(char *package, char *section, char *option)
+char *mtk_uci_default(const char *package, const char *section, const char *option)
 {
 	static struct uci_context *rom_ctx;
 	struct uci_ptr ptr = {0};

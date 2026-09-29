@@ -178,7 +178,8 @@ void wlan_reload(void)
 }
 
 /* One option on the interface, its MLO peer and the MLO section, plus mapd
- * when mesh is running -- mlo_sync_*/backhaul_sync_* of the shell. */
+ * when mesh is running -- the mlo_sync_ and backhaul_sync_ helpers of the
+ * shell. */
 static void wlan_sync_option(void *data, char *option, char *value, const char *mapd_option)
 {
 	const char *iface = iface_name(data);
