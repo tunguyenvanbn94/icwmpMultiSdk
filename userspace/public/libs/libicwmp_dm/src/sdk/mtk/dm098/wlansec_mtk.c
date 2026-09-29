@@ -397,11 +397,6 @@ static int set_wep_key_index(char *refparam, struct dmctx *ctx, void *data, char
 	return 0;
 }
 
-static int get_empty(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
-{
-	*value = "";
-	return 0;
-}
 
 /* key1..key4, length decided by the WEP level: 5 or 10 for 40 bit, 13 or 26
  * for 104 bit, the longer form being hex */
