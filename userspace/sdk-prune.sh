@@ -8,12 +8,12 @@
 #   ./sdk-prune.sh --list
 #
 # After pruning, both components still configure and build:
-#   libtr098: ./configure --with-sdk=<name>
+#   libicwmp_dm: ./configure --with-sdk=<name>
 #   icwmp:    ./configure --enable-icwmp_tr098 --with-sdk=<name>
 set -e
 
 cd "$(dirname "$0")"
-LIB=public/libs/libtr098/libtr098
+LIB=public/libs/libicwmp_dm/src
 APP=public/apps/icwmp/icwmp
 
 for c in "$LIB" "$APP"; do

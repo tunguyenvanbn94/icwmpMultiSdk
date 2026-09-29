@@ -60,7 +60,7 @@
 #include "log.h"
 #include "sdk/sdk.h"
 #include "icwmp_dm.h"
-#include <libtr098/dmentry.h>
+#include <icwmp_dm/dmentry.h>
 
 const struct blobmsg_policy icwmp_dm_policy[__ICWMP_DM_MAX] = {
 	[ICWMP_DM_CMD]        = { .name = "cmd",        .type = BLOBMSG_TYPE_STRING },

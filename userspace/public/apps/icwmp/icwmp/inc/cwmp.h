@@ -21,8 +21,8 @@
 #include <microxml.h>
 #include <libubox/list.h>
 #ifdef TR098
-#include <libtr098/dmentry.h>
-#include <libtr098/dmtr098.h>
+#include <icwmp_dm/dmentry.h>
+#include <icwmp_dm/dmtr098.h>
 #else
 #include <libbbfdm/dmentry.h>
 #include <libbbfdm/dmbbfcommon.h>

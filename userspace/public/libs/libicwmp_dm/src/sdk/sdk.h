@@ -55,8 +55,8 @@
 #ifndef __LIBTR098_SDK_H__
 #define __LIBTR098_SDK_H__
 
-#include "dmtr098.h"
-#include "dm_registry.h"
+#include "../dmtr098.h"
+#include "../dm_registry.h"
 
 /* Called from dm_ctx_init()/dm_ctx_clean() with CTX_INIT_ALL (once per RPC). */
 int dm_platform_ctx_init(struct dmctx *ctx);

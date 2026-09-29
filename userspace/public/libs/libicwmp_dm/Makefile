@@ -1,9 +1,9 @@
-# Build libtr098 (TR-098 data model engine + BDK platform layer) with autotools,
+# Build libicwmp_dm (shared data model engine, transitional libtr098 ABI) with autotools,
 # in-tree, the same way obuspa is built.  Invoked from Bcmbuild.mk.
 
-SRC_DIR := libtr098
+SRC_DIR := src
 
-# SDK selection (libtr098/sdk/<name>): bdk = Broadcom Distributed MDM via
+# SDK selection (src/sdk/<name>): bdk = Broadcom Distributed MDM via
 # libbcm_generic_hal, uci = stock OpenWrt/UCI, mtk = Airoha OpenWrt.
 # TR098_PLATFORM is the old name of the variable, still accepted.
 TR098_SDK ?= $(if $(TR098_PLATFORM),$(TR098_PLATFORM),bdk)
@@ -33,13 +33,7 @@ check_config:
 install: check_config
 	$(MAKE) -C $(SRC_DIR)
 	$(MAKE) -C $(SRC_DIR) install
-	# headers are consumed by icwmp as <libtr098/xxx.h>
-	mkdir -p $(HEADER_INSTALL_DIR)
-	cp -f $(SRC_DIR)/*.h $(SRC_DIR)/tr098/*.h $(SRC_DIR)/tr098/common/*.h $(HEADER_INSTALL_DIR)/
-	mkdir -p $(HEADER_INSTALL_DIR)/sdk
-	cp -f $(SRC_DIR)/sdk/sdk.h $(HEADER_INSTALL_DIR)/sdk/
-	# headers of the selected SDK only; a pruned tree has no other directory
-	-cp -f $(SRC_DIR)/sdk/$(TR098_SDK)/*.h $(SRC_DIR)/sdk/$(TR098_SDK)/dm098/*.h $(HEADER_INSTALL_DIR)/ 2>/dev/null
+	./$(SRC_DIR)/tools/install-headers.sh "$(dir $(HEADER_INSTALL_DIR))" "$(TR098_SDK)"
 
 clean:
 	@if [ -e $(SRC_DIR)/Makefile ]; then \
@@ -50,4 +44,4 @@ clean:
 	rm -f $(SRC_DIR)/aclocal.m4 $(SRC_DIR)/compile $(SRC_DIR)/configure $(SRC_DIR)/config.guess \
 	      $(SRC_DIR)/config.sub $(SRC_DIR)/depcomp $(SRC_DIR)/install-sh $(SRC_DIR)/ltmain.sh \
 	      $(SRC_DIR)/missing $(SRC_DIR)/Makefile.in $(SRC_DIR)/bin/Makefile.in
-	rm -rf $(HEADER_INSTALL_DIR)
+	rm -rf $(HEADER_INSTALL_DIR) $(dir $(HEADER_INSTALL_DIR))libtr098

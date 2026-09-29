@@ -19,7 +19,7 @@
 
 // TuNV
 #ifdef TR098
-#include <libtr098/md5.h>
+#include <icwmp_dm/md5.h>
 #else
 #include <libbbfdm/md5.h>
 #endif

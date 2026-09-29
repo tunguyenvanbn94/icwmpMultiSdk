@@ -25,11 +25,11 @@
 #include "external.h"
 #include "config.h"
 #ifdef TR098
-#include <libtr098/dmtr098.h>
-#include <libtr098/dmcommon.h>
-#include <libtr098/dmentry.h>
-#include <libtr098/deviceinfo.h>
-#include <libtr098/dmjson.h>
+#include <icwmp_dm/dmtr098.h>
+#include <icwmp_dm/dmcommon.h>
+#include <icwmp_dm/dmentry.h>
+#include <icwmp_dm/deviceinfo.h>
+#include <icwmp_dm/dmjson.h>
 #else
 #include <libbbfdm/dmentry.h>
 #include <libbbfdm/deviceinfo.h>

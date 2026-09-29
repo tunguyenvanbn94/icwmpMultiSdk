@@ -20,8 +20,8 @@
 #include "xml.h"
 #include "log.h"
 #ifdef TR098
-#include <libtr098/wepkey.h>
-#include <libtr098/dmentry.h>
+#include <icwmp_dm/wepkey.h>
+#include <icwmp_dm/dmentry.h>
 #include "icwmp_dm.h"
 #else
 #include <libbbfdm/wepkey.h>

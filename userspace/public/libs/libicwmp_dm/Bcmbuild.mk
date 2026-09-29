@@ -15,9 +15,9 @@ include $(BUILD_DIR)/make.common
 
 ARCH                  := $(PROFILE_ARCH)
 LIB_INSTALL_DIR       := $(BCM_FSBUILD_DIR)/public/lib
-HEADER_INSTALL_DIR    := $(BCM_FSBUILD_DIR)/public/include/libtr098
+HEADER_INSTALL_DIR    := $(BCM_FSBUILD_DIR)/public/include/icwmp_dm
 
-# The BDK platform layer (libtr098/platform/bdk) talks to the Distributed MDM
+# The BDK platform layer (src/sdk/bdk) talks to the Distributed MDM
 # through libbcm_generic_hal, so it needs the same include/lib paths as tr69c.
 ALLOWED_INCLUDE_PATHS := -I. \
                          -I$(BCM_FSBUILD_DIR)/public/include \

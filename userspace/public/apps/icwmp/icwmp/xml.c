@@ -24,10 +24,10 @@
 #include "log.h"
 #include "jshn.h"
 #ifdef TR098
-#include <libtr098/dmentry.h>
-#include <libtr098/deviceinfo.h>
-#include <libtr098/dmtr098.h>
-#include <libtr098/softwaremodules.h>
+#include <icwmp_dm/dmentry.h>
+#include <icwmp_dm/deviceinfo.h>
+#include <icwmp_dm/dmtr098.h>
+#include <icwmp_dm/softwaremodules.h>
 #else
 #include <libbbfdm/dmentry.h>
 #include <libbbfdm/dmbbfcommon.h>
