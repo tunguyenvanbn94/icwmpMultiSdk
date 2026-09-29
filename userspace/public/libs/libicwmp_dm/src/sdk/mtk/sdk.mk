@@ -8,7 +8,11 @@ libtr098_la_SOURCES +=	\
 	../sdk/mtk/dm098/deviceinfo_mtk.c			\
 	../sdk/mtk/dm098/time_mtk.c				\
 	../sdk/mtk/dm098/managementserver_core_mtk.c	\
-	../sdk/mtk/dm098/managementserver_mtk.c
+	../sdk/mtk/dm098/managementserver_mtk.c		\
+	../sdk/mtk/dm098/lan_mtk.c				\
+	../sdk/mtk/dm098/lanhosts_mtk.c				\
+	../sdk/mtk/dm098/laneth_mtk.c				\
+	../sdk/mtk/dm098/x_ais_mesh_mtk.c
 
 if DM_MTK_SCRIPT_COMPAT
 libtr098_la_SOURCES +=	\

@@ -60,6 +60,76 @@ int mtk_varstate_set(char *package, char *section, char *option, char *value)
 	return 0;
 }
 
+/*
+ * $UCI_GET_DEFAULT reads the factory tree, not the running config, so it needs
+ * its own uci context -- the engine's is bound to /etc/config.  Opened once and
+ * kept: set_LanHostConfig_DHCPServerConfigurable() needs it for every "false".
+ */
+char *mtk_uci_default(char *package, char *section, char *option)
+{
+	static struct uci_context *rom_ctx;
+	struct uci_ptr ptr = {0};
+	char buf[256];
+
+	if (!package || !section || !option)
+		return "";
+	if (!rom_ctx) {
+		rom_ctx = uci_alloc_context();
+		if (!rom_ctx)
+			return "";
+		uci_set_confdir(rom_ctx, "/rom/etc/config");
+	}
+	if (snprintf(buf, sizeof(buf), "%s.%s.%s", package, section, option) >= (int)sizeof(buf))
+		return "";
+	if (uci_lookup_ptr(rom_ctx, &ptr, buf, true) != UCI_OK)
+		return "";
+	if (!ptr.o || !ptr.o->v.string)
+		return "";
+	return dmstrdup(ptr.o->v.string);
+}
+
+int mtk_ipv4_parse(const char *s, unsigned int *out)
+{
+	unsigned int v = 0;
+	int octet, digits, i;
+
+	if (!s)
+		return -1;
+	for (i = 0; i < 4; i++) {
+		octet = 0;
+		digits = 0;
+		while (*s >= '0' && *s <= '9') {
+			octet = octet * 10 + (*s - '0');
+			if (octet > 255)
+				return -1;
+			digits++;
+			s++;
+		}
+		if (!digits || digits > 3)
+			return -1;
+		v = (v << 8) | (unsigned int)octet;
+		if (i < 3) {
+			if (*s != '.')
+				return -1;
+			s++;
+		}
+	}
+	if (*s)
+		return -1;
+	if (out)
+		*out = v;
+	return 0;
+}
+
+char *mtk_ipv4_str(unsigned int v)
+{
+	char buf[16];
+
+	snprintf(buf, sizeof(buf), "%u.%u.%u.%u",
+		 (v >> 24) & 0xff, (v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff);
+	return dmstrdup(buf);
+}
+
 char *mtk_file_line(const char *path)
 {
 	char buf[512];
@@ -78,6 +148,22 @@ char *mtk_file_line(const char *path)
 	while (l && (buf[l - 1] == '\n' || buf[l - 1] == '\r' || buf[l - 1] == ' '))
 		buf[--l] = '\0';
 	return dmstrdup(buf);
+}
+
+int mtk_file_write(const char *path, const char *value)
+{
+	FILE *f;
+	int rc;
+
+	if (!path || !value)
+		return -1;
+	f = fopen(path, "w");
+	if (!f)
+		return -1;
+	rc = fprintf(f, "%s\n", value) < 0 ? -1 : 0;
+	if (fclose(f))
+		rc = -1;
+	return rc;
 }
 
 long mtk_meminfo_kb(const char *key)

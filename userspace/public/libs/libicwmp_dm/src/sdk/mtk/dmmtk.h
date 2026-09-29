@@ -30,6 +30,10 @@ int mtk_varstate_set(char *package, char *section, char *option, char *value);
 /* System ------------------------------------------------------------ */
 /* First line of a file, trimmed, dm-allocated, "" when unreadable. */
 char *mtk_file_line(const char *path);
+/* Write one line to a /proc or /sys control file, what the shell wrote with
+ * "echo <value> > <path>".  Returns 0 on success, -1 when the file cannot be
+ * written (the caller keeps going: the shell ignored that too). */
+int mtk_file_write(const char *path, const char *value);
 /* A /proc/meminfo row in kB, -1 when absent. */
 long mtk_meminfo_kb(const char *key);
 /* /proc/uptime, whole seconds. */
@@ -50,6 +54,18 @@ int mtk_apply_service(const char *cmd);
  * session by dm_platform_restart_services() when the shell fallback is not
  * compiled in (--disable-dm-script-compat). */
 void mtk_run_apply_service(void);
+
+/* Factory defaults, what the shell calls $UCI_GET_DEFAULT
+ * ("uci -q -c /rom/etc/config get").  Never NULL. */
+char *mtk_uci_default(char *package, char *section, char *option);
+
+/* IPv4 --------------------------------------------------------------- */
+/* Dotted quad -> host order integer, mirroring is_valid_ipv4 + ipstr2int
+ * of functions/common: every octet decimal and <= 255, exactly four of them.
+ * Returns 0 on success, -1 when the string is not an IPv4 address. */
+int mtk_ipv4_parse(const char *s, unsigned int *out);
+/* Back to dotted quad, dm-allocated (int2ipstr). */
+char *mtk_ipv4_str(unsigned int v);
 
 /* Value shaping ----------------------------------------------------- */
 /* "1"/"on"/"true"/"yes"/"enabled" -> true, anything else false. */
