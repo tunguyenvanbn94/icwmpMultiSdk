@@ -24,6 +24,8 @@ const struct diag_store diag_ipping     = { "/var/state",            "ipping_lau
 const struct diag_store diag_traceroute = { "/var/state/traceroute", "traceroute_launch" };
 const struct diag_store diag_nslookup   = { "/var/state/nslookup",   "nslookup_launch" };
 const struct diag_store diag_dns        = { "/var/state/dnsDiagnostics", "dnsDiagnostics_launch" };
+const struct diag_store diag_download   = { "/var/state/downloadDiag", "DownloadDiagnostics_launch" };
+const struct diag_store diag_upload     = { "/var/state/uploadDiag",   "UploadDiagnostics_launch" };
 
 char *diag_get(const struct diag_store *d, const char *option, const char *def)
 {
@@ -134,3 +136,35 @@ int diag_host_valid(const struct diag_store *d, const char *host)
 	}
 	return 1;
 }
+
+static void diag_queue(const struct diag_store *d, const char *verb)
+{
+	char cmd[256];
+
+	snprintf(cmd, sizeof(cmd), "/bin/sh %s/%s %s", DIAG_FUNCTION_PATH, d->launcher, verb);
+	mtk_apply_service(cmd);
+}
+
+void diag_stop_queued(const struct diag_store *d)
+{
+	if (strcmp(diag_get(d, "DiagnosticsState", NULL), "Requested") == 0)
+		diag_queue(d, "stop");
+}
+
+void diag_queue_run(const struct diag_store *d)
+{
+	diag_queue(d, "run &");
+}
+
+/* The shell's pattern, as grep receives it once the double quotes are
+ * undone: "\\[" -> "\[", "\\]" -> "\]", "\+" stays.  Inside a bracket
+ * expression a backslash is an ordinary character, so the two brackets
+ * accept "\" as well -- kept. */
+#define RE_TR143_URL \
+	"(http|ftp)://[-A-Za-z0-9\\[\\+&@#/%?=~_|! /:/,.;]*(\\])*[-A-Za-z0-9\\+&@#/%=~_|]*"
+
+int diag_url_valid(const char *url)
+{
+	return strcmp(mtk_grep_o(RE_TR143_URL, url), url) == 0;
+}
+

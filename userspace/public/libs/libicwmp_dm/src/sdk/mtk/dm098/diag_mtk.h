@@ -45,6 +45,8 @@ extern const struct diag_store diag_ipping;		/* -P /var/state */
 extern const struct diag_store diag_traceroute;	/* -P /var/state/traceroute */
 extern const struct diag_store diag_nslookup;		/* -P /var/state/nslookup */
 extern const struct diag_store diag_dns;		/* -P /var/state/dnsDiagnostics */
+extern const struct diag_store diag_download;		/* -P /var/state/downloadDiag */
+extern const struct diag_store diag_upload;		/* -P /var/state/uploadDiag */
 
 /* where the launchers of the two lookup diagnostics put Result.{i}: the
  * launcher "uci -P <dir> add"s one "local" section per answer, so Result.<n>
@@ -75,6 +77,15 @@ void diag_store_value_nostop(const struct diag_store *d, const char *option, con
 char *diag_result_get(const char *dir, int idx, const char *option);
 /* <x>_set_diagnostic_state Requested: stop, Requested, queue the launcher */
 void diag_request(const struct diag_store *d);
+/* TR-143 (downloadDiag_stop_diagnostic): no kill from the data model --
+ * when DiagnosticsState is Requested, queue "<launcher> stop" on the
+ * apply-service list, and do nothing else.  The launcher's stop kills the
+ * running test and resets the results; the ORDER of the queue therefore
+ * decides what runs, and it is kept by calling this exactly where the shell
+ * did. */
+void diag_stop_queued(const struct diag_store *d);
+/* queue "<launcher> run &" -- the tail of the TR-143 Requested setters */
+void diag_queue_run(const struct diag_store *d);
 
 /* "case $v in (*[^0-9]*|'') fault", then the "[ $v -lt MIN -o $v -gt MAX ]"
  * range test.  Returns 0 when the value is accepted.
@@ -101,5 +112,10 @@ int diag_host_valid(const struct diag_store *d, const char *host);
  * The third case also ran that configuration ("eth0 down" took eth0 down);
  * the rejection is kept, the side effect is not. */
 int diag_ifconfig_prints(const char *v);
+
+/* <x>Diag_set_DownloadURL / _UploadURL: the value must equal what
+ *	echo "$url" | grep -E -o "(http|ftp)://[...]*(\])*[...]*"
+ * prints -- a whole-string match, http or ftp only (not https). */
+int diag_url_valid(const char *url);
 
 #endif

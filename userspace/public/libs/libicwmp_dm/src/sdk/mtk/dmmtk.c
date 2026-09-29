@@ -202,6 +202,62 @@ int mtk_netdev_exists(const char *name)
 	return if_nametoindex(name) != 0;
 }
 
+char *mtk_grep_o(const char *re, const char *s)
+{
+	regex_t rx;
+	char *out = NULL, *line;
+	size_t olen = 0;
+	const char *p, *nl;
+
+	if (!re || !s)
+		return "";
+	if (regcomp(&rx, re, REG_EXTENDED) != 0)
+		return "";
+	/* echo "$s": the lines of s, the last one included even when empty */
+	for (p = s;; p = nl + 1) {
+		regmatch_t m;
+		size_t ll;
+		char *q;
+		int eflags = 0;
+
+		nl = strchr(p, '\n');
+		ll = nl ? (size_t)(nl - p) : strlen(p);
+		line = dmmalloc(ll + 1);
+		if (!line)
+			break;
+		memcpy(line, p, ll);
+		line[ll] = '\0';
+		for (q = line; regexec(&rx, q, 1, &m, eflags) == 0; eflags = REG_NOTBOL) {
+			size_t n = (size_t)(m.rm_eo - m.rm_so);
+
+			if (n == 0) {		/* grep -o prints no empty match */
+				if (!q[m.rm_eo])
+					break;
+				q += m.rm_eo + 1;
+				continue;
+			}
+			out = dmrealloc(out, olen + n + 2);
+			if (!out)
+				break;
+			memcpy(out + olen, q + m.rm_so, n);
+			olen += n;
+			out[olen++] = '\n';
+			out[olen] = '\0';
+			q += m.rm_eo;
+			if (!*q)
+				break;
+		}
+		if (!nl)
+			break;
+	}
+	regfree(&rx);
+	if (!out)
+		return "";
+	while (olen && out[olen - 1] == '\n')
+		out[--olen] = '\0';
+	return out;
+}
+
 int mtk_ere_match(const char *re, const char *s)
 {
 	regex_t rx;

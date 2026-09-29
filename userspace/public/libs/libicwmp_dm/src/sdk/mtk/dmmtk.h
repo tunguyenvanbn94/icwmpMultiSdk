@@ -80,6 +80,11 @@ int mtk_netdev_exists(const char *name);
 /* "echo <s> | grep -E -q <re>": POSIX ERE, ^ and $ bound to each line like
  * grep does.  1 on a match, 0 otherwise (a bad pattern never matches). */
 int mtk_ere_match(const char *re, const char *s);
+/* "$(echo "$s" | grep -E -o <re>)": every non-empty match of every line,
+ * joined with newlines, trailing newlines stripped the way command
+ * substitution strips them.  dm-allocated, "" when nothing matches or the
+ * pattern does not compile. */
+char *mtk_grep_o(const char *re, const char *s);
 
 /* IPv4 --------------------------------------------------------------- */
 /* Dotted quad -> host order integer, mirroring is_valid_ipv4 + ipstr2int
