@@ -2,6 +2,7 @@
 """Exercise apply on small SDK fixtures. --scratch is an empty task-owned directory."""
 
 import argparse
+import ast
 import hashlib
 import importlib.util
 import json
@@ -70,6 +71,54 @@ def make_test_bundle(dest):
     (dest / "MANIFEST.json").write_text(json.dumps({"format": 1, "commit": "fixture-working-tree", "files": files}))
 
 
+# apply.py runs on the SDK build hosts, which are older than this workspace.
+# Two gates so a newer API cannot slip in again: an AST scan, and a run with
+# the 3.9 pathlib methods removed.  (2026-09-24: Path.is_relative_to() reached
+# a build host as an AttributeError traceback.)
+POST36 = {
+    "is_relative_to": "3.9", "with_stem": "3.9", "readlink": "3.9",
+    "removeprefix": "3.9", "removesuffix": "3.9", "root_dir": "3.10",
+    "link_to": "3.8", "missing_ok": "3.8", "dirs_exist_ok": "3.8",
+    "capture_output": "3.7",
+}
+PATHLIB_39 = ("is_relative_to", "with_stem", "readlink")
+
+
+def check_py36_source(path):
+    found = set()
+    tree = ast.parse(path.read_text(), str(path))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr in POST36:
+            found.add((node.lineno, node.attr, POST36[node.attr]))
+        elif isinstance(node, ast.keyword) and node.arg in POST36:
+            found.add((node.lineno, node.arg + "=", POST36[node.arg]))
+        elif isinstance(node, ast.NamedExpr):
+            found.add((node.lineno, ":=", "3.8"))
+        elif node.__class__.__name__ == "Match":
+            found.add((node.lineno, "match", "3.10"))
+    if found:
+        raise AssertionError("apply.py uses APIs newer than Python 3.6: " + repr(sorted(found)))
+
+
+def run_as_py36(bundle, scratch, *args):
+    """apply.py with the 3.9-only pathlib methods taken away."""
+    shim = scratch / "py36shim.py"
+    shim.write_text(
+        "import pathlib, runpy, sys\n"
+        "for cls in (pathlib.PurePath, pathlib.Path, pathlib.PurePosixPath, pathlib.PosixPath):\n"
+        "    for name in %r:\n"
+        "        if name in cls.__dict__:\n"
+        "            delattr(cls, name)\n"
+        "assert not hasattr(pathlib.Path('/'), 'is_relative_to')\n"
+        "sys.argv = sys.argv[1:]\n"
+        "runpy.run_path(sys.argv[0], run_name='__main__')\n" % (PATHLIB_39,))
+    result = subprocess.run([sys.executable, str(shim), str(bundle / "apply.py"), *map(str, args)],
+                            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
+    if result.returncode:
+        raise RuntimeError("apply.py needs a Python newer than 3.6:\n" + result.stdout)
+    return result.stdout
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scratch", type=Path, required=True)
@@ -84,12 +133,15 @@ def main():
         shutil.copytree(args.bundle, bundle)
     else:
         make_test_bundle(bundle)
+    check_py36_source(bundle / "apply.py")
     results = []
     for sdk in ("bdk", "mtk"):
         target = temp / (sdk + " SDK's source")
         legacy = fixture(target, sdk)
         before = snapshot(target)
         run(bundle, "--sdk", sdk, "--dry-run", target)
+        assert snapshot(target) == before and not (target / ".icwmp-backups").exists()
+        run_as_py36(bundle, temp, "--sdk", sdk, "--dry-run", target)
         assert snapshot(target) == before and not (target / ".icwmp-backups").exists()
         run(bundle, target)  # autodetect
         assert not legacy.exists()

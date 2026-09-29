@@ -15,6 +15,22 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
+# The SDK build hosts are older than this workspace: keep to what Python 3.6
+# has.  Path.is_relative_to() is 3.9 and was the one thing that slipped
+# through -- see within() below.
+if sys.version_info < (3, 6):
+    sys.exit("apply.py needs Python 3.6 or newer, found %d.%d"
+             % (sys.version_info[0], sys.version_info[1]))
+
+
+def within(path, other):
+    """path is other or lies under it.  Path.is_relative_to() without 3.9."""
+    try:
+        path.relative_to(other)
+        return True
+    except ValueError:
+        return False
+
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -243,7 +259,7 @@ def main():
     try:
         metadata = verify_bundle(HERE)
         target = args.target.resolve(strict=True)
-        if HERE == target or HERE.is_relative_to(target) or target.is_relative_to(HERE):
+        if HERE == target or within(HERE, target) or within(target, HERE):
             raise ValueError("extract the bundle outside the SDK target directory")
         sdk = args.sdk
         if not sdk:
