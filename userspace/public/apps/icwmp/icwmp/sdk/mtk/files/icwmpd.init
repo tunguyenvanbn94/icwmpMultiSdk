@@ -180,9 +180,13 @@ start_service() {
 	$UCI_COMMIT easycwmp
 	echo "icwmpd: Connection Request URL http://$wan_ip:$port/$path"
 
-	# value change polling (ubus call tr069 notify every notification_interval s)
+	# value change polling (ubus call tr069 notify every notification_interval s).
+	# fd 1000 is procd_lock()'s flock on /var/lock/procd_icwmpd.lock (procd.sh):
+	# a child that inherits it holds the lock for its whole life and every later
+	# /etc/init.d/icwmpd call (restart, running, the reload trigger) hangs in
+	# "flock 1000".  Close it, and the rc.common stdio, in the background child.
 	chmod +x /usr/sbin/value_monitoring
-	/usr/sbin/value_monitoring $notify_interval &
+	/usr/sbin/value_monitoring $notify_interval </dev/null >/dev/null 2>&1 1000>&- &
 
 	# easycwmp -> cwmp mirror is done by icwmpd itself at start (mtk/icwmp_mtk.c)
 	procd_open_instance
