@@ -16,7 +16,8 @@ libtr098_la_SOURCES +=	\
 	../sdk/mtk/dm098/wlan_mtk.c				\
 	../sdk/mtk/dm098/wlanassoc_mtk.c			\
 	../sdk/mtk/dm098/wlansec_mtk.c			\
-	../sdk/mtk/dm098/wan_mtk.c
+	../sdk/mtk/dm098/wan_mtk.c			\
+	../sdk/mtk/dm098/wanip_mtk.c
 
 if DM_MTK_SCRIPT_COMPAT
 libtr098_la_SOURCES +=	\
