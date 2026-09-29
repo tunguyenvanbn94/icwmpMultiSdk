@@ -297,8 +297,10 @@ void cwmp_add_notification_min(void) {
 	cwmp_dm_ctx_init(&cwmp_main, &dmctx);
 
 	fp = fopen(DM_ENABLED_NOTIFY, "r");
-	if (fp == NULL)
+	if (fp == NULL) {
+		cwmp_dm_ctx_clean(cwmp, &dmctx);
 		return;
+	}
 
 	while (fgets(buf, 512, fp) != NULL) {
 		dm_ctx_init_sub(&dmctx, DM_CWMP, cwmp_main.conf.amd_version, cwmp_main.conf.instance_mode);
@@ -376,8 +378,15 @@ void cwmp_add_notification(void)
 	cwmp_dm_ctx_init(&cwmp_main, &dmctx);
 
 	fp = fopen(DM_ENABLED_NOTIFY, "r");
-	if (fp == NULL)
+	if (fp == NULL) {
+		/* upstream returned here with mutex_session_send still held: the
+		 * next notify (value_monitoring, every 30 s), the session thread and
+		 * "ubus call tr069 dm" all blocked on it for good (HP2236B board,
+		 * 2026-09-27: every thread in futex_wait, no session after the first) */
+		cwmp_dm_ctx_clean(cwmp, &dmctx);
+		pthread_mutex_unlock(&(cwmp->mutex_session_send));
 		return;
+	}
 
 	while (fgets(buf, 512, fp) != NULL) {
 		dm_ctx_init_sub(&dmctx, DM_CWMP, cwmp_main.conf.amd_version, cwmp_main.conf.instance_mode);

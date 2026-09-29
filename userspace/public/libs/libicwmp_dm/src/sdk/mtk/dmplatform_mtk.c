@@ -748,8 +748,10 @@ int dm_platform_enabled_notify(struct dmctx *ctx)
 			}
 			fclose(in);
 			fclose(out);
-			remove(DM_ENABLED_NOTIFY);
-			rename(DM_ENABLED_NOTIFY_TEMPORARY, DM_ENABLED_NOTIFY);
+			/* not rename(): /tmp -> /etc/tr098 crosses filesystems (EXDEV)
+			 * and the file would just be gone */
+			if (copy_temporary_file_to_original_file(DM_ENABLED_NOTIFY, DM_ENABLED_NOTIFY_TEMPORARY))
+				remove(DM_ENABLED_NOTIFY_TEMPORARY);
 		} else {
 			if (in) fclose(in);
 			if (out) fclose(out);

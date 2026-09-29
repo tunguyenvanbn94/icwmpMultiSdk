@@ -239,6 +239,21 @@ int icwmp_platform_init(void)
 	if (stat(ICWMP_MTK_STATE_DIR, &st) != 0 && mkdir(ICWMP_MTK_STATE_DIR, 0755) != 0) {
 		CWMP_LOG(ERROR, "cannot create %s: %s", ICWMP_MTK_STATE_DIR, strerror(errno));
 	}
+	/* the directory of libtr098's DM_ENABLED_NOTIFY (/etc/tr098): nothing on
+	 * this product creates it, so the enabled-notify file could never be
+	 * written and value change notification never worked */
+	{
+		char dir[128], *slash;
+
+		snprintf(dir, sizeof(dir), "%s", DM_ENABLED_NOTIFY);
+		slash = strrchr(dir, '/');
+		if (slash && slash != dir) {
+			*slash = '\0';
+			if (stat(dir, &st) != 0 && mkdir(dir, 0755) != 0) {
+				CWMP_LOG(ERROR, "cannot create %s: %s", dir, strerror(errno));
+			}
+		}
+	}
 	icwmp_mtk_sync_easycwmp_to_cwmp();
 	return 0;
 }
