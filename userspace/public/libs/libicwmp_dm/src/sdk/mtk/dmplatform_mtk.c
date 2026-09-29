@@ -598,10 +598,30 @@ int dm_platform_param_method(struct dmctx *ctx, int cmd, char *inparam, char *ar
 {
 	bool nextlevel = false;
 
+	/* The shell's input contract (common_set_value_check_param: is_safe_input
+	 * + the shell type check) in front of every NATIVE setter; a path still
+	 * served by the script gets the script's own copy.  VALUECHECK only --
+	 * at VALUESET the value has passed already.  See input_contract_mtk.c. */
+	if (cmd == CMD_SET_VALUE && ctx && ctx->setaction == VALUECHECK) {
+#ifdef DM_MTK_SCRIPT_COMPAT
+		int native = mtk_is_native(inparam ? inparam : "");
+#else
+		int native = 1;		/* all C: every path is native */
+#endif
+		if (native) {
+			int f = mtk_input_contract(inparam, arg1);
+
+			if (f) {
+				*fault = f;
+				return 1;
+			}
+		}
+	}
+
 #ifndef DM_MTK_SCRIPT_COMPAT
 	/* all C build: the static tree is the whole data model, a path no
 	 * module owns is an unknown parameter (9005), not a shell call */
-	(void)ctx; (void)cmd; (void)arg1; (void)fault; (void)nextlevel; (void)inparam;
+	(void)nextlevel;
 	return 0;
 #else
 	if (!inparam)

@@ -53,12 +53,21 @@
  *	a WAN route and the setter accepts only InternetGatewayDevice.LANDevice.
  *	Ported literally, so it behaves the same if the package ever appears.
  *
- *	Other quirks kept: Forwarding.Enable reads "1"/"0" (not true/false) and
- *	accepts 1/true/True/TRUE/yes/on and their opposites; Forwarding.{i}.Enable
- *	accepts only "true"/"false"; Status reads "Enable"/"Disable"; Type is
- *	writable and ignores what is written; Dest/Mask/Gateway take any
- *	non-empty string; ForwardingMetric 0..255 as busybox "[" parses numbers
- *	(" 5" and "+5" pass and are stored as written); a new route is disabled
+ *	Every SPV first meets the shell's input contract (input_contract_mtk.c):
+ *	is_safe_input, then the check by SHELL type -- xsd:boolean for the two
+ *	Enable, xsd:IPv4Address for Dest/Mask/Gateway; ForwardingMetric is
+ *	"xsd:Int" (capital I) and ForwardNumberOfEntries/DefaultConnectionService
+ *	untyped, which the shell does not check.
+ *
+ *	Other quirks kept: Forwarding.Enable reads "1"/"0" (not true/false); its
+ *	setter maps 1/true/True/TRUE/yes/on and their opposites, but the
+ *	xsd:boolean contract lets only true/1/false/0 reach it;
+ *	Forwarding.{i}.Enable accepts only "true"/"false" (so "1"/"0" pass the
+ *	contract and fail here); Status reads "Enable"/"Disable"; Type is
+ *	writable and ignores what is written; Dest/Mask/Gateway need only a
+ *	dotted quad SOMEWHERE in the value (grep -o, unanchored); ForwardingMetric
+ *	0..255 as busybox "[" parses numbers (" 5" and "+5" pass and are stored
+ *	as written); a new route is disabled
  *	with metric -1, which ForwardingMetric then refuses to write back; the
  *	common Enable lives in network.route4_common.active while AddObject reads
  *	its limit from network.routev4Common.max_rules -- two different sections.

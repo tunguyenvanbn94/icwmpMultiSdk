@@ -4,6 +4,7 @@ if SDK_MTK
 libtr098_la_SOURCES +=	\
 	../sdk/mtk/dmplatform_mtk.c				\
 	../sdk/mtk/dmmtk.c						\
+	../sdk/mtk/input_contract_mtk.c				\
 	../sdk/mtk/dm098/root_mtk.c				\
 	../sdk/mtk/dm098/deviceinfo_mtk.c			\
 	../sdk/mtk/dm098/time_mtk.c				\

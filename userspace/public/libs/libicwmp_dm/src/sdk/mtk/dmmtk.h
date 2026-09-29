@@ -86,6 +86,14 @@ int mtk_ere_match(const char *re, const char *s);
  * pattern does not compile. */
 char *mtk_grep_o(const char *re, const char *s);
 
+/* Input contract --------------------------------------------------- */
+/* common_set_value_check_param() of the shell, in front of every native
+ * setter: is_safe_input + the check of the parameter's shell type
+ * (input_contract_mtk.c, shelltypes_mtk.h).  0, or FAULT_9007. */
+int mtk_input_contract(const char *path, const char *value);
+/* is_safe_input alone: 1 when the value passes */
+int mtk_shell_safe_input(const char *v);
+
 /* IPv4 --------------------------------------------------------------- */
 /* Dotted quad -> host order integer, mirroring is_valid_ipv4 + ipstr2int
  * of functions/common: every octet decimal and <= 255, exactly four of them.

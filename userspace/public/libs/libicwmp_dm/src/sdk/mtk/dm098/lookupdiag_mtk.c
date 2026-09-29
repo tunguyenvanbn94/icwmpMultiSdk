@@ -24,15 +24,18 @@
  *	the text, lists the five Result.{i} leaves anyway; verify-dm-paths.py
  *	reports them as unreachable instead of missing.  Not ported.
  *
+ *	Every SPV first meets the shell's input contract (input_contract_mtk.c:
+ *	is_safe_input + the check by shell type), then the setters below.
+ *
  *	VENDOR QUIRKS KEPT:
  *
  *	  - Timeout and NumberOfRepetitions go through nslookup_set /
- *	    dnslookup_set: NO check at all (typed unsignedInt, yet "abc" is
- *	    stored) and NO stop of a running lookup -- unlike every other
- *	    writable leaf here.
- *	  - DNSServer takes the same host check as HostName, so an empty value
- *	    ("use the system resolver", which the launcher supports) cannot be
- *	    written back once set.
+ *	    dnslookup_set: the setter checks nothing -- only the contract's
+ *	    xsd:unsignedInt range (0..4294967295) applies -- and does NOT stop a
+ *	    running lookup, unlike every other writable leaf here.
+ *	  - DNSServer takes the same host check as HostName, and the contract
+ *	    refuses "" anyway: an empty value ("use the system resolver", which
+ *	    the launcher supports) cannot be written back once set.
  *	  - Interface takes a network device name, "$(ifconfig $2)" rule
  *	    (diag_ifconfig_prints).
  *

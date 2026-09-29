@@ -34,13 +34,15 @@
  *
  *	Other quirks kept:
  *	  - DownloadURL / UploadURL: http:// or ftp:// only (no https), the value
- *	    must equal what grep -o prints (diag_url_valid) -- so "" is ACCEPTED
- *	    (grep prints nothing, "" == ""), and the launcher then reports
- *	    Error_InitConnectionFailed;
+ *	    must equal what grep -o prints (diag_url_valid).  The input contract
+ *	    in front of it (input_contract_mtk.c, is_safe_input) refuses "" and
+ *	    any of # ; & | < > ` $ \ ' " first -- so a URL with a query string
+ *	    ("?a=1&b=2") or a fragment was never accepted on the product;
  *	  - Interface: device name, "$(ifconfig $2)" rule, reads "" when unset
  *	    (no "default" here, unlike the other diagnostics);
  *	  - EthernetPriority lives in option EthPriority;
- *	  - TestFileLength: digits only, no upper bound;
+ *	  - TestFileLength: digits only in the setter, bounded to
+ *	    0..4294967295 by the contract's xsd:unsignedInt check;
  *	  - ROMTime/BOMTime/EOMTime/TCPOpen*Time are strings, not dateTime,
  *	    reading "0000-00-00T00:00:00.000000" before the first run.
  *
