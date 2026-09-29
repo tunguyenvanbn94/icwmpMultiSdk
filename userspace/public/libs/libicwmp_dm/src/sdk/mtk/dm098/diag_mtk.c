@@ -23,6 +23,7 @@
 const struct diag_store diag_ipping     = { "/var/state",            "ipping_launch" };
 const struct diag_store diag_traceroute = { "/var/state/traceroute", "traceroute_launch" };
 const struct diag_store diag_nslookup   = { "/var/state/nslookup",   "nslookup_launch" };
+const struct diag_store diag_dns        = { "/var/state/dnsDiagnostics", "dnsDiagnostics_launch" };
 
 char *diag_get(const struct diag_store *d, const char *option, const char *def)
 {
@@ -50,6 +51,30 @@ void diag_store_value(const struct diag_store *d, const char *option, const char
 	if (strcmp(diag_get(d, "DiagnosticsState", NULL), "Requested") != 0)
 		diag_set(d, "DiagnosticsState", "None");
 	diag_set(d, option, value);
+}
+
+void diag_store_value_nostop(const struct diag_store *d, const char *option, const char *value)
+{
+	if (strcmp(diag_get(d, "DiagnosticsState", NULL), "Requested") != 0)
+		diag_set(d, "DiagnosticsState", "None");
+	diag_set(d, option, value);
+}
+
+char *diag_result_get(const char *dir, int idx, const char *option)
+{
+	char sec[32];
+
+	snprintf(sec, sizeof(sec), "@local[%d]", idx);
+	return mtk_state(dir, DIAG_PKG, sec, option);
+}
+
+int diag_ifconfig_prints(const char *v)
+{
+	if (!*v || strcmp(v, "-a") == 0)
+		return 1;
+	if (strpbrk(v, " \t\n"))
+		return 0;
+	return mtk_netdev_exists(v);
 }
 
 void diag_request(const struct diag_store *d)

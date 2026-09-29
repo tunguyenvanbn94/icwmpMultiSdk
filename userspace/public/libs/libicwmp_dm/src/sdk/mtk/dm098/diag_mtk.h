@@ -44,6 +44,16 @@ struct diag_store {
 extern const struct diag_store diag_ipping;		/* -P /var/state */
 extern const struct diag_store diag_traceroute;	/* -P /var/state/traceroute */
 extern const struct diag_store diag_nslookup;		/* -P /var/state/nslookup */
+extern const struct diag_store diag_dns;		/* -P /var/state/dnsDiagnostics */
+
+/* where the launchers of the two lookup diagnostics put Result.{i}: the
+ * launcher "uci -P <dir> add"s one "local" section per answer, so Result.<n>
+ * is easycwmp.@local[<n>] of that store (@local[0] is the section already in
+ * /etc/config/easycwmp).  "uci -P ... commit" in the launcher is a no-op --
+ * uci-2020-10-06 cli.c: -P sets CLI_FLAG_NOCOMMIT -- so nothing reaches
+ * flash and the store is emptied at the start of every run. */
+#define DIAG_NSLOOKUP_RESULT_DIR	"/var/state/nslookup_result"
+#define DIAG_DNS_RESULT_DIR		"/var/state/dnsDiagnostics_result"
 
 /* <x>_get: "${val:-def}" of easycwmp.@local[0].<option> */
 char *diag_get(const struct diag_store *d, const char *option, const char *def);
@@ -58,6 +68,11 @@ void diag_stop(const struct diag_store *d);
  *	[ DiagnosticsState != Requested ] && DiagnosticsState=None
  *	<option>=<value> */
 void diag_store_value(const struct diag_store *d, const char *option, const char *value);
+/* the same tail WITHOUT the stop: nslookup_set / dnslookup_set (Timeout,
+ * NumberOfRepetitions) leave a running launcher alone */
+void diag_store_value_nostop(const struct diag_store *d, const char *option, const char *value);
+/* <x>_get_result: "${val:-}" of easycwmp.@local[<idx>].<option> in <dir> */
+char *diag_result_get(const char *dir, int idx, const char *option);
 /* <x>_set_diagnostic_state Requested: stop, Requested, queue the launcher */
 void diag_request(const struct diag_store *d);
 
@@ -77,5 +92,14 @@ int diag_check_uint(const char *v, long long min, long long max);
  *	IPv6: an IPv6 literal without ":::", or a host name
  *	anything else: not checked */
 int diag_host_valid(const struct diag_store *d, const char *host);
+
+/* <x>_set_interface of traceroute, nslookup and dns: accepted when
+ * "$(ifconfig $2)" -- unquoted -- prints something:
+ *	""     ifconfig alone lists the up interfaces      -> accepted
+ *	"-a"   lists all of them                           -> accepted
+ *	"a b"  two words: ifconfig tries to CONFIGURE a    -> rejected
+ * The third case also ran that configuration ("eth0 down" took eth0 down);
+ * the rejection is kept, the side effect is not. */
+int diag_ifconfig_prints(const char *v);
 
 #endif

@@ -110,19 +110,9 @@ TRACEROUTE_SET_RANGE(set_trc_maxhops,   "MaxHopCount",   1,  64)
 TRACEROUTE_SET_RANGE(set_trc_blocksize, "DataBlockSize", 38, 32768)
 TRACEROUTE_SET_RANGE(set_trc_dscp,      "DSCP",          0,  63)
 
-/* "$(ifconfig $2)" is not empty -- see the header for the three cases */
-static int trc_ifconfig_prints(const char *v)
-{
-	if (!*v || strcmp(v, "-a") == 0)
-		return 1;
-	if (strpbrk(v, " \t\n"))
-		return 0;
-	return mtk_netdev_exists(v);
-}
-
 static int set_trc_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
-	if (!trc_ifconfig_prints(value))
+	if (!diag_ifconfig_prints(value))
 		return FAULT_9007;
 	if (action == VALUESET)
 		diag_store_value(TRC, "Interface", value);
