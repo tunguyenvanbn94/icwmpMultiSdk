@@ -61,7 +61,7 @@ struct dm_module {
 	int order;
 	DMOBJ *objs;			/* rows merged under the root object */
 	DMLEAF *params;			/* leaves merged at the root level */
-	const char *const *paths;	/* full paths owned, trailing dot, NULL terminated */
+	const char *const *paths;	/* full paths owned, NULL terminated; see below */
 	void (*init)(void);		/* optional, called once before the tree is built */
 };
 
@@ -81,6 +81,14 @@ DMLEAF *dm_registry_root_params(enum dm_model model);
  * module's owned path, 0 otherwise.  Both "IGD.Foo." and "IGD.Foo.Bar" match
  * the owned path "IGD.Foo.". */
 int dm_registry_owns(enum dm_model model, const char *path);
+/*
+ * Spelling of .paths:
+ *   "IGD.Foo."            the object and everything under it
+ *   "IGD.Foo.Bar"         that one leaf, exactly (no prefix swallowing)
+ *   "IGD.Foo.{i}.Bar"     that leaf of every instance of Foo
+ * The wildcard is what lets a module own part of an instanced object without
+ * listing the instances, and without claiming leaves a bridge still serves.
+ */
 /* 1 when an owned path starts with the given prefix, i.e. a request for
  * prefix would also return rows the static tree answers itself. */
 int dm_registry_covers(enum dm_model model, const char *prefix);

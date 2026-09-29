@@ -180,6 +180,61 @@ static DMOBJ *merge_obj(DMOBJ *a, DMOBJ *b)
 }
 
 /* ------------------------------------------------------------------ */
+/* path matching                                                       */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Segment aware match of an owned path against a queried one.
+ *
+ * A claim ending in "." owns everything below it ("IGD.Foo." matches
+ * "IGD.Foo.Bar" and "IGD.Foo"), a claim without one is a single leaf and must
+ * match exactly -- "IGD.Foo.Bar" no longer swallows "IGD.Foo.BarBaz" the way
+ * plain strncmp() did.
+ *
+ * A segment spelled "{i}" matches any one segment, so a module can own one
+ * leaf of every instance of an object without listing the instances:
+ *
+ *     "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.SSID"
+ *
+ * With sym set, "{i}" matches a wildcard on either side: that is what the
+ * prefix and conflict checks need, where both strings may carry one.
+ */
+static int path_match(const char *claim, const char *path, int sym)
+{
+	const char *o = claim, *p = path;
+	size_t l;
+	int object_claim;
+
+	if (!claim || !path)
+		return 0;
+	l = strlen(claim);
+	object_claim = (l && claim[l - 1] == '.');
+
+	for (;;) {
+		const char *oe, *pe;
+		size_t ol, pl;
+
+		if (*o == '\0')
+			return object_claim ? 1 : (*p == '\0');
+		oe = strchr(o, '.');
+		ol = oe ? (size_t)(oe - o) : strlen(o);
+		if (ol == 0)		/* the trailing dot of an object claim */
+			return 1;
+		if (*p == '\0')
+			return 0;
+		pe = strchr(p, '.');
+		pl = pe ? (size_t)(pe - p) : strlen(p);
+		if (!(ol == 3 && memcmp(o, "{i}", 3) == 0) &&
+		    !(sym && pl == 3 && memcmp(p, "{i}", 3) == 0)) {
+			if (ol != pl || memcmp(o, p, ol) != 0)
+				return 0;
+		}
+		o = oe ? oe + 1 : o + ol;
+		p = pe ? pe + 1 : p + pl;
+	}
+}
+
+/* ------------------------------------------------------------------ */
 /* claim check                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -208,12 +263,10 @@ static int check_claims(struct dm_model_state *st, const char *model_name)
 				continue;
 			for (k = 0; a[k]; k++) {
 				for (l = 0; b[l]; l++) {
-					size_t la = strlen(a[k]), lb = strlen(b[l]);
-					size_t shortest = la < lb ? la : lb;
-
-					if (!shortest || strncmp(a[k], b[l], shortest) != 0)
+					if (!path_match(a[k], b[l], 1) &&
+					    !path_match(b[l], a[k], 1))
 						continue;
-					/* equal, or one is a prefix of the other */
+					/* equal, or one owns the other */
 					fprintf(stderr,
 						"libtr098: dm %s: path claim conflict \"%s\" (%s) vs \"%s\" (%s)\n",
 						model_name, a[k], st->mods[i]->name,
@@ -306,13 +359,7 @@ int dm_registry_owns(enum dm_model model, const char *path)
 		if (!p)
 			continue;
 		for (j = 0; p[j]; j++) {
-			size_t l = strlen(p[j]);
-
-			if (strncmp(path, p[j], l) == 0)
-				return 1;
-			/* "IGD.Foo" (no trailing dot) also belongs to "IGD.Foo." */
-			if (l && p[j][l - 1] == '.' && strlen(path) == l - 1 &&
-			    strncmp(path, p[j], l - 1) == 0)
+			if (path_match(p[j], path, 0))
 				return 1;
 		}
 	}
@@ -336,7 +383,9 @@ int dm_registry_covers(enum dm_model model, const char *prefix)
 		if (!p)
 			continue;
 		for (j = 0; p[j]; j++) {
-			if (strncmp(p[j], prefix, l) == 0)
+			/* an owned path at or below the prefix, wildcards on
+			 * either side treated as a match */
+			if (path_match(prefix, p[j], 1))
 				return 1;
 		}
 	}
