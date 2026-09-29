@@ -13,7 +13,15 @@ PKG_NAME:=icwmp_tr098
 PKG_VERSION:=3
 PKG_RELEASE:=2
 
-PKG_SOURCE:=$(APP_HNI_ICWMP_TR098_DIR)
+# NOT $(APP_HNI_ICWMP_TR098_DIR): that is exported from
+# feeds/airoha/target/linux/airoha/dir.mak, which only the TARGET Makefile
+# includes.  A full image build sees it, "make package/icwmp_tr098/compile"
+# does not -- PKG_SOURCE is then empty and Build/Prepare runs "cp -fpR /."
+# which copies the whole root filesystem into the build directory (17 GB
+# observed, 2026-09-24).  $(TRUNK_DIR) comes from include/ecnt-trunkdir.mk,
+# which rules.mk includes everywhere, so it works in both.  libtr098 and the
+# vendor's own cwmpclient package both spell it this way.
+PKG_SOURCE:=$(TRUNK_DIR)/apps/hni/icwmp_tr098
 # the data model scripts and the ACS config of record come from the
 # easycwmp client this package replaces
 CWMPCLIENT_EXT:=$(TRUNK_DIR)/apps/hni/cwmpclient/ext/openwrt
@@ -54,6 +62,10 @@ endef
 
 define Build/Prepare
 	@echo "Build/Prepare"
+	@test -n "$(strip $(PKG_SOURCE))" -a -d "$(PKG_SOURCE)" || { \
+		echo "ERROR: PKG_SOURCE is empty or not a directory: '$(PKG_SOURCE)'"; \
+		echo "Without this guard the next line copies all of / into $(PKG_BUILD_DIR)."; \
+		exit 1; }
 	mkdir -p $(PKG_BUILD_DIR)
 	$(CP) $(PKG_SOURCE)/. $(PKG_BUILD_DIR)
 	@echo "Finish Build/Prepare"

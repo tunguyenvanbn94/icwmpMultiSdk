@@ -31,6 +31,10 @@ endef
 
 define Build/Prepare
 	@echo "Build/Prepare"
+	@test -n "$(strip $(PKG_SOURCE))" -a -d "$(PKG_SOURCE)" || { \
+		echo "ERROR: PKG_SOURCE is empty or not a directory: '$(PKG_SOURCE)'"; \
+		echo "Without this guard the next line copies all of / into $(PKG_BUILD_DIR)."; \
+		exit 1; }
 	mkdir -p $(PKG_BUILD_DIR)
 	$(CP) $(PKG_SOURCE)/. $(PKG_BUILD_DIR)
 endef
