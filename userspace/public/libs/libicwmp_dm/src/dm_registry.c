@@ -23,6 +23,7 @@ struct dm_model_state {
 	DMLEAF *root_params;
 	DMOBJ entry[2];
 	int built;
+	int conflicts;
 };
 
 static struct dm_model_state models[__DM_MODEL_MAX];
@@ -178,6 +179,56 @@ static DMOBJ *merge_obj(DMOBJ *a, DMOBJ *b)
 	return out;
 }
 
+/* ------------------------------------------------------------------ */
+/* claim check                                                         */
+/* ------------------------------------------------------------------ */
+
+static const char *const model_names[__DM_MODEL_MAX] = { "tr098", "tr181" };
+
+/* Two modules claiming the same path is a build time mistake: dm_registry_owns()
+ * answers for whichever module is scanned first, so the compat bridge would
+ * filter on an arbitrary owner and one of the two trees would silently lose.
+ * The intended way to extend an object another module owns is to declare no
+ * .paths at all and let the merge do it (sdk/mtk/dm098/managementserver_core_mtk.c).
+ * Reported once, at build time, never fatal -- a wrong tree at runtime is worse
+ * than a noisy log on a developer build. */
+static int check_claims(struct dm_model_state *st, const char *model_name)
+{
+	int i, j, k, l, n = 0;
+
+	for (i = 0; i < st->nmods; i++) {
+		const char *const *a = st->mods[i]->paths;
+
+		if (!a)
+			continue;
+		for (j = i + 1; j < st->nmods; j++) {
+			const char *const *b = st->mods[j]->paths;
+
+			if (!b)
+				continue;
+			for (k = 0; a[k]; k++) {
+				for (l = 0; b[l]; l++) {
+					size_t la = strlen(a[k]), lb = strlen(b[l]);
+					size_t shortest = la < lb ? la : lb;
+
+					if (!shortest || strncmp(a[k], b[l], shortest) != 0)
+						continue;
+					/* equal, or one is a prefix of the other */
+					fprintf(stderr,
+						"libtr098: dm %s: path claim conflict \"%s\" (%s) vs \"%s\" (%s)\n",
+						model_name, a[k], st->mods[i]->name,
+						b[l], st->mods[j]->name);
+					n++;
+				}
+			}
+		}
+	}
+	if (n)
+		fprintf(stderr, "libtr098: dm %s: %d path claim conflict(s), "
+				"dm_registry_owns() is ambiguous for them\n", model_name, n);
+	return n;
+}
+
 static void build(enum dm_model model)
 {
 	struct dm_model_state *st = &models[model];
@@ -194,6 +245,8 @@ static void build(enum dm_model model)
 		st->root = merge_obj(st->root, st->mods[i]->objs);
 		st->root_params = merge_leaf(st->root_params, st->mods[i]->params);
 	}
+
+	st->conflicts = check_claims(st, model < __DM_MODEL_MAX ? model_names[model] : "?");
 
 	st->entry[0].obj = (char *)&dmroot;
 	st->entry[0].permission = &DMREAD;
@@ -290,6 +343,13 @@ int dm_registry_covers(enum dm_model model, const char *prefix)
 	return 0;
 }
 
+int dm_registry_conflicts(enum dm_model model)
+{
+	if (model >= __DM_MODEL_MAX)
+		return 0;
+	return state_of(model)->conflicts;
+}
+
 int dm_registry_count(enum dm_model model)
 {
 	if (model >= __DM_MODEL_MAX)
@@ -299,7 +359,6 @@ int dm_registry_count(enum dm_model model)
 
 void dm_registry_dump(void)
 {
-	static const char *const model_name[__DM_MODEL_MAX] = { "tr098", "tr181" };
 	int m, i, j;
 
 	for (m = 0; m < __DM_MODEL_MAX; m++) {
@@ -314,7 +373,7 @@ void dm_registry_dump(void)
 					np++;
 			}
 			fprintf(stderr, "libtr098: dm module %-8s %-24s order %3d  %d root obj  %d root leaf  %d owned path\n",
-				model_name[m], mod->name, mod->order,
+				model_names[m], mod->name, mod->order,
 				count_obj(mod->objs), count_leaf(mod->params), np);
 		}
 	}

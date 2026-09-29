@@ -87,6 +87,12 @@ int dm_registry_covers(enum dm_model model, const char *prefix);
 
 /* Number of registered modules, and a one line log of each (LOG level INFO). */
 int dm_registry_count(enum dm_model model);
+/* Number of overlapping .paths claims found when the model was built.  Two
+ * modules claiming the same path (or one claiming a prefix of the other) make
+ * dm_registry_owns() answer for an arbitrary one of them; each pair is logged
+ * to stderr at build time.  Extend an object owned by another module by
+ * declaring no .paths and letting the merge do it. */
+int dm_registry_conflicts(enum dm_model model);
 void dm_registry_dump(void);
 
 #define DM_MODULE_REGISTER(sym)						\

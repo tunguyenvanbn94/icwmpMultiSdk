@@ -336,10 +336,13 @@ int dm_entry_apply(struct dmctx *ctx, int cmd, char *arg1, char *arg2)
 {
 	int fault = 0;
 	struct set_tmp *n, *p;
+	/* actions queued by the setters of this batch, dropped when it faults */
+	struct dm_end_session_mark end_mark;
 	
 	switch(cmd) {
 		case CMD_SET_VALUE:
 			ctx->setaction = VALUESET;
+			dm_end_session_mark(&end_mark);
 			list_for_each_entry_safe(n, p, &ctx->set_list_tmp, list) {
 				ctx->in_param = n->name;
 				ctx->in_value = n->value ? n->value : "";
@@ -355,6 +358,7 @@ int dm_entry_apply(struct dmctx *ctx, int cmd, char *arg1, char *arg2)
 				//Should not happen
 				dmuci_revert();
 				dm_platform_revert(ctx);
+				dm_end_session_rollback(&end_mark);
 				add_list_fault_param(ctx, ctx->in_param, fault);
 			} else {
 				/* platform batch write (BDK: one bcm_generic_setParameterValues
@@ -362,6 +366,10 @@ int dm_entry_apply(struct dmctx *ctx, int cmd, char *arg1, char *arg2)
 				fault = dm_platform_commit(ctx, arg1);
 				if (fault) {
 					dmuci_revert();
+					/* the batch was rejected as a whole: drop the platform
+					 * queue and the actions its setters had queued too */
+					dm_platform_revert(ctx);
+					dm_end_session_rollback(&end_mark);
 				} else {
 					dmuci_set_value("cwmp", "acs", "ParameterKey", arg1 ? arg1 : "");
 					dmuci_change_packages(&head_package_change);
@@ -372,6 +380,7 @@ int dm_entry_apply(struct dmctx *ctx, int cmd, char *arg1, char *arg2)
 			break;
 		case CMD_SET_NOTIFICATION:
 			ctx->setaction = VALUESET;
+			dm_end_session_mark(&end_mark);
 			list_for_each_entry_safe(n, p, &ctx->set_list_tmp, list) {
 				ctx->in_param = n->name;
 				ctx->in_notification = n->value ? n->value : "0";
@@ -386,6 +395,7 @@ int dm_entry_apply(struct dmctx *ctx, int cmd, char *arg1, char *arg2)
 			if (fault) {
 				//Should not happen
 				dmuci_revert();
+				dm_end_session_rollback(&end_mark);
 			} else {
 				dmuci_commit();
 			}

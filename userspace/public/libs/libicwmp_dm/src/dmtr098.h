@@ -531,6 +531,17 @@ char *get_last_instance_lev2_tr098(char *package, char *section, char* dmmap_pac
 char *handle_update_instance(int instance_ranck, struct dmctx *ctx, char **last_inst, char * (*up_instance)(int action, char **last_inst, void *argv[]), int argc, ...);
 int dm_add_end_session(struct dmctx *ctx, void(*function)(struct execute_end_session *), int action, void *data);
 int apply_end_session();
+
+/* Transaction around the end of session action queue: take a mark before a set
+ * batch, roll back when the batch faults, so an action queued by a setter whose
+ * RPC was reverted (reboot, factory reset, diagnostic) does not run anyway.
+ * Restores end_session_flag as well.  Returns the number of dropped actions. */
+struct dm_end_session_mark {
+	struct list_head *tail;
+	int flag;
+};
+void dm_end_session_mark(struct dm_end_session_mark *mark);
+int dm_end_session_rollback(const struct dm_end_session_mark *mark);
 void cwmp_set_end_session (unsigned int flag);
 char *dm_get_parameter_notification(struct dmctx *ctx, char *param);
 int dm_set_parameter_notification(struct dmctx *ctx, char *param, char *value);

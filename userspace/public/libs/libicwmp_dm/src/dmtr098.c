@@ -3158,6 +3158,52 @@ void cwmp_set_end_session (unsigned int flag)
 	end_session_flag |= flag;
 }
 
+/*
+ * Transaction around the end of session action queue.
+ *
+ * A setter queues its action (dm_add_end_session above) while the RPC is still
+ * being written, before the engine knows the RPC will succeed.  When it then
+ * faults, dm_entry_apply() reverts UCI and the platform -- but the queued
+ * actions used to stay in the list and still ran when the session ended, so a
+ * rolled back SetParameterValues could still reboot or factory reset the box.
+ * Mark before the batch, roll back on the same paths that call dmuci_revert().
+ *
+ * Only the session thread queues actions, like the list itself, which has never
+ * been locked.  Entries are appended and never removed inside one batch, so the
+ * marked node cannot be freed under us.
+ */
+void dm_end_session_mark(struct dm_end_session_mark *mark)
+{
+	if (!mark)
+		return;
+	mark->tail = list_execute_end_session.prev;
+	mark->flag = end_session_flag;
+}
+
+int dm_end_session_rollback(const struct dm_end_session_mark *mark)
+{
+	struct list_head *stop;
+	int n = 0;
+
+	if (!mark)
+		return 0;
+	stop = mark->tail ? mark->tail : &list_execute_end_session;
+	/* head.prev == &head means empty, so the second test is the "not empty"
+	 * guard without depending on a list_empty() macro */
+	while (list_execute_end_session.prev != stop &&
+	       list_execute_end_session.prev != &list_execute_end_session) {
+		struct execute_end_session *p =
+			list_entry(list_execute_end_session.prev,
+				   struct execute_end_session, list);
+
+		list_del(&p->list);
+		tr098_free_dm_end_session(p);
+		n++;
+	}
+	end_session_flag = mark->flag;
+	return n;
+}
+
 char *dm_print_path(char *fpath, ...)
 {
 	static char pathbuf[512] = "";
