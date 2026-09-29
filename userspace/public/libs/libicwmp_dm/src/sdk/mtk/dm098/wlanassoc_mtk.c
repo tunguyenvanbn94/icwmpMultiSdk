@@ -219,19 +219,13 @@ static DMOBJ tLanDeviceAssocRoot[] = {
 {0}
 };
 
-/* The whole AssociatedDevice subtree is ours for every WLAN instance, so one
- * wildcard claim is enough -- unlike its parent, which is still shared with
- * the shell bridge until the security leaves are ported (P3b). */
-static const char *const assoc_mtk_paths[] = {
-	"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.AssociatedDevice.",
-	NULL
-};
-
+/* No .paths here: wlan_mtk.c claims the whole WLANConfiguration branch for
+ * all three modules of this object.  Claiming the subtree again would be a
+ * duplicate owner, which check_claims() reports. */
 static const struct dm_module wlanassoc_mtk_module = {
 	.name  = "mtk-wlan-assoc",
 	.model = DM_MODEL_TR098,
 	.order = DM_ORDER_SDK,
 	.objs  = tLanDeviceAssocRoot,
-	.paths = assoc_mtk_paths,
 };
 DM_MODULE_REGISTER(wlanassoc_mtk_module);

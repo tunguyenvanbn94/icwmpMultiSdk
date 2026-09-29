@@ -924,49 +924,16 @@ static DMOBJ tLanDeviceWlanRoot[] = {
 };
 
 /*
- * The object is shared with the shell bridge until phase P3b ports the
- * security leaves, so the claim is leaf by leaf instead of the whole branch --
- * claiming "WLANConfiguration." here would hide BeaconType and the encryption
- * modes.  "{i}" stands for any instance, so one line covers all twelve.
+ * The whole object is C now that wlansec_mtk.c carries the security leaves,
+ * so one branch claim replaces the thirty leaf claims this module needed
+ * while half of it was still answered by the shell bridge.  The two sibling
+ * modules declare no paths: a second claim on the same branch is exactly what
+ * check_claims() reports as a conflict.
  */
-#define W(leaf)	"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}." leaf
-
 static const char *const wlan_mtk_paths[] = {
-	W("Enable"),
-	W("Status"),
-	W("BSSID"),
-	W("SSID"),
-	W("SSIDAdvertisementEnabled"),
-	W("RadioEnabled"),
-	W("Channel"),
-	W("AutoChannelEnable"),
-	W("ChannelsInUse"),
-	W("PossibleChannels"),
-	W("TransmitPower"),
-	W("TransmitPowerSupported"),
-	W("MaxBitRate"),
-	W("BasicDataTransmitRates"),
-	W("OperationalDataTransmitRates"),
-	W("Standard"),
-	W("SupportedStandards"),
-	W("RegulatoryDomain"),
-	W("MruEnable"),
-	W("TotalAssociations"),
-	W("TotalBytesReceived"),
-	W("TotalBytesSent"),
-	W("TotalPacketsReceived"),
-	W("TotalPacketsSent"),
-	W("BeaconAdvertisementEnabled"),
-	W("MACAddressControlEnabled"),
-	W("UAPSDEnable"),
-	W("WMMEnable"),
-	W("X_AIS_APModuleEnable"),
-	W("X_AIS_WlanStandard"),
-	W("Stats."),
-	W("WPS."),
+	"InternetGatewayDevice.LANDevice.1.WLANConfiguration.",
 	NULL
 };
-#undef W
 
 static const struct dm_module wlan_mtk_module = {
 	.name  = "mtk-wlan",
