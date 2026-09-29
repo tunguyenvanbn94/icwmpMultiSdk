@@ -292,12 +292,17 @@ def main():
             # single-package build is not: feeds.conf.default uses src-cpy, so
             # feeds/airoha holds a COPY of the two package Makefiles this just
             # rewrote, and the build keeps the old DEPENDS until refreshed.
-            print("\nBuilding one package instead of the whole image?  Refresh the")
-            print("feed first -- apply rewrote two feed Makefiles and the airoha feed")
-            print("is src-cpy, a copy:")
+            # Refresh only the two Makefiles: "feeds update airoha" re-copies
+            # the whole airoha feed and broke a later "make MSDK=1" image
+            # build on the user's tree (2026-09-26).  package/feeds/airoha/<p>
+            # already links into feeds/airoha, so no "feeds install" either.
+            print("\nBuilding one package instead of the whole image?  The airoha feed")
+            print("is src-cpy (a copy); refresh ONLY the two package Makefiles:")
             print("cd openwrt-21.02/openwrt-21.02.1_dev")
-            print("./scripts/feeds update airoha")
-            print("./scripts/feeds install -p airoha -f libtr098 icwmp_tr098")
+            print("for p in libtr098 icwmp_tr098; do cmp -s ../../airoha_feeds/package/airoha/apps/$p/Makefile"
+                  " feeds/airoha/package/airoha/apps/$p/Makefile || cp -v ../../airoha_feeds/package/airoha/apps/$p/Makefile"
+                  " feeds/airoha/package/airoha/apps/$p/Makefile; done")
+            print("make package/libtr098/{clean,compile} V=sc -j1")
             print("make package/icwmp_tr098/{clean,compile} V=sc -j1")
         print("\nApply does not run the compiler or flash a board.")
         return 0
