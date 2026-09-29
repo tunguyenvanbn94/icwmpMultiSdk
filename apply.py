@@ -286,6 +286,19 @@ def main():
             execute(target, copies, edits, removals)
         print("\nBuild next, from SDK root with its toolchain environment:")
         print("\n".join(build_commands(sdk, profile)))
+        if sdk == "mtk":
+            # airoha-compile.sh calls airoha-feeds-prepare.sh, which runs
+            # "feeds update airoha" -- so the full build above is fine.  A
+            # single-package build is not: feeds.conf.default uses src-cpy, so
+            # feeds/airoha holds a COPY of the two package Makefiles this just
+            # rewrote, and the build keeps the old DEPENDS until refreshed.
+            print("\nBuilding one package instead of the whole image?  Refresh the")
+            print("feed first -- apply rewrote two feed Makefiles and the airoha feed")
+            print("is src-cpy, a copy:")
+            print("cd openwrt-21.02/openwrt-21.02.1_dev")
+            print("./scripts/feeds update airoha")
+            print("./scripts/feeds install -p airoha -f libtr098 icwmp_tr098")
+            print("make package/icwmp_tr098/{clean,compile} V=sc -j1")
         print("\nApply does not run the compiler or flash a board.")
         return 0
     except (OSError, ValueError, KeyError) as error:
