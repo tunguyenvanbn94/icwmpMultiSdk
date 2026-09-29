@@ -119,6 +119,17 @@ static void child_close_locked(int kill_it)
 	rlen = 0;
 }
 
+static int read_reply_locked(dmscript_line_cb cb, void *priv);
+
+/* a line the script prints before its start-up prompt (icwmp_dm.sh: the
+ * fault of a missing function library) */
+static int startup_line_cb(json_object *line, void *priv)
+{
+	(void)priv;
+	dmscript_log("start-up: %s", json_object_to_json_string(line));
+	return 0;
+}
+
 static int child_spawn_locked(void)
 {
 	int pin[2], pout[2];
@@ -175,6 +186,15 @@ static int child_spawn_locked(void)
 	/* never die on a closed pipe: the caller sees -1 instead */
 	signal(SIGPIPE, SIG_IGN);
 	dmscript_log("spawned %s %s pid %d", script_path, script_arg, (int)pid);
+	/* icwmp_dm.sh prints one prompt once the function library is loaded,
+	 * before it reads a request.  Left in the pipe, that prompt ends the
+	 * reply of the first request with nothing in it, and every reply after
+	 * is handed to the request that follows it. */
+	if (read_reply_locked(startup_line_cb, NULL) != 0) {
+		dmscript_log("pid %d gave no start-up prompt", (int)pid);
+		child_close_locked(1);
+		return -1;
+	}
 	return 0;
 }
 

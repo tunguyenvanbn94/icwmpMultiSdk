@@ -14,6 +14,10 @@
  *	                      {"parameter":"...","fault_code":"9005"}\n               (or faults)
  *	                      icwmp_dm>\n                                             (prompt = end)
  *
+ *	Once its library is loaded the child prints one prompt before it reads
+ *	the first request; the spawn consumes it, so each reply belongs to the
+ *	request that was just written.
+ *
  *	Every reply line is a JSON object handed to the caller's callback; the
  *	platform (platform/mtk/dmplatform_mtk.c) turns them into engine lists.
  *	The child is spawned on first use and respawned when it died; a request
