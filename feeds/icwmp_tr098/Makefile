@@ -9,6 +9,12 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 include $(INCLUDE_DIR)/target.mk
 
+# TRUNK_DIR lives in include/ecnt-trunkdir.mk, written by
+# airoha_script/airoha-compile.sh.  Nothing in the OpenWrt tree includes that
+# file, so in a shell that has not exported TRUNK_DIR it is empty -- pull it in
+# here.  "-include": a tree without the file still parses.
+-include $(TOPDIR)/include/ecnt-trunkdir.mk
+
 PKG_NAME:=icwmp_tr098
 PKG_VERSION:=3
 PKG_RELEASE:=2
