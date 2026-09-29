@@ -320,6 +320,10 @@ int run_session_end_func (struct session *session);
 int cwmp_move_session_to_session_queue (struct cwmp *cwmp, struct session *session);
 int cwmp_session_destructor (struct cwmp *cwmp, struct session *session);
 int cwmp_init(int argc, char** argv,struct cwmp *cwmp);
+/* start-up trace + crash report (cwmp.c): stderr (procd -> logread) and
+ * /tmp/icwmpd_boot.log, independent of the cwmp.cpe.log_* settings */
+void icwmp_boot_trace(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+void icwmp_boot_trace_init(int argc, char **argv);
 int cwmp_exit(void);
 void add_list_value_change(char *param_name, char *param_data, char *param_type);
 void send_active_value_change(void);

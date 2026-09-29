@@ -27,8 +27,191 @@
 #include "ubus.h"
 #include "diagnostic.h"
 #include "config.h"
+#include <stdarg.h>
+#include <string.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <ucontext.h>
+#include <sys/syscall.h>
+#include <sys/stat.h>
 
 struct cwmp         	cwmp_main = {0};
+
+/* ------------------------------------------------------------------------ */
+/* start-up trace + crash report                                             */
+/*                                                                           */
+/* The daemon can die before cwmp.cpe.log_* is read (the log file then only  */
+/* holds what icwmp_platform_init printed) and several exits on the way are  */
+/* silent: the pid-file lock (exit 0), global_conf_init / backup session     */
+/* errors returned from main, ubus_connect failing in the ubus thread.  A    */
+/* crash leaves nothing at all.  Every step of the start is written to       */
+/* stderr, which procd (stderr 1) forwards to logread, and appended to       */
+/* ICWMP_BOOT_TRACE_FILE, which survives the crash and the procd respawns.   */
+/* On SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGABRT the handler writes the fault      */
+/* address, pc/lr/sp and /proc/self/maps (pc - start of the r-xp mapping of  */
+/* the binary or libtr098.so = the address for addr2line), then re-raises    */
+/* the signal so a core dump is still possible.                              */
+/* ------------------------------------------------------------------------ */
+#define ICWMP_BOOT_TRACE_FILE	"/tmp/icwmpd_boot.log"
+#define ICWMP_BOOT_TRACE_MAX	(64 * 1024)
+
+static int boot_trace_fd = -1;
+static char boot_altstack[16384];
+
+static void bt_raw(int fd, const char *s, size_t n)
+{
+	while (fd >= 0 && n > 0) {
+		ssize_t w = write(fd, s, n);
+		if (w <= 0)
+			break;
+		s += w;
+		n -= (size_t)w;
+	}
+}
+
+static void bt_both(const char *s, size_t n)
+{
+	bt_raw(boot_trace_fd, s, n);
+	bt_raw(STDERR_FILENO, s, n);
+}
+
+void icwmp_boot_trace(const char *fmt, ...)
+{
+	char buf[768];
+	struct timespec ts;
+	va_list ap;
+	int n, m;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	n = snprintf(buf, sizeof(buf), "icwmpd-boot [%ld.%03ld pid %d] ",
+		     (long)ts.tv_sec, ts.tv_nsec / 1000000, (int)getpid());
+	if (n < 0 || n >= (int)sizeof(buf))
+		n = 0;
+	va_start(ap, fmt);
+	m = vsnprintf(buf + n, sizeof(buf) - n - 1, fmt, ap);
+	va_end(ap);
+	if (m < 0)
+		m = 0;
+	n += m;
+	if (n > (int)sizeof(buf) - 2)
+		n = sizeof(buf) - 2;
+	buf[n++] = '\n';
+	bt_both(buf, (size_t)n);
+}
+
+/* async-signal-safe formatting for the crash handler */
+static void bt_puts(const char *s)
+{
+	bt_both(s, strlen(s));
+}
+
+static void bt_putx(unsigned long long v)
+{
+	char b[19];
+	int i;
+
+	b[0] = '0';
+	b[1] = 'x';
+	for (i = 0; i < 16; i++)
+		b[2 + i] = "0123456789abcdef"[(v >> (60 - 4 * i)) & 0xf];
+	b[18] = '\0';
+	bt_puts(b);
+}
+
+static void bt_putd(long v)
+{
+	char b[24];
+	int i = sizeof(b) - 1, neg = v < 0;
+	unsigned long u = neg ? (unsigned long)(-v) : (unsigned long)v;
+
+	b[i] = '\0';
+	do {
+		b[--i] = (char)('0' + u % 10);
+		u /= 10;
+	} while (u && i > 1);
+	if (neg)
+		b[--i] = '-';
+	bt_puts(b + i);
+}
+
+static void icwmp_crash_handler(int sig, siginfo_t *si, void *ucv)
+{
+	char buf[1024];
+	ssize_t r;
+	int fd;
+
+	bt_puts("icwmpd-boot CRASH sig=");
+	bt_putd(sig);
+	bt_puts(" code=");
+	bt_putd(si ? si->si_code : 0);
+	bt_puts(" addr=");
+	bt_putx(si ? (unsigned long long)(unsigned long)si->si_addr : 0);
+	bt_puts(" tid=");
+	bt_putd((long)syscall(SYS_gettid));
+#if defined(__aarch64__)
+	if (ucv) {
+		ucontext_t *uc = ucv;
+		bt_puts(" pc=");
+		bt_putx(uc->uc_mcontext.pc);
+		bt_puts(" lr=");
+		bt_putx(uc->uc_mcontext.regs[30]);
+		bt_puts(" sp=");
+		bt_putx(uc->uc_mcontext.sp);
+	}
+#elif defined(__arm__)
+	if (ucv) {
+		ucontext_t *uc = ucv;
+		bt_puts(" pc=");
+		bt_putx(uc->uc_mcontext.arm_pc);
+		bt_puts(" lr=");
+		bt_putx(uc->uc_mcontext.arm_lr);
+		bt_puts(" sp=");
+		bt_putx(uc->uc_mcontext.arm_sp);
+	}
+#endif
+	bt_puts("\nicwmpd-boot CRASH maps (executable):\n");
+	/* the whole maps to the file, only r-xp lines would need parsing */
+	fd = open("/proc/self/maps", O_RDONLY | O_CLOEXEC);
+	if (fd >= 0) {
+		while ((r = read(fd, buf, sizeof(buf))) > 0)
+			bt_raw(boot_trace_fd, buf, (size_t)r);
+		close(fd);
+	}
+	bt_puts("icwmpd-boot CRASH end (maps in " ICWMP_BOOT_TRACE_FILE ")\n");
+	signal(sig, SIG_DFL);
+	raise(sig);
+}
+
+void icwmp_boot_trace_init(int argc, char **argv)
+{
+	static const int sigs[] = { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT };
+	struct sigaction sa;
+	struct stat st;
+	stack_t ss;
+	char cmd[256];
+	size_t o = 0;
+	int i;
+
+	boot_trace_fd = open(ICWMP_BOOT_TRACE_FILE, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+	if (boot_trace_fd >= 0 && fstat(boot_trace_fd, &st) == 0 && st.st_size > ICWMP_BOOT_TRACE_MAX)
+		ftruncate(boot_trace_fd, 0);
+
+	ss.ss_sp = boot_altstack;
+	ss.ss_size = sizeof(boot_altstack);
+	ss.ss_flags = 0;
+	sigaltstack(&ss, NULL);		/* main thread only: stack overflow there */
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_sigaction = icwmp_crash_handler;
+	sa.sa_flags = SA_SIGINFO | SA_ONSTACK | SA_RESETHAND;
+	sigemptyset(&sa.sa_mask);
+	for (i = 0; i < (int)(sizeof(sigs) / sizeof(sigs[0])); i++)
+		sigaction(sigs[i], &sa, NULL);
+
+	cmd[0] = '\0';
+	for (i = 0; i < argc && o + 2 < sizeof(cmd); i++)
+		o += snprintf(cmd + o, sizeof(cmd) - o, "%s%s", i ? " " : "", argv[i]);
+	icwmp_boot_trace("==== start: %s (ppid %d)", cmd, (int)getppid());
+}
 char *commandKey = NULL;
 
 int cwmp_dm_ctx_init(struct cwmp *cwmp, struct dmctx *ctx)
@@ -763,24 +946,32 @@ int main(int argc, char **argv)
     set_bbfdatamodel_type(BBFDM_CWMP); // To show only CWMP parameters
 #endif
 
+    icwmp_boot_trace_init(argc, argv);
     if ((error = cwmp_init(argc, argv, cwmp)))
     {
+        icwmp_boot_trace("cwmp_init failed, error %d: EXIT", error);
         return error;
     }
     CWMP_LOG(INFO,"STARTING ICWMP with PID :%d", getpid());
+    icwmp_boot_trace("cwmp_init ok, acs url '%s', cr port %d", cwmp->conf.acsurl ? cwmp->conf.acsurl : "(null)", cwmp->conf.connection_request_port);
     cwmp->start_time = time(NULL);
 
     if ((error = cwmp_init_backup_session(cwmp, NULL, ALL)))
     {
+        icwmp_boot_trace("cwmp_init_backup_session failed, error %d: EXIT", error);
         return error;
     }
+    icwmp_boot_trace("backup session loaded");
 
     if ((error = cwmp_root_cause_events(cwmp)))
     {
+        icwmp_boot_trace("cwmp_root_cause_events failed, error %d: EXIT", error);
         return error;
     }
+    icwmp_boot_trace("root cause events ok");
 
     http_server_init();
+    icwmp_boot_trace("http_server_init done");
 
     act.sa_handler = signal_handler;
     sigaction(SIGINT,  &act, 0);
@@ -836,7 +1027,9 @@ int main(int argc, char **argv)
     {
         CWMP_LOG(ERROR,"Error when creating the download thread!");
     }
+    icwmp_boot_trace("threads created, entering cwmp_schedule_session");
     cwmp_schedule_session(cwmp);
+    icwmp_boot_trace("cwmp_schedule_session returned");
 
     pthread_join(ubus_thread, NULL);
     pthread_join(periodic_event_thread, NULL);
@@ -850,6 +1043,7 @@ int main(int argc, char **argv)
     pthread_join(http_cr_server_thread, NULL);
 
     CWMP_LOG(INFO,"EXIT ICWMP");
+    icwmp_boot_trace("all threads joined: EXIT");
     cwmp_exit();
 #ifndef TR098
     free_dynamic_arrays();

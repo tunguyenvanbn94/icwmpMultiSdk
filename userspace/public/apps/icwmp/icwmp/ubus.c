@@ -359,11 +359,18 @@ ubus_init(struct cwmp *cwmp)
 		}
 	}
 	ctx = ubus_connect(cwmp->conf.ubus_socket);
-	if (!ctx) return -1;
+	if (!ctx) {
+		icwmp_boot_trace("ubus_connect(%s) failed: no tr069 ubus object", cwmp->conf.ubus_socket ? cwmp->conf.ubus_socket : "default");
+		return -1;
+	}
 
 	ubus_add_uloop(ctx);
 
-	if (ubus_add_object(ctx, &main_object)) return -1;
+	if (ubus_add_object(ctx, &main_object)) {
+		icwmp_boot_trace("ubus_add_object(tr069) failed: no tr069 ubus object");
+		return -1;
+	}
+	icwmp_boot_trace("ubus object tr069 registered");
 	/* bdk: CMS messages from tr69_md (ACS config changed, active
 	 * notification, WAN up) are served from this thread, next to ubus and
 	 * netlink; uci/mtk: nothing */
