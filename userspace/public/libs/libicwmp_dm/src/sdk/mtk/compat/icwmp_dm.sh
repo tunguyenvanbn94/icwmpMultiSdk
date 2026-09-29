@@ -256,7 +256,12 @@ dm_apply_service() {
 	common_restart_services
 	if [ -f "$apply_service_tmp_file" ]; then
 		chmod +x "$apply_service_tmp_file"
-		/bin/sh "$apply_service_tmp_file"
+		# Detached stdio.  This script is icwmpd's coprocess for its whole
+		# life: our stdin carries its requests, our stdout its replies.  A
+		# queued "... &" (diagnostics launchers, "easycwmpd restart &")
+		# would inherit both, and write into -- or read from -- the next
+		# request long after this one returned.
+		/bin/sh "$apply_service_tmp_file" </dev/null >/dev/null 2>&1
 		rm -f "$apply_service_tmp_file"
 	fi
 	uci_change_packages=""

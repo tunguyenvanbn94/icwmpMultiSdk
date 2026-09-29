@@ -20,7 +20,10 @@ libtr098_la_SOURCES +=	\
 	../sdk/mtk/dm098/wanip_mtk.c	\
 	../sdk/mtk/dm098/wanipv6_mtk.c	\
 	../sdk/mtk/dm098/portmapping_mtk.c	\
-	../sdk/mtk/dm098/servicelist_mtk.c
+	../sdk/mtk/dm098/servicelist_mtk.c	\
+	../sdk/mtk/dm098/diag_mtk.c	\
+	../sdk/mtk/dm098/ipping_mtk.c	\
+	../sdk/mtk/dm098/traceroute_mtk.c
 
 if DM_MTK_SCRIPT_COMPAT
 libtr098_la_SOURCES +=	\

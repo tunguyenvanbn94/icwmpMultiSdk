@@ -16,6 +16,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <dirent.h>
+#include <signal.h>
+#include <regex.h>
+#include <net/if.h>
 
 #include <uci.h>
 
@@ -87,6 +91,129 @@ char *mtk_uci_default(const char *package, const char *section, const char *opti
 	if (!ptr.o || !ptr.o->v.string)
 		return "";
 	return dmstrdup(ptr.o->v.string);
+}
+
+static struct uci_context *state_ctx(const char *dir)
+{
+	struct uci_context *c = uci_alloc_context();
+
+	if (!c)
+		return NULL;
+	/* what "uci -P <dir>" does: the default savedir becomes a delta
+	 * path, <dir> becomes the savedir */
+	uci_add_delta_path(c, c->savedir);
+	uci_set_savedir(c, dir);
+	return c;
+}
+
+char *mtk_state(const char *dir, const char *package, const char *section,
+		const char *option)
+{
+	struct uci_context *c;
+	struct uci_ptr ptr = {0};
+	char buf[256];
+	char *v = "";
+
+	if (!dir || !package || !section || !option)
+		return "";
+	if (snprintf(buf, sizeof(buf), "%s.%s.%s", package, section, option) >= (int)sizeof(buf))
+		return "";
+	c = state_ctx(dir);
+	if (!c)
+		return "";
+	if (uci_lookup_ptr(c, &ptr, buf, true) == UCI_OK &&
+	    (ptr.flags & UCI_LOOKUP_COMPLETE) && ptr.o &&
+	    ptr.o->type == UCI_TYPE_STRING && ptr.o->v.string)
+		v = dmstrdup(ptr.o->v.string);
+	uci_free_context(c);
+	return v;
+}
+
+int mtk_state_set(const char *dir, const char *package, const char *section,
+		  const char *option, const char *value)
+{
+	struct uci_context *c;
+	struct uci_ptr ptr = {0};
+	char buf[1024];
+	int rc = -1;
+
+	if (!dir || !package || !section || !option || !value)
+		return -1;
+	if (snprintf(buf, sizeof(buf), "%s.%s.%s=%s", package, section, option, value) >= (int)sizeof(buf))
+		return -1;
+	c = state_ctx(dir);
+	if (!c)
+		return -1;
+	if (uci_lookup_ptr(c, &ptr, buf, true) == UCI_OK &&
+	    uci_set(c, &ptr) == UCI_OK && ptr.p &&
+	    uci_save(c, ptr.p) == UCI_OK)
+		rc = 0;
+	uci_free_context(c);
+	return rc;
+}
+
+int mtk_kill_cmdline(const char *pattern)
+{
+	DIR *d;
+	struct dirent *de;
+	pid_t self = getpid();
+	int n = 0;
+
+	if (!pattern || !*pattern)
+		return 0;
+	d = opendir("/proc");
+	if (!d)
+		return 0;
+	while ((de = readdir(d)) != NULL) {
+		char path[64], buf[1024];
+		ssize_t len, i;
+		pid_t pid;
+		int fd;
+
+		if (!isdigit((unsigned char)de->d_name[0]))
+			continue;
+		pid = (pid_t)atoi(de->d_name);
+		if (pid <= 1 || pid == self)
+			continue;
+		snprintf(path, sizeof(path), "/proc/%s/cmdline", de->d_name);
+		fd = open(path, O_RDONLY);
+		if (fd < 0)
+			continue;
+		len = read(fd, buf, sizeof(buf) - 1);
+		close(fd);
+		if (len <= 0)
+			continue;	/* kernel thread, or already gone */
+		/* argv is NUL separated: join it with spaces, as pgrep -f sees it */
+		for (i = 0; i < len; i++)
+			if (buf[i] == '\0')
+				buf[i] = ' ';
+		buf[len] = '\0';
+		if (strstr(buf, pattern) && kill(pid, SIGKILL) == 0)
+			n++;
+	}
+	closedir(d);
+	return n;
+}
+
+int mtk_netdev_exists(const char *name)
+{
+	if (!name || !*name || strlen(name) >= IFNAMSIZ)
+		return 0;
+	return if_nametoindex(name) != 0;
+}
+
+int mtk_ere_match(const char *re, const char *s)
+{
+	regex_t rx;
+	int hit;
+
+	if (!re || !s)
+		return 0;
+	if (regcomp(&rx, re, REG_EXTENDED | REG_NEWLINE | REG_NOSUB) != 0)
+		return 0;
+	hit = regexec(&rx, s, 0, NULL, 0) == 0;
+	regfree(&rx);
+	return hit;
 }
 
 int mtk_ipv4_parse(const char *s, unsigned int *out)
@@ -300,13 +427,22 @@ void mtk_run_apply_service(void)
 	if (!f)
 		return;
 	while (fgets(line, sizeof(line), f)) {
-		char *argv[] = { "/bin/sh", "-c", line, NULL };
+		char cmd[sizeof(line) + 48];
+		char *argv[] = { "/bin/sh", "-c", cmd, NULL };
 
 		line[strcspn(line, "\r\n")] = '\0';
 		if (!line[0])
 			continue;
 		/* output discarded on purpose: these are init scripts, their
-		 * logs belong in syslog, not in a CWMP reply */
+		 * logs belong in syslog, not in a CWMP reply.
+		 *
+		 * The shell detaches its own stdio BEFORE running the line.  Lines
+		 * end in "&" (the diagnostics launchers, "easycwmpd restart &"):
+		 * a background child would otherwise inherit the pipe mtk_exec()
+		 * reads to EOF, and the end of the session would wait for a
+		 * traceroute or a TR-143 download to finish -- while the launcher
+		 * retries "ubus call tr069 inform" against this very agent. */
+		snprintf(cmd, sizeof(cmd), "exec </dev/null >/dev/null 2>&1; %s", line);
 		(void)mtk_exec(argv);
 	}
 	fclose(f);

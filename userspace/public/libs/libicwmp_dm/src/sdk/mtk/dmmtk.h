@@ -60,6 +60,27 @@ void mtk_run_apply_service(void);
  * ("uci -q -c /rom/etc/config get").  Never NULL. */
 char *mtk_uci_default(const char *package, const char *section, const char *option);
 
+/* "uci -P <dir> get/set": runtime state kept in a savedir of its own
+ * (/var/state/traceroute, /var/state/nslookup, ...).  Each diagnostic of the
+ * shell has its own <dir>, so DiagnosticsState of one never reads as the
+ * DiagnosticsState of another.  A fresh uci context per call: the engine's
+ * varstate context already carries /var/state as a delta path and would leak
+ * those deltas in.  Getter never NULL, "" when unset. */
+char *mtk_state(const char *dir, const char *package, const char *section,
+		const char *option);
+int mtk_state_set(const char *dir, const char *package, const char *section,
+		  const char *option, const char *value);
+
+/* Processes ---------------------------------------------------------- */
+/* "pgrep -f <pattern> | xargs kill -9": every process whose command line
+ * contains pattern, this one excepted.  Returns how many were signalled. */
+int mtk_kill_cmdline(const char *pattern);
+/* "ifconfig <name>" succeeds: the network device exists, up or down. */
+int mtk_netdev_exists(const char *name);
+/* "echo <s> | grep -E -q <re>": POSIX ERE, ^ and $ bound to each line like
+ * grep does.  1 on a match, 0 otherwise (a bad pattern never matches). */
+int mtk_ere_match(const char *re, const char *s);
+
 /* IPv4 --------------------------------------------------------------- */
 /* Dotted quad -> host order integer, mirroring is_valid_ipv4 + ipstr2int
  * of functions/common: every octet decimal and <= 255, exactly four of them.
