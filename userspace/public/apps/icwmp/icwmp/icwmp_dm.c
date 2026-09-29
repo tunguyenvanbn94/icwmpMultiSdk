@@ -135,8 +135,11 @@ static int dm_write_param_file(struct dmctx *dmctx, int cmd, const char *file)
 	return 0;
 }
 
-/* end-session flags a setter left behind (libtr098 end_session_flag) */
-static void dm_add_end_session(unsigned int flags)
+/* end-session flags a setter left behind (libtr098 end_session_flag).
+ * Not dm_add_end_session(): dmtr098.h:532 owns that name for the engine call
+ * that QUEUES an end-session action, and inc/cwmp.h pulls that header into
+ * every file here. */
+static void dm_add_end_session_list(unsigned int flags)
 {
 	static const struct { unsigned int bit; const char *name; } names[] = {
 		{ END_SESSION_RELOAD, "reload" }, { END_SESSION_REBOOT, "reboot" },
@@ -298,7 +301,7 @@ int icwmp_ubus_dm(struct ubus_context *ctx, struct ubus_object *obj,
 	pending = (unsigned int)end_session_flag;
 	if (changed) {
 		blobmsg_add_u8(&bb, "reloaded", reloaded);
-		dm_add_end_session(pending);
+		dm_add_end_session_list(pending);
 	}
 
 	ubus_send_reply(ctx, req, bb.head);
