@@ -1,0 +1,968 @@
+phase	phase_name	kind	path	perm	getter	setter	type	forced_inform	easycwmp_file
+1	P1 identity, time, management server	obj	InternetGatewayDevice.DeviceInfo.	0					common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.Description	0	$UCI_GET easycwmp.@device[0].description			1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.DeviceLog	0					common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.HardwareVersion	0	$UCI_GET easycwmp.@device[0].hardware_version			1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.Manufacturer	0	$UCI_GET easycwmp.@device[0].manufacturer			1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.ManufacturerOUI	0	$UCI_GET easycwmp.@device[0].oui			1	common/device_info
+1	P1 identity, time, management server	obj	InternetGatewayDevice.DeviceInfo.MemoryStatus.	0					common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.MemoryStatus.Free	0	device_info_get_free_memory				common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.MemoryStatus.Total	0	device_info_get_total_memory				common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.ModelName	0	$UCI_GET easycwmp.@device[0].modelname			1	common/device_info
+1	P1 identity, time, management server	obj	InternetGatewayDevice.DeviceInfo.ProcessStatus.	0					common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.ProcessStatus.CPUUsage	0	device_info_get_CPU_usage				common/device_info
+1	P1 identity, time, management server	obj	InternetGatewayDevice.DeviceInfo.ProcessStatus.Process.	0					common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.ProductClass	0	$UCI_GET easycwmp.@device[0].product_class			1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.ProvisioningCode	1	$UCI_GET easycwmp.@local[0].provisioning_code	device_info_set_provisioningcode		1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.SerialNumber	0	$UCI_GET easycwmp.@device[0].serial_number			1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.SoftwareVersion	0	$UCI_GET easycwmp.@device[0].software_version			1	common/device_info
+1	P1 identity, time, management server	obj	InternetGatewayDevice.DeviceInfo.TemperatureStatus.	0					common/device_info
+1	P1 identity, time, management server	obj	InternetGatewayDevice.DeviceInfo.TemperatureStatus.TemperatureSensor.	0					common/device_info
+1	P1 identity, time, management server	obj	InternetGatewayDevice.DeviceInfo.TemperatureStatus.TemperatureSensor.1.	0					common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value	0	device_info_get_temperature_sensor_value		xsd:int		common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.UpTime	0	device_info_get_uptime		xsd:unsignedInt		common/device_info
+1	P1 identity, time, management server	obj	InternetGatewayDevice.DeviceInfo.X_AIS.	0					common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.X_AIS.PonPassword	1	$UCI_GET pon.xpon_auth.sn_ascii_password	device_info_set_x_ais_pon_passwd	xsd:string	1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.X_AIS.PonPasswordState	0	device_info_get_x_ais_pon_password_state		xsd:unsignedInt	1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.X_AIS_CpuUsed	1	device_info_get_x_ais_cpu_used	device_info_set_x_ais_cpu_used_request	xsd:unsignedInt	1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.X_AIS_CpuUsedResponse	0	device_info_get_x_ais_cpu_used_response		xsd:unsignedInt	1	common/device_info
+1	P1 identity, time, management server	obj	InternetGatewayDevice.DeviceInfo.X_AIS_DSL.	0					common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.X_AIS_DSL.Attenuation	0	device_info_get_dsl_atten				common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.X_AIS_DSL.SNR	0	device_info_get_dsl_snr				common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.X_AIS_DSL.UpDownStream	0	device_info_get_dsl_stream				common/device_info
+1	P1 identity, time, management server	obj	InternetGatewayDevice.DeviceInfo.X_AIS_GPON.	0					common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.X_AIS_GPON.RxPower	0	device_info_get_gpon_rxpower_dbm			1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.X_AIS_GPON.TxPower	0	device_info_get_gpon_txpower_dbm			1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.X_AIS_MemUsed	1	device_info_get_x_ais_mem_used	device_info_set_x_ais_mem_used_request	xsd:unsignedInt	1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.X_AIS_MemUsedResponse	0	device_info_get_x_ais_mem_used_response		xsd:unsignedInt	1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.X_AIS_reuseCPE_cycles	0				1	common/device_info
+1	P1 identity, time, management server	param	InternetGatewayDevice.DeviceInfo.X_AIS_reuseCPE_status	0				1	common/device_info
+1	P1 identity, time, management server	obj	InternetGatewayDevice.ManagementServer.	0					common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.CWMPRetryIntervalMultiplier	1	$UCI_GET easycwmp.@acs[0].cwmpretryintervalmultiplier	management_server_set_cwmpretryintervalmultiplier	xsd:unsignedInt		common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.CWMPRetryMinimumWaitInterval	1	$UCI_GET easycwmp.@acs[0].cwmpretryinterval	management_server_set_cwmpretryinterval	xsd:unsignedInt		common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.ConnReqXMPPConnection	0	echo \\				common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.ConnectionRequestPassword	1		management_server_set easycwmp.@local[0].password			common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.ConnectionRequestURL	0	management_server_get_connection_request_url			1	common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.ConnectionRequestUsername	1	$UCI_GET easycwmp.@local[0].username	management_server_set easycwmp.@local[0].username			common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.EnableCWMP	1	$UCI_GET easycwmp.@acs[0].enablecwmp	management_server_set_enablecwmp	xsd:boolean		common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.NATDetected	0	$UCI_GET stun.@stun[0].natdetect		xsd:boolean	1	common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.ParameterKey	0	$UCI_GET easycwmp.@acs[0].parameter_key			1	common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.Password	1		management_server_set easycwmp.@acs[0].password			common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.PeriodicInformEnable	1	$UCI_GET easycwmp.@acs[0].periodic_enable	management_server_set_periodic_enable	xsd:boolean		common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.PeriodicInformInterval	1	$UCI_GET easycwmp.@acs[0].periodic_interval	management_server_set_periodicinform_interval	xsd:unsignedInt		common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.PeriodicInformTime	1	$UCI_GET easycwmp.@acs[0].periodic_time	management_server_set easycwmp.@acs[0].periodic_time	xsd:dateTime		common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.STUNEnable	1	$UCI_GET stun.@stun[0].stun_enable	management_server_set_stun_enable	xsd:boolean	1	common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.STUNMaximumKeepAlivePeriod	1	$UCI_GET stun.@stun[0].max_keepalive	management_server_set_stun_max_keepalive	xsd:int		common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.STUNMinimumKeepAlivePeriod	1	$UCI_GET stun.@stun[0].min_keepalive	management_server_set_stun_min_keepalive	xsd:unsignedint		common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.STUNPassword	1		management_server_set_stun_password	xsd:string	1	common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.STUNServerAddress	1	$UCI_GET stun.@stun[0].serveraddress	management_server_set_stun_serveraddress	xsd:string	1	common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.STUNServerPort	1	$UCI_GET stun.@stun[0].serverport	management_server_set_stunport	xsd:int	1	common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.STUNUsername	1	$UCI_GET stun.@stun[0].username	management_server_set_stun_username	xsd:string	1	common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.UDPConnectionRequestAddress	0	$UCI_GET stun.@stun[0].udpcontnreqaddr		xsd:string	1	common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.URL	1	$UCI_GET easycwmp.@acs[0].url	management_server_set_url			common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.UpgradesManaged	1	$UCI_GET easycwmp.@acs[0].upgradesmanaged	management_server_set_upgradesmanaged	xsd:boolean		common/management_server
+1	P1 identity, time, management server	param	InternetGatewayDevice.ManagementServer.Username	1	$UCI_GET easycwmp.@acs[0].username	management_server_set easycwmp.@acs[0].username			common/management_server
+1	P1 identity, time, management server	obj	InternetGatewayDevice.Time.	0					tr098/time
+1	P1 identity, time, management server	param	InternetGatewayDevice.Time.CurrentLocalTime	0	get_current_local_time		xsd:dateTime		tr098/time
+1	P1 identity, time, management server	param	InternetGatewayDevice.Time.DaylightSavingsEnd	0	get_daylight_savings_end	set_daylight_savings_end	xsd:dateTime		tr098/time
+1	P1 identity, time, management server	param	InternetGatewayDevice.Time.DaylightSavingsStart	0	get_daylight_savings_start	set_daylight_savings_start	xsd:dateTime		tr098/time
+1	P1 identity, time, management server	param	InternetGatewayDevice.Time.DaylightSavingsUsed	1	get_daylight_savings_used	set_daylight_savings_used	xsd:boolean		tr098/time
+1	P1 identity, time, management server	param	InternetGatewayDevice.Time.Enable	1	get_time_enable	set_time_enable	xsd:boolean		tr098/time
+1	P1 identity, time, management server	param	InternetGatewayDevice.Time.LocalTimeZone	0	get_local_time_zone		xsd:string		tr098/time
+1	P1 identity, time, management server	param	InternetGatewayDevice.Time.LocalTimeZoneName	1	get_timezone_name	set_timezone_name	xsd:string		tr098/time
+1	P1 identity, time, management server	param	InternetGatewayDevice.Time.NTPServer1	1	get_ntp_server 0	set_ntp_server 0	xsd:string		tr098/time
+1	P1 identity, time, management server	param	InternetGatewayDevice.Time.NTPServer2	1	get_ntp_server 1	set_ntp_server 1	xsd:string		tr098/time
+1	P1 identity, time, management server	param	InternetGatewayDevice.Time.NTPServer3	1	get_ntp_server 2	set_ntp_server 2	xsd:string		tr098/time
+1	P1 identity, time, management server	param	InternetGatewayDevice.Time.NTPServer4	1	get_ntp_server 3	set_ntp_server 3	xsd:string		tr098/time
+1	P1 identity, time, management server	param	InternetGatewayDevice.Time.NTPServer5	1	get_ntp_server 4	set_ntp_server 4	xsd:string		tr098/time
+1	P1 identity, time, management server	param	InternetGatewayDevice.Time.Status	0	echo \Synchronized\				tr098/time
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.	0					tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.	0					tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.DHCPStaticAddress.	0					tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.Hosts.	0					tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.	0			hosts_browse_instances $1		tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.$1.	0					tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.$1.Active	0	echo true		xsd:boolean		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.$1.AddressSource	0	hosts_get_lanhost_value $section addressSrc				tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.$1.ClientID	0	echo \\				tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.$1.HostName	0	hosts_get_lanhost_hostname $section				tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.$1.IPAddress	0	hosts_get_lanhost_value $section ip				tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.$1.InterfaceType	0	hosts_get_lanhost_interface_type $section				tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.$1.Layer2Interface	0	hosts_get_lanhost_layer2_interface $section				tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.$1.LeaseTimeRemaining	0	hosts_get_lanhost_lease_time_remaining $section		xsd:int		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.$1.MACAddress	0	hosts_get_lanhost_value $section mac				tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.$1.UserClassID	0	echo \\				tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.$1.VendorClassID	0	echo \\				tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.Hosts.HostNumberOfEntries	0	get_HostNumberOfEntries		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.	0					tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.BroadcastPacketsReceived	0	get_Stats_BroadcastPacketsReceived $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.BroadcastPacketsSent	0	get_Stats_BroadcastPacketsSent $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.BytesReceived	0	get_Stats_BytesReceived $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.BytesSent	0	get_Stats_BytesSent $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.DiscardPacketsReceived	0	get_Stats_DiscardPacketsReceived $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.DiscardPacketsSent	0	get_Stats_DiscardPacketsSent $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.ErrorsReceived	0	get_Stats_ErrorsReceived $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.ErrorsSent	0	get_Stats_ErrorsSent $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.MulticastPacketsReceived	0	get_Stats_MulticastPacketsReceived $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.MulticastPacketsSent	0	get_Stats_MulticastPacketsSent $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.PacketsReceived	0	get_Stats_PacketsReceived $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.PacketsSent	0	get_Stats_PacketsSent $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.UnicastPacketsReceived	0	get_Stats_UnicastPacketsReceived $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.UnicastPacketsSent	0	get_Stats_UnicastPacketsSent $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.$1.Stats.UnknownProtoPacketsReceived	0	get_Stats_UnknownProtoPacketsReceived $index		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.	0					tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.Alias	0	get_LANEthIfConfig_Alias $inst		xsd:string		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.DuplexMode	1	get_LANEthIfConfig_DuplexMode $portIndex	set_LANEthIfConfig_DuplexMode $portIndex			tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.Enable	1	get_LANEthIfConfig_Enable $portIndex	set_LANEthIfConfig_Enable $portIndex	xsd:boolean		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.MACAddress	0	get_LANEthIfConfig_MACAddress				tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.MACAddressControlEnabled	1	echo true		xsd:boolean		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.MaxBitRate	1	get_LANEthIfConfig_MaxBitRate $portIndex	set_LANEthIfConfig_MaxBitRate $portIndex			tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.Name	0	echo eth0.$inst				tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.Stats.	0					tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.Status	0	get_LANEthIfConfig_Status $portIndex				tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceNumberOfEntries	0	get_LANEthernetInterfaceNumberOfEntries		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.	0					tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.AllowedMACAddresses	1					tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.AssociatedConnection	1					tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPConditionalPoolNumberOfEntries	0	echo 0		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPLeaseTime	1	get_LanHostConfig_DHCPLeaseTime	set_LanHostConfig_DHCPLeaseTime	xsd:int		tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPOption.	0					tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPOptionNumberOfEntries	0	echo 0		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPRelay	0	echo false		xsd:boolean		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPServerConfigurable	1	get_LanHostConfig_DHCPServerConfigurable	set_LanHostConfig_DHCPServerConfigurable	xsd:boolean		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPServerEnable	1	get_LanHostConfig_DHCPServerEnable	set_LanHostConfig_DHCPServerEnable	xsd:boolean		tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPStaticAddress.	0					tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPStaticAddressNumberOfEntries	0	echo 0		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DNSServers	1	get_LanHostConfig_DNSServers	set_LanHostConfig_DNSServers			tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DomainName	1	get_LanHostConfig_DomainName	set_LanHostConfig_DomainName			tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.	0					tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.1.	0					tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.1.Alias	1	echo cpe-ipif1		xsd:string		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.1.Enable	1	echo false		xsd:boolean		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.1.IPInterfaceAddressingType	1	echo Static		xsd:string		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.1.IPInterfaceIPAddress	1	get_LanHostConfig_IPRouters	set_LanHostConfig_IPRouters			tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.1.IPInterfaceSubnetMask	1	get_LanHostConfig_SubnetMask	set_LanHostConfig_SubnetMask			tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterfaceNumberOfEntries	0	echo 1		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPRouters	1	get_LanHostConfig_IPRouters	set_LanHostConfig_IPRouters			tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.MACAddress	0	get_LanHostConfig_MacAddress				tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.MaxAddress	1	get_LanHostConfig_MaxAddress	set_LanHostConfig_MaxAddress			tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.MinAddress	1	get_LanHostConfig_MinAddress	set_LanHostConfig_MinAddress			tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.PassthroughLease	1	echo 600		xsd:int		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.PassthroughMACAddress	1					tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.ReservedAddresses	1					tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.SubnetMask	1	get_LanHostConfig_SubnetMask	set_LanHostConfig_SubnetMask			tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.UseAllocatedWAN	1	echo Normal				tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.LANUSBInterfaceConfig.	0					tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANUSBInterfaceNumberOfEntries	0	echo 0		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.LANWLANConfigurationNumberOfEntries	0	get_LANWLANConfigurationNumberOfEntries		xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.X-AIS_2-4GHzTransmitPower	1	get_X_AIS_2GTransmitPower	set_X_AIS_2GTransmitPower	xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.X-AIS_5GHzTransmitPower	1	get_X_AIS_5GTransmitPower	set_X_AIS_5GTransmitPower	xsd:unsignedInt		tr098/lan_device
+2	P2 LAN	obj	InternetGatewayDevice.LANDevice.{i}.X_AIS_Mesh.	0					tr098/X_AIS_Mesh
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.X_AIS_Mesh.MeshEnabled	1	get_X_AIS_Mesh_MeshEnabled	set_X_AIS_Mesh_MeshEnabled	xsd:boolean	1	tr098/X_AIS_Mesh
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.X_AIS_Mesh.MeshHopNumberStatus	0	get_X_AIS_Mesh_MeshHopNumberStatus		xsd:unsignedInt	1	tr098/X_AIS_Mesh
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.X_AIS_Mesh.MeshMaximumHopNumber	1	get_X_AIS_Mesh_MeshMaximumHopNumber	set_X_AIS_Mesh_MeshMaximumHopNumber	xsd:unsignedInt	1	tr098/X_AIS_Mesh
+2	P2 LAN	param	InternetGatewayDevice.LANDevice.{i}.X_AIS_Mesh.MeshMode	1	get_X_AIS_Mesh_MeshMode	set_X_AIS_Mesh_MeshMode	xsd:unsignedInt	1	tr098/X_AIS_Mesh
+3	P3 Wi-Fi	obj	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.	1	lan_device_add_wlan_iface		lan_device_browse_instances_wlan_iface $1		tr098/lan_device
+3	P3 Wi-Fi	obj	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.	0					tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.Active	0	assoc_get_active		xsd:boolean		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.AssociatedDeviceAuthenticationState	0	assoc_get_auth_state		xsd:boolean		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.AssociatedDeviceIPAddress	0	assoc_get_ip $wlan_index $offset				tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.AssociatedDeviceMACAddress	0	assoc_get_mac $wlan_index $offset				tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.LastDataTransmitRate	0	assoc_get_rate $wlan_index $offset				tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.RSSI	0	assoc_get_rssi $wlan_index $offset		xsd:int		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.SignalStrength	0	assoc_get_signal_strength $wlan_index $offset		xsd:int		tr098/lan_device
+3	P3 Wi-Fi	obj	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.Stats.	0					tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.Stats.BytesReceived	0	assoc_get_bytes_received $wlan_index $offset		xsd:int		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.Stats.BytesSent	0	assoc_get_bytes_sent $wlan_index $offset		xsd:int		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.Stats.ErrorsReceived	0	assoc_get_errors_received $wlan_index $offset		xsd:int		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.Stats.ErrorsSent	0	assoc_get_errors_sent $wlan_index $offset		xsd:int		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.Stats.PacketsReceived	0	assoc_get_packets_received $wlan_index $offset		xsd:int		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.Stats.PacketsSent	0	assoc_get_packets_sent $wlan_index $offset		xsd:int		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.Stats.RetransCount	0	assoc_get_zero		xsd:int		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.Stats.RetryCount	0	assoc_get_zero		xsd:int		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.Stats.RxDropCount	0	assoc_get_rx_drop_count $wlan_index $offset		xsd:int		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.$1.AssociatedDevice.$2.Stats.TxDropCount	0	assoc_get_tx_drop_count $wlan_index $offset		xsd:int		tr098/lan_device
+3	P3 Wi-Fi	obj	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.	1		lan_device_delete_wlan_iface $iface			tr098/lan_device
+3	P3 Wi-Fi	obj	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AssociatedDevice.	0			associate_browse_instances $j $path		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AutoChannelEnable	1	lan_device_get_auto_channel_enable $iface	lan_device_set_auto_channel_enable $iface	xsd:boolean		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BSSID	0	lan_device_get_bssid $iface		xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BasicAuthenticationMode	1	lan_device_get_basic_authentication_mode $iface	lan_device_set_basic_authentication_mode $iface	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BasicDataTransmitRates	0	wlan_cfg_get_transmitRates $iface		xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BasicEncryptionModes	1	lan_device_get_basic_encryption_modes $iface	lan_device_set_basic_encryption_modes $iface	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BeaconAdvertisementEnabled	1	echo false		xsd:boolean		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BeaconType	1	lan_device_get_beacon_type $iface	lan_device_set_beacon_type $iface	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.Channel	1	lan_device_get_channel $iface	lan_device_set_channel $iface	xsd:unsignedInt		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.ChannelsInUse	0	lan_device_get_channels_in_use $iface		xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.Enable	1	lan_device_get_wlan_enable $iface	lan_device_set_wlan_enable $iface	xsd:boolean		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.IEEE11iAuthenticationMode	1	lan_device_get_ieee11i_authentication_mode $iface	lan_device_set_ieee11i_authentication_mode $iface	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.IEEE11iEncryptionModes	1	lan_device_get_ieee11i_encryption_modes $iface	lan_device_set_ieee11i_encryption_modes $iface	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.KeyPassphrase	1	lan_device_get_KeyPassphrase $iface	lan_device_set_KeyPassphrase $iface	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.MACAddressControlEnabled	1	echo false		xsd:boolean		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.MaxBitRate	0	lan_device_get_max_bitrate		xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.MruEnable	1	lan_device_get_mru_enable $iface	lan_device_set_mru_enable $iface	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.OperationalDataTransmitRates	0	wlan_cfg_get_transmitRates $iface		xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.PossibleChannels	0	lan_device_get_possible_channel $iface		xsd:string		tr098/lan_device
+3	P3 Wi-Fi	obj	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.PreSharedKey.	0					tr098/lan_device
+3	P3 Wi-Fi	obj	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.PreSharedKey.1.	0					tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.PreSharedKey.1.KeyPassphrase	1	echo \\	lan_device_set_key_passphrase $iface			tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.PreSharedKey.1.PreSharedKey	1	echo \\	lan_device_set_key_passphrase $iface			tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.RadioEnabled	1	lan_device_get_radio_enabled $iface	lan_device_set_radio_enabled $iface	xsd:boolean		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.RegulatoryDomain	1	lan_device_get_regulatory_domain $iface	lan_device_set_regulatory_domain $iface	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.SSID	1	lan_device_get_ssid $iface	lan_device_set_ssid $iface			tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.SSIDAdvertisementEnabled	1	lan_device_get_ssid_advertisement_enabled $iface	lan_device_set_ssid_advertisement_enabled $iface	xsd:boolean		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.Standard	0	lan_device_get_standard $iface		xsd:string		tr098/lan_device
+3	P3 Wi-Fi	obj	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.Stats.	0					tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.Stats.ErrorsReceived	0	echo 0		xsd:unsignedInt		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.Stats.ErrorsSent	0	echo 0		xsd:unsignedInt		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.Status	0	lan_device_get_wlan_status $iface		xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.SupportedStandards	0	lan_device_get_standard $iface		xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TotalAssociations	0	lan_device_get_total_associations $iface		xsd:unsignedInt		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TotalBytesReceived	0	lan_device_get_total_bytes_received		xsd:unsignedInt		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TotalBytesSent	0	lan_device_get_total_bytes_sent		xsd:unsignedInt		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TotalPacketsReceived	0	lan_device_get_total_packets_received		xsd:unsignedInt		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TotalPacketsSent	0	lan_device_get_total_packets_sent		xsd:unsignedInt		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TransmitPower	1	lan_device_get_transmit_power $iface	lan_device_set_transmit_power $iface	xsd:unsignedInt		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TransmitPowerSupported	0	wlan_cfg_get_powerSupported		xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.UAPSDEnable	1	echo false		xsd:boolean		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WEPEncryptionLevel	1	lan_device_get_wep_encryption_level $iface	lan_device_set_wep_encryption_level $iface	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	obj	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WEPKey.	0					tr098/lan_device
+3	P3 Wi-Fi	obj	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WEPKey.{i}.	0					tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WEPKey.{i}.WEPKey	1		lan_device_set_wepkey_value $iface $i	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WEPKeyIndex	1	lan_device_get_wep_key_index $iface	lan_device_set_wep_key_index $iface	xsd:unsignedInt		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WMMEnable	1	echo false		xsd:boolean		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPAAuthenticationMode	1	lan_device_get_wpa_authentication_mode $iface	lan_device_set_wpa_authentication_mode $iface	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPAEncryptionModes	1	lan_device_get_wpa_encryption_modes $iface	lan_device_set_wpa_encryption_modes $iface	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	obj	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.	0					tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.ConfigMethodsEnabled	1	lan_device_get_wps_config_methods_enabled	lan_device_set_wps_config_methods_enabled	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.ConfigMethodsSupported	0	lan_device_get_wps_config_methods_supported		xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.DevicePassword	1	lan_device_get_wps_device_password	lan_device_set_wps_device_password	xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.Enable	1	lan_device_get_wps_enable	lan_device_set_wps_enable	xsd:boolean		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.Status	0	lan_device_get_wps_status		xsd:string		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.X_AIS_APModuleEnable	1	lan_device_get_apmodule_enable $iface	lan_device_set_apmodule_enable $iface	xsd:boolean		tr098/lan_device
+3	P3 Wi-Fi	param	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.X_AIS_WlanStandard	1	lan_device_get_wlan_standard $iface	lan_device_set_wlan_standard $iface	xsd:string		tr098/lan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.	0					tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.	0					tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.	0					tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.EnabledForInternet	0	echo 1		xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.Layer1DownstreamMaxBitRate	0	wan_common_get_downstream_rate		xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.Layer1UpstreamMaxBitRate	0	wan_common_get_upstream_rate		xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.PhysicalLinkStatus	0	wan_common_get_link_status				tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.TotalBytesReceived	0	wan_common_get_bytes_received		xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.TotalBytesSent	0	wan_common_get_bytes_sent		xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.TotalPacketsReceived	0	wan_common_get_packets_received		xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.TotalPacketsSent	0	wan_common_get_packets_sent		xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.WANAccessType	0	wan_common_get_access_type				tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.	0					tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.	0					tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANDSLLinkConfig.	0					tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANDSLLinkConfig.ATMEncapsulation	1	wan_dsl_link_get_atm_encapsulation	wan_dsl_link_set_fake	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANDSLLinkConfig.DestinationAddress	1	wan_dsl_link_get_destination_address	wan_dsl_link_set_fake	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANDSLLinkConfig.Enable	1	wan_dsl_link_get_enable	wan_dsl_link_set_fake	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANDSLLinkConfig.LinkStatus	0	wan_dsl_link_get_status		xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANDSLLinkConfig.LinkType	1	wan_dsl_link_get_type	wan_dsl_link_set_fake	xsd:string		tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.	1	wan_device_add_instance_ip		wan_device_browse_instances_wancxdev_ip $param		tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.$2.PortMapping.$3.	1		port_mapping_delete_entry $section			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.$2.PortMapping.$3.ExternalPort	1	port_mapping_get_external_port $section	port_mapping_set_external_port $section	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.$2.PortMapping.$3.ExternalPortEndRange	1	port_mapping_get_external_port_end_range $section	port_mapping_set_external_port_end_range $section	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.$2.PortMapping.$3.InternalClient	1	port_mapping_get_internal_client $section	port_mapping_set_internal_client $section	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.$2.PortMapping.$3.InternalPort	1	port_mapping_get_internal_port $section	port_mapping_set_internal_port $section	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.$2.PortMapping.$3.PortMappingDescription	1	port_mapping_get_description $section	port_mapping_set_description $section	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.$2.PortMapping.$3.PortMappingEnabled	1	port_mapping_get_enable $section	port_mapping_set_enable $section	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.$2.PortMapping.$3.PortMappingLeaseDuration	1	port_mapping_get_lease_duration $section	port_mapping_set_lease_duration $section	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.$2.PortMapping.$3.PortMappingProtocol	1	port_mapping_get_protocol $section	port_mapping_set_protocol $section	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.$2.PortMapping.$3.RemoteHost	1	port_mapping_get_remote_host $section	port_mapping_set_remote_host $section	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.$2.PortMapping.$3.X_AIS_InternalPortEndRange	1	port_mapping_get_internal_port_end_range $section	port_mapping_set_internal_port_end_range $section	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.$2.PortMapping.$3.X_AIS_Name	1	port_mapping_get_name $section	port_mapping_set_name $section	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.$2.PortMapping.$3.X_AIS_RemoteHostEndRange	1	port_mapping_get_remote_host_end_range $section	port_mapping_set_remote_host_end_range $section	xsd:string		tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.	1		wan_device_del_instance $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.AddressingType	1	wan_device_get_addr_type $uci_wan_idx	wan_device_set_addr_type $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Alias	0	wan_device_get_alias $uci_wan_idx				tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.ConnectionStatus	0	wan_device_get_conn_status $iface4 $iface6				tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.ConnectionType	1	echo IP_Routed	wan_device_set_wan_conn_type $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.DNSEnabled	1	echo true	true	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.DNSOverrideAllowed	1	wan_device_get_dns_static $uci_wan_idx	wan_device_set_dns_static $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.DNSServers	1	wan_device_get_dns_servers $iface4	wan_device_set_dns_servers $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.DefaultGateway	1	wan_device_get_gw $iface4	wan_device_set_ipcx_gw $uci_wan_idx $iface4	xsd:IPv4Address		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Enable	1	wan_device_get_wan_enable $uci_wan_idx	wan_device_set_wan_enable $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.ExternalIPAddress	1	wan_device_get_ipaddr $iface4	wan_device_set_ipcx_ipaddr $uci_wan_idx $iface4	xsd:IPv4Address	$isWanTr069	tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.LastConnectionError	0	echo ERROR_NONE				tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.MACAddress	1	wan_device_get_mac $iface4	wan_device_set_mac $uci_wan_idx $iface4			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.MACAddressOverride	1	wan_device_get_mac_override $uci_wan_idx	wan_device_set_mac_override $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.MaxMTUSize	1	wan_device_get_mtu $iface4	wan_device_set_ipcx_mtu $iface4	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.NATEnabled	1	wan_device_get_nat_enable $uci_wan_idx	wan_device_set_nat_enable $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Name	1	$UCI_GET wan.@entry[$uci_wan_idx].name	wan_device_set_name $uci_wan_idx			tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PortMapping.	1	port_mapping_add_entry $ifaceName		port_mapping_browse_instances $object_idx $1 $protocol $ifaceName		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PortMappingNumberOfEntries	0	wan_device_get_port_mapping_number $ifaceName	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PossibleConnectionTypes	0	echo IP_Routed,IP_Bridged				tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.	0					tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.EthernetBytesReceived	0	wan_device_get_eth_stats IP $iface4 rx_bytes	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.EthernetBytesSent	0	wan_device_get_eth_stats IP $iface4 tx_bytes	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.EthernetDiscardPacketsReceived	0	wan_device_get_eth_stats IP $iface4 rx_dropped	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.EthernetDiscardPacketsSent	0	wan_device_get_eth_stats IP $iface4 tx_dropped	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.EthernetErrorsReceived	0	wan_device_get_eth_stats IP $iface4 rx_errors	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.EthernetErrorsSent	0	wan_device_get_eth_stats IP $iface4 tx_errors	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.EthernetPacketsReceived	0	wan_device_get_eth_stats IP $iface4 rx_packets	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.EthernetPacketsSent	0	wan_device_get_eth_stats IP $iface4 tx_packets	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.EthernetUnknownProtoPacketsReceived	0	wan_device_get_eth_stats IP $iface4 rx_nohandler	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.SubnetMask	1	wan_device_get_ipcx_subnet $iface4	wan_device_set_ipcx_subnet $uci_wan_idx $iface4	xsd:IPv4Address		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Uptime	0	wan_device_get_uptime $iface4	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_DefaultRoute	1	wan_device_get_default_route $uci_wan_idx	wan_device_set_default_route $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPMode	1	wan_device_get_ip_mode $uci_wan_idx	wan_device_set_ip_mode $uci_wan_idx			tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.	0					tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.AddressingType	1	wan_device_v6_get_address_type $uci_wan_idx	wan_device_v6_set_address_type $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.ConnectionStatus	0	wan_device_v6_get_conn_status $iface6				tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.DNSServers	1	wan_device_v6_get_dns_servers $iface6	wan_device_v6_set_dns_servers $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.DefaultGateway	1	wan_device_v6_get_gw $iface6	wan_device_v6_set_gw $uci_wan_idx $iface6	"	xsd:IPv6Address"		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.IPAddress	1	wan_device_v6_get_ipaddr $iface6	wan_device_v6_set_ipaddr $uci_wan_idx $iface6	xsd:IPv6Address		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.ManualDNS	1	wan_device_v6_get_dns_static $uci_wan_idx	wan_device_v6_set_dns_static $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.Pd.	0					tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.Pd.Address	0	wan_device_v6_get_pd_address $iface6	xsd:IPv6Address			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.Pd.Enable	1	wan_device_v6_get_pd_enable $uci_wan_idx	wan_device_v6_set_pd_enable $uci_wan_idx $iface6	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.Pd.PLtime	0	wan_device_v6_get_pd_pltime $iface6	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.Pd.PrefixLength	0	wan_device_v6_get_pd_prefix_len $iface6	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.Pd.VLtime	0	wan_device_v6_get_pd_vltime $iface6	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.PrefixLength	1	wan_device_v6_get_prefix_len $iface6	wan_device_v6_set_prefix_len $uci_wan_idx $iface6	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.Uptime	0	wan_device_v6_get_uptime $iface6	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6AddressingType	1	wan_device_get_x_ais_ipv6_addressing_type $uci_wan_idx	wan_device_set_x_ais_ipv6_addressing_type $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6AutoModeEnable	1	wan_device_get_x_ais_ipv6_auto_mode_enable $uci_wan_idx	wan_device_set_x_ais_ipv6_auto_mode_enable $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6ConnStatus	1	wan_device_get_x_ais_ipv6_connection_status $iface6	wan_device_set_x_ais_ipv6_connection_status $iface6	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6DNSServers1	1	wan_device_get_x_ais_ipv6_dns_server1	wan_device_set_x_ais_ipv6_dns_server1	xsd:IPv6Address		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6DNSServers2	1	wan_device_get_x_ais_ipv6_dns_server2	wan_device_set_x_ais_ipv6_dns_server2	xsd:IPv6Address		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6DNSType	1	wan_device_get_x_ais_ipv6_dns_type $uci_wan_idx	wan_device_set_x_ais_ipv6_dns_type $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6ExternalAddress	1	wan_device_get_x_ais_ipv6_external_address $iface6	wan_device_set_x_ais_ipv6_external_address $uci_wan_idx $iface6	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6GUAFromPrefixEnable	1	wan_device_get_x_ais_ipv6_gua_from_prefix_enable $uci_wan_idx	wan_device_set_x_ais_ipv6_gua_from_prefix_enable $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6GatewayAddress	1	wan_device_get_x_ais_ipv6_gateway_address $iface6	wan_device_set_x_ais_ipv6_gateway_address $uci_wan_idx $iface6	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6GatewayType	1	wan_device_get_x_ais_ipv6_gateway_type $uci_wan_idx	wan_device_set_x_ais_ipv6_gateway_type $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6PrefixDelegationAddress	1	wan_device_get_x_ais_ipv6_prefix_delegation_address $iface6	wan_device_set_x_ais_ipv6_prefix_delegation_address $uci_wan_idx $iface6	xsd:IPv6Address		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6PrefixDelegationType	1	wan_device_get_x_ais_ipv6_prefix_delegation_type $uci_wan_idx	wan_device_set_x_ais_ipv6_prefix_delegation_type $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_LanInterface	1	wan_device_get_x_ais_lan_interface $uci_wan_idx	wan_device_set_x_ais_lan_interface $uci_wan_idx	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_ServiceList	1	wan_device_get_x_ais_service_list $uci_wan_idx	wan_device_set_x_ais_service_list $uci_wan_idx	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_VLAN8021P	1	wan_device_get_vlan_priority $uci_wan_idx	wan_device_set_vlan_priority $uci_wan_idx $iface4	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_VLANEnable	1	wan_device_get_vlan_enable $uci_wan_idx	wan_device_set_vlan_enable $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_VLANID	1	wan_device_get_vlan_id $uci_wan_idx	wan_device_set_vlan_id $uci_wan_idx	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnectionNumberOfEntries	0	wan_device_get_entry_num_ip		xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.	1	wan_device_add_instance_ppp		wan_device_browse_instances_wancxdev_ppp $param		tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.$2.PortMapping.$3.	1		port_mapping_delete_entry $section			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.$2.PortMapping.$3.ExternalPort	1	port_mapping_get_external_port $section	port_mapping_set_external_port $section	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.$2.PortMapping.$3.ExternalPortEndRange	1	port_mapping_get_external_port_end_range $section	port_mapping_set_external_port_end_range $section	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.$2.PortMapping.$3.InternalClient	1	port_mapping_get_internal_client $section	port_mapping_set_internal_client $section	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.$2.PortMapping.$3.InternalPort	1	port_mapping_get_internal_port $section	port_mapping_set_internal_port $section	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.$2.PortMapping.$3.PortMappingDescription	1	port_mapping_get_description $section	port_mapping_set_description $section	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.$2.PortMapping.$3.PortMappingEnabled	1	port_mapping_get_enable $section	port_mapping_set_enable $section	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.$2.PortMapping.$3.PortMappingLeaseDuration	1	port_mapping_get_lease_duration $section	port_mapping_set_lease_duration $section	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.$2.PortMapping.$3.PortMappingProtocol	1	port_mapping_get_protocol $section	port_mapping_set_protocol $section	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.$2.PortMapping.$3.RemoteHost	1	port_mapping_get_remote_host $section	port_mapping_set_remote_host $section	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.$2.PortMapping.$3.X_AIS_InternalPortEndRange	1	port_mapping_get_internal_port_end_range $section	port_mapping_set_internal_port_end_range $section	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.$2.PortMapping.$3.X_AIS_Name	1	port_mapping_get_name $section	port_mapping_set_name $section	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.$2.PortMapping.$3.X_AIS_RemoteHostEndRange	1	port_mapping_get_remote_host_end_range $section	port_mapping_set_remote_host_end_range $section	xsd:string		tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.	1		wan_device_del_instance $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.AddressingType	1	wan_device_get_addr_type $uci_wan_idx	wan_device_set_addr_type $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Alias	0	wan_device_get_alias $uci_wan_idx				tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.ConnectionStatus	0	wan_device_get_conn_status $iface4 $iface6				tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.ConnectionType	1	echo IP_Routed	wan_device_set_wan_conn_type $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.CurrentMRUSize	0	wan_device_get_ppp_current_mru $iface4	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.DNSEnabled	1	echo true	true	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.DNSOverrideAllowed	1	wan_device_get_dns_static $uci_wan_idx	wan_device_set_dns_static $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.DNSServers	1	wan_device_get_dns_servers $iface4	wan_device_set_dns_servers $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.DefaultGateway	0	wan_device_get_gw $iface4				tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Enable	1	wan_device_get_wan_enable $uci_wan_idx	wan_device_set_wan_enable $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.ExternalIPAddress	1	wan_device_get_ipaddr $iface4	true	xsd:IPv4Address	$isWanTr069	tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.LastConnectionError	0	echo ERROR_NONE				tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.MACAddress	1	wan_device_get_mac $iface4	wan_device_set_mac $uci_wan_idx $iface4			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.MACAddressOverride	1	wan_device_get_mac_override $uci_wan_idx	wan_device_set_mac_override $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.MaxMRUSize	1	wan_device_get_ppp_max_mru $iface4	wan_device_set_ppp_max_mru $iface4	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.MaxMTUSize	1	wan_device_get_mtu $iface	wan_device_set_br_mtu $device	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.NATEnabled	1	wan_device_get_nat_enable $uci_wan_idx	wan_device_set_nat_enable $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Name	1	$UCI_GET wan.@entry[$uci_wan_idx].name	wan_device_set_name $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Password	1	$UCI_GET wan.@entry[$uci_wan_idx].ppp_password	wan_device_set_ppp_password $uci_wan_idx $iface4			tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PortMapping.	1	port_mapping_add_entry $ifaceName		port_mapping_browse_instances $object_idx $1 $protocol $ifaceName		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PortMappingNumberOfEntries	0	wan_device_get_port_mapping_number $ifaceName	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PossibleConnectionTypes	0	echo IP_Routed				tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.RemoteIPAddress	0	wan_device_get_ppp_remote_ipaddr $iface4				tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Reset	1	wan_device_get_reset	wan_device_set_reset $uci_wan_idx $iface4	xsd:boolean		tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Stats.	0					tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Stats.EthernetBytesReceived	0	wan_device_get_eth_stats PPP $iface4 rx_bytes	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Stats.EthernetBytesSent	0	wan_device_get_eth_stats PPP $iface4 tx_bytes	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Stats.EthernetDiscardPacketsReceived	0	wan_device_get_eth_stats PPP $iface4 rx_dropped	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Stats.EthernetDiscardPacketsSent	0	wan_device_get_eth_stats PPP $iface4 tx_dropped	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Stats.EthernetErrorsReceived	0	wan_device_get_eth_stats PPP $iface4 rx_errors	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Stats.EthernetErrorsSent	0	wan_device_get_eth_stats PPP $iface4 tx_errors	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Stats.EthernetPacketsReceived	0	wan_device_get_eth_stats PPP $iface4 rx_packets	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Stats.EthernetPacketsSent	0	wan_device_get_eth_stats PPP $iface4 tx_packets	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Stats.EthernetUnknownProtoPacketsReceived	0	wan_device_get_eth_stats PPP $iface4 rx_nohandler	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.SubnetMask	1	wan_device_get_ipcx_subnet $iface4	wan_device_set_ipcx_subnet $uci_wan_idx $iface4	xsd:IPv4Address		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.TransportType	0	echo PPPoE				tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Uptime	0	wan_device_get_uptime $iface4	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Username	1	$UCI_GET wan.@entry[$uci_wan_idx].ppp_username	wan_device_set_ppp_username $uci_wan_idx $iface4	xsd:string	$isWanTr069	tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_DefaultRoute	1	wan_device_get_default_route $uci_wan_idx	wan_device_set_default_route $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPMode	1	wan_device_get_ip_mode $uci_wan_idx	wan_device_set_ip_mode $uci_wan_idx			tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.	0					tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.AddressingType	1	wan_device_v6_get_address_type $uci_wan_idx	wan_device_v6_set_address_type $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.ConnectionStatus	0	wan_device_v6_get_conn_status $iface6				tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.DNSServers	1	wan_device_v6_get_dns_servers $iface6	wan_device_v6_set_dns_servers $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.DefaultGateway	1	wan_device_v6_get_gw $iface6	wan_device_v6_set_gw $uci_wan_idx $iface6	xsd:IPv6Address		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.IPAddress	1	wan_device_v6_get_ipaddr $iface6	wan_device_v6_set_ipaddr $uci_wan_idx $iface6	xsd:IPv6Address		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.ManualDNS	1	wan_device_v6_get_dns_static $uci_wan_idx	wan_device_v6_set_dns_static $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.Pd.	0					tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.Pd.Address	0	wan_device_v6_get_pd_address $iface6	xsd:IPv6Address			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.Pd.Enable	1	wan_device_v6_get_pd_enable $uci_wan_idx	wan_device_v6_set_pd_enable $uci_wan_idx $iface6	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.Pd.PLtime	0	wan_device_v6_get_pd_pltime $iface6	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.Pd.PrefixLength	0	wan_device_v6_get_pd_prefix_len $iface6	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.Pd.VLtime	0	wan_device_v6_get_pd_vltime $iface6	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.PrefixLength	1	wan_device_v6_get_prefix_len $iface6	wan_device_v6_set_prefix_len $uci_wan_idx $iface6	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.Uptime	0	wan_device_v6_get_uptime $iface6	xsd:unsignedInt			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6AddressingType	1	wan_device_get_x_ais_ipv6_addressing_type $uci_wan_idx	wan_device_set_x_ais_ipv6_addressing_type $uci_wan_idx			tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6AutoModeEnable	1	wan_device_get_x_ais_ipv6_auto_mode_enable $uci_wan_idx	wan_device_set_x_ais_ipv6_auto_mode_enable $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6ConnectionStatus	1	wan_device_get_x_ais_ipv6_connection_status $iface6	wan_device_set_x_ais_ipv6_connection_status $iface6	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6DNSServers1	1	wan_device_get_x_ais_ipv6_dns_server1	wan_device_set_x_ais_ipv6_dns_server1	xsd:IPv6Address		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6DNSServers2	1	wan_device_get_x_ais_ipv6_dns_server2	wan_device_set_x_ais_ipv6_dns_server2	xsd:IPv6Address		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6ExternalAddress	1	wan_device_get_x_ais_ipv6_external_address $iface6	wan_device_set_x_ais_ipv6_external_address $uci_wan_idx $iface6	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6PdEnable	1	wan_device_get_x_ais_ipv6_pd_enable $uci_wan_idx	wan_device_set_x_ais_ipv6_pd_enable $uci_wan_idx $iface6	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6PrefixDelegationAddress	1	wan_device_get_x_ais_ipv6_prefix_delegation_address $iface6	wan_device_set_x_ais_ipv6_prefix_delegation_address $uci_wan_idx $iface6	xsd:IPv6Address		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_LanInterface	1	wan_device_get_x_ais_lan_interface $uci_wan_idx	wan_device_set_x_ais_lan_interface $uci_wan_idx	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_ServiceList	1	wan_device_get_x_ais_service_list $uci_wan_idx	wan_device_set_x_ais_service_list $uci_wan_idx	xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_VLAN8021P	1	wan_device_get_vlan_priority $uci_wan_idx	wan_device_set_vlan_priority $uci_wan_idx $iface4	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_VLANEnable	1	wan_device_get_vlan_enable $uci_wan_idx	wan_device_set_vlan_enable $uci_wan_idx	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_VLANID	1	wan_device_get_vlan_id $uci_wan_idx	wan_device_set_vlan_id $uci_wan_idx	xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnectionNumberOfEntries	0	wan_device_get_entry_num_ppp		xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANEthernetInterfaceConfig.	0					tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANEthernetInterfaceConfig.DuplexMode	0	get_fake_WANEthernetDuplexMode		xsd:string		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANEthernetInterfaceConfig.Enable	1	echo true	true	xsd:boolean		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANEthernetInterfaceConfig.MaxBitRate	0	get_fake_WANEthernetMaxBitRate				tr098/wan_device
+4	P4 WAN	obj	InternetGatewayDevice.WANDevice.{i}.WANEthernetInterfaceConfig.Stats.	0					tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANEthernetInterfaceConfig.Stats.BytesReceived	0	wan_common_get_bytes_received		xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANEthernetInterfaceConfig.Stats.BytesSent	0	wan_common_get_bytes_sent		xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANEthernetInterfaceConfig.Stats.PacketsReceived	0	wan_common_get_packets_received		xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANEthernetInterfaceConfig.Stats.PacketsSent	0	wan_common_get_packets_sent		xsd:unsignedInt		tr098/wan_device
+4	P4 WAN	param	InternetGatewayDevice.WANDevice.{i}.WANEthernetInterfaceConfig.Status	0	get_fake_WANEthernetStatus				tr098/wan_device
+5	P5 diagnostics	obj	InternetGatewayDevice.DNSDiagnostics.	0					tr098/dns_diagnostics
+5	P5 diagnostics	param	InternetGatewayDevice.DNSDiagnostics.DiagnosticsState	1	dnslookup_get easycwmp.@local[0].DiagnosticsState None	dnslookup_set_diagnostic_state			tr098/dns_diagnostics
+5	P5 diagnostics	param	InternetGatewayDevice.DNSDiagnostics.FailureCount	0	dnslookup_get easycwmp.@local[0].FailureCount 0		xsd:unsignedInt		tr098/dns_diagnostics
+5	P5 diagnostics	param	InternetGatewayDevice.DNSDiagnostics.Host	1	dnslookup_get easycwmp.@local[0].Host	dnslookup_set_host easycwmp.@local[0].Host	xsd:string		tr098/dns_diagnostics
+5	P5 diagnostics	param	InternetGatewayDevice.DNSDiagnostics.Interface	1	dnslookup_get easycwmp.@local[0].Interface default	dnslookup_set_interface easycwmp.@local[0].Interface	xsd:string		tr098/dns_diagnostics
+5	P5 diagnostics	param	InternetGatewayDevice.DNSDiagnostics.NumberOfRepetitions	1	dnslookup_get easycwmp.@local[0].NumberOfRepetitions 3	dnslookup_set easycwmp.@local[0].NumberOfRepetitions	xsd:unsignedInt		tr098/dns_diagnostics
+5	P5 diagnostics	obj	InternetGatewayDevice.DNSDiagnostics.Result.{i}.	0					tr098/dns_diagnostics
+5	P5 diagnostics	param	InternetGatewayDevice.DNSDiagnostics.Result.{i}.DNSServerIP	0	dnslookup_get_result easycwmp.@local[$i].DNSServerIP		xsd:string		tr098/dns_diagnostics
+5	P5 diagnostics	param	InternetGatewayDevice.DNSDiagnostics.Result.{i}.HostNameReturned	0	dnslookup_get_result easycwmp.@local[$i].HostNameReturned		xsd:string		tr098/dns_diagnostics
+5	P5 diagnostics	param	InternetGatewayDevice.DNSDiagnostics.Result.{i}.IPAddresses	0	dnslookup_get_result easycwmp.@local[$i].IPAddresses		xsd:string		tr098/dns_diagnostics
+5	P5 diagnostics	param	InternetGatewayDevice.DNSDiagnostics.Result.{i}.ResponseTime	0	dnslookup_get_result easycwmp.@local[$i].ResponseTime		xsd:unsignedInt		tr098/dns_diagnostics
+5	P5 diagnostics	param	InternetGatewayDevice.DNSDiagnostics.Result.{i}.Status	0	dnslookup_get_result easycwmp.@local[$i].Status		xsd:string		tr098/dns_diagnostics
+5	P5 diagnostics	param	InternetGatewayDevice.DNSDiagnostics.SuccessCount	0	dnslookup_get easycwmp.@local[0].SuccessCount 0		xsd:unsignedInt		tr098/dns_diagnostics
+5	P5 diagnostics	param	InternetGatewayDevice.DNSDiagnostics.Timeout	1	dnslookup_get easycwmp.@local[0].Timeout 5000	dnslookup_set easycwmp.@local[0].Timeout	xsd:unsignedInt		tr098/dns_diagnostics
+5	P5 diagnostics	obj	InternetGatewayDevice.DownloadDiagnostics.	0					tr143/download_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.DownloadDiagnostics.BOMTime	0	downloadDiag_get easycwmp.@local[0].BOMTime 0000-00-00T00:00:00.000000		xsd:string		tr143/download_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.DownloadDiagnostics.DSCP	1	downloadDiag_get easycwmp.@local[0].DSCP 0	downloadDiag_set_dscp easycwmp.@local[0].DSCP	xsd:unsignedInt		tr143/download_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.DownloadDiagnostics.DiagnosticsState	1	downloadDiag_get easycwmp.@local[0].DiagnosticsState None	downloadDiag_set_DiagnosticState			tr143/download_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.DownloadDiagnostics.DownloadTransports	0	downloadDiag_get easycwmp.@local[0].DownloadTransports HTTP,FTP		xsd:string		tr143/download_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.DownloadDiagnostics.DownloadURL	1	downloadDiag_get easycwmp.@local[0].DownloadURL	downloadDiag_set_DownloadURL easycwmp.@local[0].DownloadURL	xsd:string		tr143/download_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.DownloadDiagnostics.EOMTime	0	downloadDiag_get easycwmp.@local[0].EOMTime 0000-00-00T00:00:00.000000		xsd:string		tr143/download_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.DownloadDiagnostics.EthernetPriority	1	downloadDiag_get easycwmp.@local[0].EthPriority 0	downloadDiag_set_EthPriority easycwmp.@local[0].EthPriority	xsd:unsignedInt		tr143/download_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.DownloadDiagnostics.Interface	1	downloadDiag_get easycwmp.@local[0].Interface	downloadDiag_set_interface easycwmp.@local[0].Interface	xsd:string		tr143/download_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.DownloadDiagnostics.ROMTime	0	downloadDiag_get easycwmp.@local[0].ROMTime 0000-00-00T00:00:00.000000		xsd:string		tr143/download_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.DownloadDiagnostics.TCPOpenRequestTime	0	downloadDiag_get easycwmp.@local[0].TCPOpenRequestTime 0000-00-00T00:00:00.000000		xsd:string		tr143/download_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.DownloadDiagnostics.TCPOpenResponseTime	0	downloadDiag_get easycwmp.@local[0].TCPOpenResponseTime 0000-00-00T00:00:00.000000		xsd:string		tr143/download_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.DownloadDiagnostics.TestBytesReceived	0	downloadDiag_get easycwmp.@local[0].TestBytesReceived 0		xsd:unsignedInt		tr143/download_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.DownloadDiagnostics.TotalBytesReceived	0	downloadDiag_get easycwmp.@local[0].TotalBytesReceived 0		xsd:unsignedInt		tr143/download_diagnostic
+5	P5 diagnostics	obj	InternetGatewayDevice.IPPingDiagnostics.	0					tr098/ipping_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.IPPingDiagnostics.AverageResponseTime	0	ipping_get easycwmp.@local[0].AverageResponseTime 0		xsd:unsignedInt		tr098/ipping_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.IPPingDiagnostics.DSCP	1	ipping_get easycwmp.@local[0].DSCP	ipping_set easycwmp.@local[0].DSCP			tr098/ipping_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.IPPingDiagnostics.DataBlockSize	1	ipping_get easycwmp.@local[0].DataBlockSize 64	ipping_set_number easycwmp.@local[0].DataBlockSize	xsd:unsignedInt		tr098/ipping_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.IPPingDiagnostics.DiagnosticsState	1	ipping_get easycwmp.@local[0].DiagnosticsState None	ipping_set_diagnostic_state			tr098/ipping_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.IPPingDiagnostics.FailureCount	0	ipping_get easycwmp.@local[0].FailureCount 0		xsd:unsignedInt		tr098/ipping_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.IPPingDiagnostics.Host	1	ipping_get easycwmp.@local[0].Host	ipping_set_host easycwmp.@local[0].Host			tr098/ipping_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.IPPingDiagnostics.Interface	1	ipping_get easycwmp.@local[0].InterfacePath	ipping_set_interface easycwmp.@local[0].InterfacePath			tr098/ipping_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.IPPingDiagnostics.MaximumResponseTime	0	ipping_get easycwmp.@local[0].MaximumResponseTime 0		xsd:unsignedInt		tr098/ipping_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.IPPingDiagnostics.MinimumResponseTime	0	ipping_get easycwmp.@local[0].MinimumResponseTime 0		xsd:unsignedInt		tr098/ipping_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.IPPingDiagnostics.NumberOfRepetitions	1	ipping_get easycwmp.@local[0].NumberOfRepetitions 3	ipping_set_number easycwmp.@local[0].NumberOfRepetitions	xsd:unsignedInt		tr098/ipping_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.IPPingDiagnostics.SuccessCount	0	ipping_get easycwmp.@local[0].SuccessCount 0		xsd:unsignedInt		tr098/ipping_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.IPPingDiagnostics.Timeout	1	ipping_get easycwmp.@local[0].Timeout 1000	ipping_set_number easycwmp.@local[0].Timeout	xsd:unsignedInt		tr098/ipping_diagnostic
+5	P5 diagnostics	obj	InternetGatewayDevice.Layer3Forwarding.	0					tr098/layer3_forwarding
+5	P5 diagnostics	obj	InternetGatewayDevice.Layer3Forwarding.Forwarding.	1	static_route_add_rule		static_route_browse_instances_obj $1		tr098/layer3_forwarding
+5	P5 diagnostics	obj	InternetGatewayDevice.Layer3Forwarding.Forwarding.$2.	1		static_route_delete_entry $section			tr098/layer3_forwarding
+5	P5 diagnostics	param	InternetGatewayDevice.Layer3Forwarding.Forwarding.$2.DestIPAddress	1	get_Forwarding_DestIPAddress $section	set_Forwarding_DestIPAddress $section	xsd:IPv4Address		tr098/layer3_forwarding
+5	P5 diagnostics	param	InternetGatewayDevice.Layer3Forwarding.Forwarding.$2.DestSubnetMask	1	get_Forwarding_DestSubnetMask $section	set_Forwarding_DestSubnetMask $section	xsd:IPv4Address		tr098/layer3_forwarding
+5	P5 diagnostics	param	InternetGatewayDevice.Layer3Forwarding.Forwarding.$2.Enable	1	get_Forwarding_Enable $section	set_Forwarding_Enable $section	xsd:boolean		tr098/layer3_forwarding
+5	P5 diagnostics	param	InternetGatewayDevice.Layer3Forwarding.Forwarding.$2.ForwardingMetric	1	get_Forwarding_ForwardingMetric $section	set_Forwarding_ForwardingMetric $section	xsd:Int		tr098/layer3_forwarding
+5	P5 diagnostics	param	InternetGatewayDevice.Layer3Forwarding.Forwarding.$2.GatewayIPAddress	1	get_Forwarding_GatewayIPAddress $section	set_Forwarding_GatewayIPAddress $section	xsd:IPv4Address		tr098/layer3_forwarding
+5	P5 diagnostics	param	InternetGatewayDevice.Layer3Forwarding.Forwarding.$2.Interface	1	get_Forwarding_Interface $section	set_Forwarding_Interface $section			tr098/layer3_forwarding
+5	P5 diagnostics	param	InternetGatewayDevice.Layer3Forwarding.Forwarding.$2.StaticRoute	0	echo true		xsd:boolean		tr098/layer3_forwarding
+5	P5 diagnostics	param	InternetGatewayDevice.Layer3Forwarding.Forwarding.$2.Status	0	get_Forwarding_Status $section				tr098/layer3_forwarding
+5	P5 diagnostics	param	InternetGatewayDevice.Layer3Forwarding.Forwarding.$2.Type	1	get_Forwarding_Type $section	set_Forwarding_Type $section			tr098/layer3_forwarding
+5	P5 diagnostics	param	InternetGatewayDevice.Layer3Forwarding.Forwarding.DefaultConnectionService	1	get_Forwarding_DefaultConnectionService	set_Forwarding_DefaultConnectionService			tr098/layer3_forwarding
+5	P5 diagnostics	param	InternetGatewayDevice.Layer3Forwarding.Forwarding.Enable	1	get_forwarding_common_enable	set_forwarding_common_enable	xsd:boolean		tr098/layer3_forwarding
+5	P5 diagnostics	param	InternetGatewayDevice.Layer3Forwarding.Forwarding.ForwardNumberOfEntries	0	get_forwarding_common_NumberOfEntries		xsd:Int		tr098/layer3_forwarding
+5	P5 diagnostics	obj	InternetGatewayDevice.NSLookupDiagnostics.	0					tr098/nslookup_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.NSLookupDiagnostics.DNSServer	1	nslookup_get easycwmp.@local[0].DNSServer	nslookup_set_host easycwmp.@local[0].DNSServer	xsd:string		tr098/nslookup_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.NSLookupDiagnostics.DiagnosticsState	1	nslookup_get easycwmp.@local[0].DiagnosticsState None	nslookup_set_diagnostic_state			tr098/nslookup_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.NSLookupDiagnostics.HostName	1	nslookup_get easycwmp.@local[0].HostName	nslookup_set_host easycwmp.@local[0].HostName	xsd:string		tr098/nslookup_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.NSLookupDiagnostics.Interface	1	nslookup_get easycwmp.@local[0].Interface default	nslookup_set_interface easycwmp.@local[0].Interface	xsd:string		tr098/nslookup_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.NSLookupDiagnostics.NumberOfRepetitions	1	nslookup_get easycwmp.@local[0].NumberOfRepetitions 3	nslookup_set easycwmp.@local[0].NumberOfRepetitions	xsd:unsignedInt		tr098/nslookup_diagnostic
+5	P5 diagnostics	obj	InternetGatewayDevice.NSLookupDiagnostics.Result.	0			dnsdiag_nslookupresult_browse_instances $1		tr098/nslookup_diagnostic
+5	P5 diagnostics	obj	InternetGatewayDevice.NSLookupDiagnostics.Result.{i}.	0					tr098/nslookup_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.NSLookupDiagnostics.Result.{i}.DNSServerIP	0	nslookup_get_result easycwmp.@local[$i].DNSServerIP		xsd:string		tr098/nslookup_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.NSLookupDiagnostics.Result.{i}.HostNameReturned	0	nslookup_get_result easycwmp.@local[$i].HostNameReturned		xsd:string		tr098/nslookup_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.NSLookupDiagnostics.Result.{i}.IPAddresses	0	nslookup_get_result easycwmp.@local[$i].IPAddresses		xsd:string		tr098/nslookup_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.NSLookupDiagnostics.Result.{i}.ResponseTime	0	nslookup_get_result easycwmp.@local[$i].ResponseTime		xsd:unsignedInt		tr098/nslookup_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.NSLookupDiagnostics.Result.{i}.Status	0	nslookup_get_result easycwmp.@local[$i].Status		xsd:string		tr098/nslookup_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.NSLookupDiagnostics.ResultNumberOfEntries	0	nslookup_get easycwmp.@local[0].ResultNumberOfEntries 0		xsd:unsignedInt		tr098/nslookup_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.NSLookupDiagnostics.SuccessCount	0	nslookup_get easycwmp.@local[0].SuccessCount 0		xsd:unsignedInt		tr098/nslookup_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.NSLookupDiagnostics.Timeout	1	nslookup_get easycwmp.@local[0].Timeout 5000	nslookup_set easycwmp.@local[0].Timeout	xsd:unsignedInt		tr098/nslookup_diagnostic
+5	P5 diagnostics	obj	InternetGatewayDevice.SelfTestDiagnostics.	0					tr098/root
+5	P5 diagnostics	param	InternetGatewayDevice.SelfTestDiagnostics.DiagnosticsState	1	echo \None\				tr098/root
+5	P5 diagnostics	param	InternetGatewayDevice.SelfTestDiagnostics.Results	0	echo \\				tr098/root
+5	P5 diagnostics	obj	InternetGatewayDevice.TraceRouteDiagnostics.	0					tr098/traceroute_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.TraceRouteDiagnostics.DSCP	1	traceroute_get easycwmp.@local[0].DSCP 0	traceroute_set_dscp easycwmp.@local[0].DSCP	xsd:unsignedInt		tr098/traceroute_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.TraceRouteDiagnostics.DataBlockSize	1	traceroute_get easycwmp.@local[0].DataBlockSize 38	traceroute_set_dsize easycwmp.@local[0].DataBlockSize	xsd:unsignedInt		tr098/traceroute_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.TraceRouteDiagnostics.DiagnosticsState	1	traceroute_get easycwmp.@local[0].DiagnosticsState None	traceroute_set_diagnostic_state			tr098/traceroute_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.TraceRouteDiagnostics.Host	1	traceroute_get easycwmp.@local[0].Host	traceroute_set_host easycwmp.@local[0].Host	xsd:string		tr098/traceroute_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.TraceRouteDiagnostics.Interface	1	traceroute_get easycwmp.@local[0].Interface default	traceroute_set_interface easycwmp.@local[0].Interface	xsd:string		tr098/traceroute_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.TraceRouteDiagnostics.MaxHopCount	1	traceroute_get easycwmp.@local[0].MaxHopCount 30	traceroute_set_mhops easycwmp.@local[0].MaxHopCount	xsd:unsignedInt		tr098/traceroute_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.TraceRouteDiagnostics.NumberOfTries	1	traceroute_get easycwmp.@local[0].NumberOfTries 3	traceroute_set_tries easycwmp.@local[0].NumberOfTries	xsd:unsignedInt		tr098/traceroute_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.TraceRouteDiagnostics.ResponseTime	0	traceroute_get easycwmp.@local[0].ResponseTime 0		xsd:unsignedInt		tr098/traceroute_diagnostic
+5	P5 diagnostics	obj	InternetGatewayDevice.TraceRouteDiagnostics.RouteHops.	0			traceroute_routehops_browse_instances $1		tr098/traceroute_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.TraceRouteDiagnostics.RouteHopsNumberOfEntries	0	traceroute_get easycwmp.@local[0].RouteHopsNumberOfEntries 0		xsd:unsignedInt		tr098/traceroute_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.TraceRouteDiagnostics.Timeout	1	traceroute_get easycwmp.@local[0].Timeout 5000	traceroute_set_timout easycwmp.@local[0].Timeout	xsd:unsignedInt		tr098/traceroute_diagnostic
+5	P5 diagnostics	obj	InternetGatewayDevice.UploadDiagnostics.	0					tr143/upload_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.UploadDiagnostics.BOMTime	0	uploadDiag_get easycwmp.@local[0].BOMTime 0000-00-00T00:00:00.000000		xsd:string		tr143/upload_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.UploadDiagnostics.DSCP	1	uploadDiag_get easycwmp.@local[0].DSCP 0	uploadDiag_set_dscp easycwmp.@local[0].DSCP	xsd:unsignedInt		tr143/upload_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.UploadDiagnostics.DiagnosticsState	1	uploadDiag_get easycwmp.@local[0].DiagnosticsState None	uploadDiag_set_DiagnosticState			tr143/upload_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.UploadDiagnostics.EOMTime	0	uploadDiag_get easycwmp.@local[0].EOMTime 0000-00-00T00:00:00.000000		xsd:string		tr143/upload_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.UploadDiagnostics.EthernetPriority	1	uploadDiag_get easycwmp.@local[0].EthPriority 0	uploadDiag_set_EthPriority easycwmp.@local[0].EthPriority	xsd:unsignedInt		tr143/upload_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.UploadDiagnostics.Interface	1	uploadDiag_get easycwmp.@local[0].Interface	uploadDiag_set_interface easycwmp.@local[0].Interface	xsd:string		tr143/upload_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.UploadDiagnostics.ROMTime	0	uploadDiag_get easycwmp.@local[0].ROMTime 0000-00-00T00:00:00.000000		xsd:string		tr143/upload_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.UploadDiagnostics.TCPOpenRequestTime	0	uploadDiag_get easycwmp.@local[0].TCPOpenRequestTime 0000-00-00T00:00:00.000000		xsd:string		tr143/upload_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.UploadDiagnostics.TCPOpenResponseTime	0	uploadDiag_get easycwmp.@local[0].TCPOpenResponseTime 0000-00-00T00:00:00.000000		xsd:string		tr143/upload_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.UploadDiagnostics.TestFileLength	1	uploadDiag_get easycwmp.@local[0].TestFileLength 0	uploadDiag_set_TestFileLength easycwmp.@local[0].TestFileLength	xsd:unsignedInt		tr143/upload_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.UploadDiagnostics.TotalBytesSent	0	uploadDiag_get easycwmp.@local[0].TotalBytesSent 0		xsd:unsignedInt		tr143/upload_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.UploadDiagnostics.UploadTransports	0	uploadDiag_get easycwmp.@local[0].UploadTransports HTTP,FTP		xsd:string		tr143/upload_diagnostic
+5	P5 diagnostics	param	InternetGatewayDevice.UploadDiagnostics.UploadURL	1	uploadDiag_get easycwmp.@local[0].UploadURL	uploadDiag_set_UploadURL easycwmp.@local[0].UploadURL	xsd:string		tr143/upload_diagnostic
+5	P5 diagnostics	obj	InternetGatewayDevice.WiFi.	0					tr098/root
+5	P5 diagnostics	obj	InternetGatewayDevice.WiFi.NeighboringWiFiDiagnostic.	0					tr098/root
+5	P5 diagnostics	param	InternetGatewayDevice.WiFi.NeighboringWiFiDiagnostic.DiagnosticsState	0	echo \\				tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Account.	0					tr098/account
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Account.Web.	0					tr098/account
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Account.Web.SessionMaxTime	1	get_Account_Web_SessionMaxTime	set_Account_Web_SessionMaxTime	xsd:unsignedInt		tr098/account
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.BulkData.	0					tr098/root
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.BulkData.Enable	0	bulk_data_get_enable		xsd:boolean		tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.BulkData.Profile.	0					tr098/root
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.BulkData.Status	0	bulk_data_get_status				tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.CaptivePortal.	0					tr098/root
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.CaptivePortal.AllowedList	1	captive_portal_get_allowed_list	captive_portal_set_fake	xsd:string		tr098/root
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.CaptivePortal.CaptivePortalURL	1	captive_portal_get_url	captive_portal_set_fake	xsd:string		tr098/root
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.CaptivePortal.Enable	1	captive_portal_get_enable	captive_portal_set_fake	xsd:boolean		tr098/root
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.CaptivePortal.Status	0	captive_portal_get_status		xsd:string		tr098/root
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.DeviceSummary	0	device_info_get_device_summary			1	tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.FAP.	0					tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.FAP.GPS.	0					tr098/root
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.FAP.GPS.LastSuccessfulScanTime	0	fap_gps_get_last_successful_scan_time		xsd:dateTime		tr098/root
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.FAP.GPS.LockedLatitude	0	fap_gps_get_locked_latitude		xsd:string		tr098/root
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.FAP.GPS.LockedLongitude	0	fap_gps_get_locked_longitude		xsd:string		tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.FaultMgmt.	0					tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.FaultMgmt.CurrentAlarm.	0					tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Firewall.	0					tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.Config	0	firewall_get_config		xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.Enable	0	firewall_get_enable		xsd:boolean		tr098/firewall
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Firewall.X_AIS_DisablePort.	1	disable_port_rule_add		disable_port_browse_instances_obj $1		tr098/firewall
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Firewall.X_AIS_DisablePort.{i}.	1		disable_port_rule_delete $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_DisablePort.{i}.Enable	1	get_x_ais_disable_port_enable $index	set_x_ais_disable_port_enable $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_DisablePort.{i}.Interface	1	get_x_ais_disable_port_interface $index	set_x_ais_disable_port_interface $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_DisablePort.{i}.Name	1	get_x_ais_disable_port_name $index	set_x_ais_disable_port_name $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_DisablePort.{i}.Port	1	get_x_ais_disable_port_port $index	set_x_ais_disable_port_port $index			tr098/firewall
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Firewall.X_AIS_IPFilter.	1	ipfilter2_add_entry		browse_X_AIS_IPFilter $1		tr098/firewall
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.	1		ipfilter2_delete_entry $inst			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.DSCP	1	get_X_AIS_IPFilter_Param $idx DSCP	set_X_AIS_IPFilter_Param $idx DSCP	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.DSCPExclude	1	get_X_AIS_IPFilter_Param $idx DSCPExclude	set_X_AIS_IPFilter_Param $idx DSCPExclude	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.DestAllInterface	1	get_X_AIS_IPFilter_Param $idx DestAllInterface	set_X_AIS_IPFilter_Param $idx DestAllInterface	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.DestIP	1	get_X_AIS_IPFilter_Param $idx DestIP	set_X_AIS_IPFilter_Param $idx DestIP	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.DestIPExclude	1	get_X_AIS_IPFilter_Param $idx DestIPExclude	set_X_AIS_IPFilter_Param $idx DestIPExclude	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.DestInterface	1	get_X_AIS_IPFilter_Param $idx DestInterface	set_X_AIS_IPFilter_Param $idx DestInterface	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.DestInterfaceExclude	1	get_X_AIS_IPFilter_Param $idx DestInterfaceExclude	set_X_AIS_IPFilter_Param $idx DestInterfaceExclude	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.DestMask	1	get_X_AIS_IPFilter_Param $idx DestMask	set_X_AIS_IPFilter_Param $idx DestMask	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.DestPort	1	get_X_AIS_IPFilter_Param $idx DestPort	set_X_AIS_IPFilter_Param $idx DestPort	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.DestPortExclude	1	get_X_AIS_IPFilter_Param $idx DestPortExclude	set_X_AIS_IPFilter_Param $idx DestPortExclude	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.DestPortRangeMax	1	get_X_AIS_IPFilter_Param $idx DestPortRangeMax	set_X_AIS_IPFilter_Param $idx DestPortRangeMax	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.Enable	1	get_X_AIS_IPFilter_Param $idx Enable	set_X_AIS_IPFilter_Param $idx Enable	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.IPVersion	1	get_X_AIS_IPFilter_Param $idx IPVersion	set_X_AIS_IPFilter_Param $idx IPVersion	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.Name	1	get_X_AIS_IPFilter_Param $idx Name	set_X_AIS_IPFilter_Param $idx Name	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.Order	1	get_X_AIS_IPFilter_Param $idx Order	set_X_AIS_IPFilter_Param $idx Order	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.Protocol	1	get_X_AIS_IPFilter_Param $idx Protocol	set_X_AIS_IPFilter_Param $idx Protocol	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.ProtocolExclude	1	get_X_AIS_IPFilter_Param $idx ProtocolExclude	set_X_AIS_IPFilter_Param $idx ProtocolExclude	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.SourceAllInterface	1	get_X_AIS_IPFilter_Param $idx SourceAllInterface	set_X_AIS_IPFilter_Param $idx SourceAllInterface	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.SourceIP	1	get_X_AIS_IPFilter_Param $idx SourceIP	set_X_AIS_IPFilter_Param $idx SourceIP	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.SourceIPExclude	1	get_X_AIS_IPFilter_Param $idx SourceIPExclude	set_X_AIS_IPFilter_Param $idx SourceIPExclude	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.SourceInterface	1	get_X_AIS_IPFilter_Param $idx SourceInterface	set_X_AIS_IPFilter_Param $idx SourceInterface	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.SourceInterfaceExclude	1	get_X_AIS_IPFilter_Param $idx SourceInterfaceExclude	set_X_AIS_IPFilter_Param $idx SourceInterfaceExclude	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.SourceMask	1	get_X_AIS_IPFilter_Param $idx SourceMask	set_X_AIS_IPFilter_Param $idx SourceMask	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.SourcePort	1	get_X_AIS_IPFilter_Param $idx SourcePort	set_X_AIS_IPFilter_Param $idx SourcePort	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.SourcePortExclude	1	get_X_AIS_IPFilter_Param $idx SourcePortExclude	set_X_AIS_IPFilter_Param $idx SourcePortExclude	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.SourcePortRangeMax	1	get_X_AIS_IPFilter_Param $idx SourcePortRangeMax	set_X_AIS_IPFilter_Param $idx SourcePortRangeMax	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.Target	1	get_X_AIS_IPFilter_Param $idx Target	set_X_AIS_IPFilter_Param $idx Target	xsd:string		tr098/firewall
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.	0					tr098/firewall
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.	1	service_control_rule_add		service_control_browse_instances_obj $1		tr098/firewall
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.	1		service_control_rule_delete $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.Enable	1	get_x_ais_service_control_enable $index	set_x_ais_service_control_enable $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.IPEnd	1	get_x_ais_service_control_ip_end $index	set_x_ais_service_control_ip_end $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.IPStart	1	get_x_ais_service_control_ip_start $index	set_x_ais_service_control_ip_start $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.Ingress	1	get_x_ais_service_control_ingress $index	set_x_ais_service_control_ingress $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.Mode	1	get_x_ais_service_control_mode $index	set_x_ais_service_control_mode $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.Name	1	get_x_ais_service_control_name $index	set_x_ais_service_control_name $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.OtherPort	1	get_x_ais_service_control_other_port $index	set_x_ais_service_control_other_port $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.OtherProtocol	1	get_x_ais_service_control_other_protocol $index	set_x_ais_service_control_other_protocol $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.ServiceType	1	get_x_ais_service_control_service_type $index	set_x_ais_service_control_service_type $index			tr098/firewall
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.	1	service_control_ipv6_rule_add		service_control_ipv6_browse_instances_obj $1		tr098/firewall
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.	1		service_control_rule_delete $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.Enable	1	get_x_ais_service_control_enable $index	set_x_ais_service_control_enable $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.Ingress	1	get_x_ais_service_control_ingress $index	set_x_ais_service_control_ingress $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.Mode	1	get_x_ais_service_control_mode $index	set_x_ais_service_control_mode $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.Name	1	get_x_ais_service_control_name $index	set_x_ais_service_control_name $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.OtherPort	1	get_x_ais_service_control_other_port $index	set_x_ais_service_control_other_port $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.OtherProtocol	1	get_x_ais_service_control_other_protocol $index	set_x_ais_service_control_other_protocol $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.Prefix	1	get_x_ais_service_control_prefix $index	set_x_ais_service_control_prefix $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.PrefixLen	1	get_x_ais_service_control_prefix_len $index	set_x_ais_service_control_prefix_len $index			tr098/firewall
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.ServiceType	1	get_x_ais_service_control_service_type $index	set_x_ais_service_control_service_type $index			tr098/firewall
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Layer2Bridging.	0					tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Layer2Bridging.AvailableInterface.	0					tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.Layer2Bridging.Bridge.	0					tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.SoftwareModules.	0					tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.SoftwareModules.DeploymentUnit.	0					tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.USBHosts.	0					tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.USBHosts.Host.	0					tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.User.	0					tr098/root
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.UserInterface.	0					tr098/userinterface
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.UserInterface.CarrierLocking.	0					tr098/X_AIS_CarrierLocking
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.CarrierLocking.X_AIS_DelayBeforeStartCheckISP	1	get_CarrierLocking_X_AIS_DelayBeforeStartCheckISP	set_CarrierLocking_X_AIS_DelayBeforeStartCheckISP	xsd:string		tr098/X_AIS_CarrierLocking
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.CarrierLocking.X_AIS_DelayToCheckAgain	1	get_CarrierLocking_X_AIS_DelayToCheckAgain	set_CarrierLocking_X_AIS_DelayToCheckAgain	xsd:string		tr098/X_AIS_CarrierLocking
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.CarrierLocking.X_AIS_Guard_URL	1	get_CarrierLocking_X_AIS_Guard_URL	set_CarrierLocking_X_AIS_Guard_URL	xsd:string		tr098/X_AIS_CarrierLocking
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.CarrierLocking.X_AIS_LockingEnable	1	get_CarrierLocking_X_AIS_LockingEnable	set_CarrierLocking_X_AIS_LockingEnable	xsd:boolean		tr098/X_AIS_CarrierLocking
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.CarrierLocking.X_AIS_LockingStatus	0	get_CarrierLocking_X_AIS_LockingStatus		xsd:string		tr098/X_AIS_CarrierLocking
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.CarrierLocking.X_AIS_RoundDelay	1	get_CarrierLocking_X_AIS_RoundDelay	set_CarrierLocking_X_AIS_RoundDelay	xsd:string		tr098/X_AIS_CarrierLocking
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.CarrierLocking.X_AIS_RoundNum	1	get_CarrierLocking_X_AIS_RoundNum	set_CarrierLocking_X_AIS_RoundNum	xsd:string		tr098/X_AIS_CarrierLocking
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.	0					tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.AdminName	1	get_AdminName	set_AdminName	xsd:string		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.AdminPassword	1	get_AdminPassword	set_AdminPassword	xsd:string		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.AvailableLanguages	0	get_AvailableLanguages		xsd:string		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.Captcha_enable	1	get_Captcha_enable	set_Captcha_enable	xsd:boolean		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.CurrentLanguage	1	get_CurrentLanguage	set_CurrentLanguage	xsd:string		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.RemoteAccess	1	get_RemoteAccess	set_RemoteAccess	xsd:boolean		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.RemoteAccessTimeout	1	get_RemoteAccessTimeout	set_RemoteAccessTimeout	xsd:unsignedInt		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.SuperAdminAccessList	1	get_SuperAdminAccessList	set_SuperAdminAccessList	xsd:string		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.SuperAdminEnable	1	get_SuperAdminEnable	set_SuperAdminEnable	xsd:string		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.SuperAdminName	1	get_SuperAdminName	set_SuperAdminName	xsd:string		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.SuperAdminPassword	1	get_SuperAdminPassword	set_SuperAdminPassword	xsd:string		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.SuperAdminSecurity	1	get_SuperAdminSecurity	set_SuperAdminSecurity	xsd:string		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.WebIp	1	get_WebIp	set_WebIp	xsd:string		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.XMPP.	0					tr098/xmpp
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.XMPP.Connection.	0					tr098/xmpp
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.XMPP.Connection.1.	0					tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.Domain	1	xmpp_get_domain	xmpp_set_fake	xsd:string		tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.Enable	1	xmpp_get_enable	xmpp_set_fake	xsd:boolean		tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.JabberID	1	xmpp_get_jabber_id	xmpp_set_fake	xsd:string		tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.KeepAliveInterval	1	xmpp_get_keep_alive_interval	xmpp_set_fake	xsd:unsignedInt		tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.LastChangeDate	0	xmpp_get_last_change_date		xsd:dateTime		tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.Password	1	xmpp_get_password	xmpp_set_fake	xsd:string		tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.Resource	1	xmpp_get_resource	xmpp_set_fake	xsd:string		tr098/xmpp
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.XMPP.Connection.1.Server.	0					tr098/xmpp
+6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.XMPP.Connection.1.Server.1.	0					tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.Server.1.Enable	1	xmpp_get_server_enable	xmpp_set_fake	xsd:boolean		tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.Server.1.Port	1	xmpp_get_server_port	xmpp_set_fake	xsd:unsignedInt		tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.Server.1.ServerAddress	1	xmpp_get_server_address	xmpp_set_fake	xsd:string		tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.ServerConnectAlgorithm	1	xmpp_get_server_connect_algorithm	xmpp_set_fake	xsd:string		tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.ServerConnectAttempts	0	xmpp_get_server_connect_attempts		xsd:unsignedInt		tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.Status	0	xmpp_get_status		xsd:string		tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.UseTLS	1	xmpp_get_use_tls	xmpp_set_fake	xsd:boolean		tr098/xmpp
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.XMPP.Connection.1.Username	1	xmpp_get_username	xmpp_set_fake	xsd:string		tr098/xmpp
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_3rdAgent.	0					tr098/X_AIS_3rdAgent
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_3rdAgent.enable	1	get_3rdagent_enable	set_3rdagent_enable	xsd:boolean		tr098/X_AIS_3rdAgent
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_3rdAgent.server_Cert	1	get_3rdagent_server_cert	set_3rdagent_server_cert	xsd:boolean		tr098/X_AIS_3rdAgent
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_3rdAgent.server_URL	1	get_3rdagent_server_url	set_3rdagent_server_url	xsd:string		tr098/X_AIS_3rdAgent
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_AutoWifiScan.	0					tr098/X_AIS_AutoWifiScan
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_AutoWifiScan.Enable	1	autowifiscan_get_enable	autowifiscan_set_enable	xsd:boolean		tr098/X_AIS_AutoWifiScan
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_AutoWifiScan.TrafficKeepTime	1	autowifiscan_get_traffic_keeptime	autowifiscan_set_traffic_keeptime	xsd:unsignedInt		tr098/X_AIS_AutoWifiScan
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_AutoWifiScan.TrafficLimit	1	autowifiscan_get_traffic_limit	autowifiscan_set_traffic_limit	xsd:unsignedInt		tr098/X_AIS_AutoWifiScan
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_CPEagent.	0					tr098/X_AIS_CPEagent
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_CPEagent.SecretKey	1	get_cpeagent_secretkey	set_cpeagent_secretkey	xsd:string		tr098/X_AIS_CPEagent
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_CPEagent.SecretKeyVersion	1	get_cpeagent_secretkey_version	set_cpeagent_secretkey_version	xsd:string		tr098/X_AIS_CPEagent
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_Conf.	0					tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.auto_download_status	\					tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.auto_upload_delay	\					tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.auto_upload_interval_time	\					tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.auto_upload_status	\					tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.download_from_server	\					tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.download_server	\					tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.upload_server	\					tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.upload_to_server	\					tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_DDNS.	0					tr098/X_AIS_DDNS
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_DDNS.DomainName	1	get_ddns_domain	set_ddns_domain	xsd:string		tr098/X_AIS_DDNS
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_DDNS.Enable	1	get_ddns_enable	set_ddns_enable	xsd:boolean		tr098/X_AIS_DDNS
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_DDNS.Password	1	get_ddns_password	set_ddns_password	xsd:string		tr098/X_AIS_DDNS
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_DDNS.Provider	1	get_ddns_provider	set_ddns_provider	xsd:string		tr098/X_AIS_DDNS
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_DDNS.Username	1	get_ddns_username	set_ddns_username	xsd:string		tr098/X_AIS_DDNS
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_DHCPClient.	0					tr098/X_AIS_DHCPClient
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_DHCPClient.Clean	1	get_X_AIS_DHCPClient_Clean	set_X_AIS_DHCPClient_Clean	xsd:int		tr098/X_AIS_DHCPClient
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_DHCPClient.Session	1	get_X_AIS_DHCPClient_Session	set_X_AIS_DHCPClient_Session	xsd:int		tr098/X_AIS_DHCPClient
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_DHCPClient.SessionResponse	0	get_X_AIS_DHCPClient_SessionResponse		xsd:int		tr098/X_AIS_DHCPClient
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_DnsLandingPage.	0					tr098/X_AIS_DnsLandingPage
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_DnsLandingPage.Enable	1	get_X_AIS_DnsLandingPage_Enable	set_X_AIS_DnsLandingPage_Enable	xsd:string		tr098/X_AIS_DnsLandingPage
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_Isolation.	0					tr098/X_AIS_Isolation
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Isolation.LANIsolation	1	get_X_AIS_Isolation_LANIsolation	set_X_AIS_Isolation_LANIsolation	xsd:string		tr098/X_AIS_Isolation
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_Logging.	0					tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.AlertEnable	1	get_log_level_enable alert	set_log_level_enable alert	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.CleanLogging	1	get_clean_logging	set_clean_logging	xsd:unsignedInt		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.CriticalEnable	1	get_log_level_enable crit	set_log_level_enable crit	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.DebugEnable	1	get_log_level_enable debug	set_log_level_enable debug	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.EmergencyEnable	1	get_log_level_enable emerg	set_log_level_enable emerg	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.EnableLogging	1	get_logging_enable	set_logging_enable	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.EnableRemoteLogging	1	get_enable_remote_logging	set_enable_remote_logging	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.ErrorEnable	1	get_log_level_enable err	set_log_level_enable err	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.InformationEnable	1	get_log_level_enable info	set_log_level_enable info	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.LoggingLevel	1	get_logging_level	set_logging_level	xsd:unsignedInt		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.NoticeEnable	1	get_log_level_enable notice	set_log_level_enable notice	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_Logging.RemoteLogging.	0					tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.RemoteLogging.AlertEnable	1	get_remote_log_level_enable alert	set_remote_log_level_enable alert	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.RemoteLogging.CriticalEnable	1	get_remote_log_level_enable crit	set_remote_log_level_enable crit	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.RemoteLogging.DebugEnable	1	get_remote_log_level_enable debug	set_remote_log_level_enable debug	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.RemoteLogging.EmergencyEnable	1	get_remote_log_level_enable emerg	set_remote_log_level_enable emerg	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.RemoteLogging.ErrorEnable	1	get_remote_log_level_enable err	set_remote_log_level_enable err	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.RemoteLogging.InformationEnable	1	get_remote_log_level_enable info	set_remote_log_level_enable info	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.RemoteLogging.NoticeEnable	1	get_remote_log_level_enable notice	set_remote_log_level_enable notice	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.RemoteLogging.WarningEnable	1	get_remote_log_level_enable warn	set_remote_log_level_enable warn	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.RemoteLoggingAddress	1	get_remote_logging_address	set_remote_logging_address	xsd:string		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.RemoteLoggingPort	1	get_remote_logging_port	set_remote_logging_port	xsd:unsignedInt		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.TFTPAddress	1	get_tftp_address	set_tftp_address	xsd:string		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.TFTPUploadResponse	1	get_tftp_upload_response	set_tftp_upload_response	xsd:unsignedInt		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Logging.WarningEnable	1	get_log_level_enable warn	set_log_level_enable warn	xsd:boolean		tr098/X_AIS_Logging
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_MLO.	0					tr098/lan_device
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_MLO.Backhaul.	0					tr098/lan_device
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_MLO.Backhaul.Enable	1	lan_device_get_mlo_backhaul_enable	lan_device_set_mlo_backhaul_enable	xsd:string		tr098/lan_device
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_MLO.Fronthaul.	0					tr098/lan_device
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_MLO.Fronthaul.Enable	1	lan_device_get_mlo_fronthaul_enable	lan_device_set_mlo_fronthaul_enable	xsd:string		tr098/lan_device
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_MeshAPI.	0					tr098/X_AIS_MeshAPI
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_MeshAPI.Delay_time	1	get_X_AIS_MeshAPI_Delay_time	set_X_AIS_MeshAPI_Delay_time	xsd:string		tr098/X_AIS_MeshAPI
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_MeshAPI.Domain_name	1	get_X_AIS_MeshAPI_Domain_name	set_X_AIS_MeshAPI_Domain_name	xsd:string		tr098/X_AIS_MeshAPI
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_MeshAPI.enable	1	get_X_AIS_MeshAPI_enable	set_X_AIS_MeshAPI_enable	xsd:boolean		tr098/X_AIS_MeshAPI
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_SSH.	0					tr098/X_AIS_SSH
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_SSH.Enable	1	get_X_AIS_SSH_Enable	set_X_AIS_SSH_Enable	xsd:string		tr098/X_AIS_SSH
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_Telnet.	0					tr098/X_AIS_Telnet
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Telnet.Enable	1	get_X_AIS_Telnet_Enable	set_X_AIS_Telnet_Enable	xsd:string		tr098/X_AIS_Telnet
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Telnet.Password	1	get_X_AIS_Telnet_Password	set_X_AIS_Telnet_Password	xsd:string		tr098/X_AIS_Telnet
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Telnet.Username	1	get_X_AIS_Telnet_Username	set_X_AIS_Telnet_Username	xsd:string		tr098/X_AIS_Telnet
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_UPnP.	0					tr098/X_AIS_UPnP
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UPnP.Enable	1	get_x_ais_upnp_enable	set_x_ais_upnp_enable	xsd:boolean		tr098/X_AIS_UPnP
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_UplinkSetup.	0					tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.AllowAdmin	1	get_X_AIS_UplinkSetup_AllowAdmin	set_X_AIS_UplinkSetup_AllowAdmin	xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.CurrentUplinkType	0	get_X_AIS_UplinkSetup_CurrentUplinkType		xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.	0					tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.BackupOver	1	get_X_AIS_UplinkSetup_DualUplink_BackupOver	set_X_AIS_UplinkSetup_DualUplink_BackupOver	xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.DelayBeforeSwitchUplink	1	get_X_AIS_UplinkSetup_DualUplink_DelayBeforeSwitchUplink	set_X_AIS_UplinkSetup_DualUplink_DelayBeforeSwitchUplink	xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.DualUplinkFlag	0	get_X_AIS_UplinkSetup_DualUplink_DualUplinkFlag		xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.IncreaseTime	1	get_X_AIS_UplinkSetup_DualUplink_IncreaseTime	set_X_AIS_UplinkSetup_DualUplink_IncreaseTime	xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.NoWANIPTime	1	get_X_AIS_UplinkSetup_DualUplink_NoWANIPTime	set_X_AIS_UplinkSetup_DualUplink_NoWANIPTime	xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.VlanTaggingEnable	1	get_X_AIS_UplinkSetup_DualUplink_VlanTaggingEnable	set_X_AIS_UplinkSetup_DualUplink_VlanTaggingEnable	xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.mode	1	get_X_AIS_UplinkSetup_DualUplink_Mode	set_X_AIS_UplinkSetup_DualUplink_Mode	xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.mode1.	0					tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.mode1.BackupUplink	1	get_X_AIS_UplinkSetup_DualUplink_Mode1_BackupUplink	set_X_AIS_UplinkSetup_DualUplink_Mode1_BackupUplink	xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.mode2.	0					tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.mode2.MainUplink	1	get_X_AIS_UplinkSetup_DualUplink_Mode2_MainUplink	set_X_AIS_UplinkSetup_DualUplink_Mode2_MainUplink	xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.mode3.	0					tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.mode3.BackupUplink	1	get_X_AIS_UplinkSetup_DualUplink_Mode3_BackupUplink	set_X_AIS_UplinkSetup_DualUplink_Mode3_BackupUplink	xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.DualUplink.mode3.MainUplink	1	get_X_AIS_UplinkSetup_DualUplink_Mode3_MainUplink	set_X_AIS_UplinkSetup_DualUplink_Mode3_MainUplink	xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.UplinkStatus	0	get_X_AIS_UplinkSetup_UplinkStatus		xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_UplinkSetup.mode	1	get_X_AIS_UplinkSetup_Mode	set_X_AIS_UplinkSetup_Mode	xsd:string		tr098/X_AIS_UplinkSetup
+7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_WiFiStatus.	0					tr098/X_AIS_WiFiStatus
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_WiFiStatus.X_AIS_NeighborAP	1	ais_get_neighborap_state	ais_set_neighborap_state	xsd:unsignedInt		tr098/X_AIS_WiFiStatus
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_WiFiStatus.X_AIS_NeighborAPResponse	0	ais_get_neighborap_response		xsd:string		tr098/X_AIS_WiFiStatus
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_WiFiStatus.X_AIS_WiFiClient	1	ais_get_wificlient_state	ais_set_wificlient_state	xsd:unsignedInt		tr098/X_AIS_WiFiStatus
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_WiFiStatus.X_AIS_WiFiClientResponse	0	ais_get_wificlient_response		xsd:string		tr098/X_AIS_WiFiStatus
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.	0					tr098/root
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.DOCSIS.	0					tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.DOCSIS.DownstreamChannel.	0					tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.DOCSIS.Interface.	0					tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.DOCSIS.Interface.1.	0					tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.DOCSIS.Interface.1.ConnectivityStatus.	0					tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.Interface.1.ConnectivityStatus.InvalidMaps	0	docsis_get_zero		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.Interface.1.ConnectivityStatus.InvalidRangingRsps	0	docsis_get_zero		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.Interface.1.ConnectivityStatus.InvalidRegRsps	0	docsis_get_zero		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.Interface.1.ConnectivityStatus.InvalidUcds	0	docsis_get_zero		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.Interface.1.ConnectivityStatus.LostSyncs	0	docsis_get_zero		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.Interface.1.ConnectivityStatus.Resets	0	docsis_get_zero		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.Interface.1.ConnectivityStatus.T1Timeouts	0	docsis_get_zero		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.Interface.1.ConnectivityStatus.T2Timeouts	0	docsis_get_zero		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.Interface.1.DOCSISVersion	0	docsis_get_docsis_version		xsd:string		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.Interface.1.Status	0	docsis_get_interface_status		xsd:string		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.DOCSIS.UpstreamChannel.	0					tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.DOCSIS.UpstreamChannel.1.	0					tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.UpstreamChannel.1.Frequency	0	docsis_get_zero		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.UpstreamChannel.1.ID	0	docsis_get_one		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.DOCSIS.UpstreamChannel.1.Status.	0					tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.UpstreamChannel.1.Status.ModulationType	0	docsis_get_default		xsd:string		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.UpstreamChannel.1.Status.RangingAborteds	0	docsis_get_zero		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.UpstreamChannel.1.Status.T3Timeouts	0	docsis_get_zero		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.UpstreamChannel.1.Status.T4Timeouts	0	docsis_get_zero		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.UpstreamChannel.1.Status.TxPower	0	docsis_get_zero		xsd:int		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.DOCSIS.UpstreamChannel.1.Width	0	docsis_get_zero		xsd:unsignedInt		tr098/docsis
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.	0					tr098/device_root
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.DHCPv6.	0					tr098/device_dhcpv6_server
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.DHCPv6.Server.	0					tr098/device_dhcpv6_server
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.DHCPv6.Server.Pool.	0			dhcp6_browse_instances $path		tr098/device_dhcpv6_server
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.DHCPv6.Server.Pool.{i}.	0					tr098/device_dhcpv6_server
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DHCPv6.Server.Pool.{i}.DUID	0	dhcp6_get_duid $sec		xsd:string		tr098/device_dhcpv6_server
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DHCPv6.Server.Pool.{i}.Enable	1	dhcp6_get_enable $sec	dhcp6_set_enable $sec	xsd:boolean		tr098/device_dhcpv6_server
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DHCPv6.Server.Pool.{i}.Interface	1	dhcp6_get_interface $sec	dhcp6_set_interface $sec	xsd:string		tr098/device_dhcpv6_server
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DHCPv6.Server.Pool.{i}.Status	0	dhcp6_get_status $sec		xsd:string		tr098/device_dhcpv6_server
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.DynamicDNS.	0					tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.DynamicDNS.Client.	1	ddns_client_add		ddns_client_browse $path		tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.DynamicDNS.Client.$2.	1		ddns_client_del $sec			tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DynamicDNS.Client.$2.Alias	1	ddns_get_alias $sec	ddns_set_alias $sec	xsd:string		tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DynamicDNS.Client.$2.Enable	1	ddns_get_bool ddns.$sec.enabled 0	ddns_set_bool ddns.$sec.enabled	xsd:boolean		tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DynamicDNS.Client.$2.Interface	1	ddns_get_interface $sec	ddns_set_interface $sec	xsd:string		tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DynamicDNS.Client.$2.LastError	0	ddns_get_lasterror $sec		xsd:string		tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DynamicDNS.Client.$2.Password	1	uci -q get ddns.$sec.password	ddns_set_uci_val ddns.$sec.password	xsd:string		tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DynamicDNS.Client.$2.Server	1	uci -q get ddns.$sec.service_name	ddns_set_uci_val ddns.$sec.service_name	xsd:string		tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DynamicDNS.Client.$2.Status	0	ddns_get_status $sec		xsd:string		tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DynamicDNS.Client.$2.Username	1	uci -q get ddns.$sec.username	ddns_set_uci_val ddns.$sec.username	xsd:string		tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DynamicDNS.ClientNumberOfEntries	0	ddns_get_client_count		xsd:unsignedInt		tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DynamicDNS.ServerNumberOfEntries	0	ddns_get_server_count		xsd:unsignedInt		tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.DynamicDNS.SupportedServices	0	ddns_get_supported_services		xsd:string		tr098/device_dynamic_dns
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.IP.	0					tr098/device_root
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.IP.Diagnostics.	0					tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.	0					tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.DSCP	1	traceroute_get easycwmp.@local[0].DSCP 0	traceroute_set_dscp easycwmp.@local[0].DSCP	xsd:unsignedInt		tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.DataBlockSize	1	traceroute_get easycwmp.@local[0].DataBlockSize 38	traceroute_set_dsize easycwmp.@local[0].DataBlockSize	xsd:unsignedInt		tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.DiagnosticsState	1	traceroute_get easycwmp.@local[0].DiagnosticsState None	traceroute_set_diagnostic_state			tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.Host	1	traceroute_get easycwmp.@local[0].Host	traceroute_set_host easycwmp.@local[0].Host	xsd:string		tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.Interface	1	traceroute_get easycwmp.@local[0].Interface	traceroute_set_interface easycwmp.@local[0].Interface	xsd:string		tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.MaxHopCount	1	traceroute_get easycwmp.@local[0].MaxHopCount 30	traceroute_set_mhops easycwmp.@local[0].MaxHopCount	xsd:unsignedInt		tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.NumberOfTries	1	traceroute_get easycwmp.@local[0].NumberOfTries 3	traceroute_set_tries easycwmp.@local[0].NumberOfTries	xsd:unsignedInt		tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.ResponseTime	0	traceroute_get easycwmp.@local[0].ResponseTime 0		xsd:unsignedInt		tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.	0					tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.$2.	0					tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.$2.HopErrorCode	0	traceroute_parse_hop_error $idx		xsd:unsignedInt		tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.$2.HopHost	0	traceroute_parse_hop_host $idx		xsd:string		tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.$2.HopHostAddress	0	traceroute_parse_hop_addr $idx		xsd:string		tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.$2.HopRTTTimes	0	traceroute_parse_hop_rtt $idx		xsd:string		tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHopsNumberOfEntries	0	traceroute_get easycwmp.@local[0].RouteHopsNumberOfEntries 0		xsd:unsignedInt		tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.Timeout	1	traceroute_get easycwmp.@local[0].Timeout 5000	traceroute_set_timout easycwmp.@local[0].Timeout	xsd:unsignedInt		tr098/device_diagnostic_traceroute
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.IPv4Capable	0	ip_get_v4_capable		xsd:boolean		tr098/ip_ipv4v6
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.IPv4Enable	0	ip_get_v4_enable		xsd:boolean		tr098/ip_ipv4v6
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.IPv4Status	0	ip_get_v4_status		xsd:string		tr098/ip_ipv4v6
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.IPv6Capable	0	ip_get_v6_capable		xsd:boolean		tr098/ip_ipv4v6
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.IPv6Enable	1	ip_get_v6_enable	ip_set_v6_enable	xsd:boolean		tr098/ip_ipv4v6
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.IPv6Status	0	ip_get_v6_status		xsd:string		tr098/ip_ipv4v6
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.IP.Interface.	1	add_ip_iface		ip_device_browse_instances $path		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.IP.Interface.{i}.	1		del_ip_iface $sec			tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Enable	1	ip_get_enable $sec	ip_set_enable $sec	xsd:boolean		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.IPv4AddressNumberOfEntries	0	ip_get_ipv4addr_count $sec		xsd:unsignedInt		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.IPv4Enable	1	ip_get_ipv4enable $sec	ip_set_ipv4enable $sec	xsd:boolean		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.IPv6AddressNumberOfEntries	0	ip_get_ipv6addr_count $sec		xsd:unsignedInt		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.IPv6Enable	1	ip_get_ipv6enable $sec	ip_set_ipv6enable $sec	xsd:boolean		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.IPv6PrefixNumberOfEntries	0	ip_get_ipv6prefix_count $sec		xsd:unsignedInt		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.LastChange	0	ip_get_lastchange $sec		xsd:unsignedInt		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.LowerLayers	0	ip_get_lowerlayers $sec		xsd:string		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Name	0	ip_get_name $sec		xsd:string		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.	0					tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.BroadcastPacketsReceived	0	ip_stats_get_sys $dev rx_broadcast		xsd:unsignedLong		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.BroadcastPacketsSent	0	ip_stats_get_sys $dev tx_broadcast		xsd:unsignedLong		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.BytesReceived	0	ip_stats_get_ubus $dev rx_bytes		xsd:unsignedLong		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.BytesSent	0	ip_stats_get_ubus $dev tx_bytes		xsd:unsignedLong		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.DiscardPacketsReceived	0	ip_stats_get_ubus $dev rx_dropped		xsd:unsignedInt		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.DiscardPacketsSent	0	ip_stats_get_ubus $dev tx_dropped		xsd:unsignedInt		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.ErrorsReceived	0	ip_stats_get_ubus $dev rx_errors		xsd:unsignedInt		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.ErrorsSent	0	ip_stats_get_ubus $dev tx_errors		xsd:unsignedInt		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.MulticastPacketsReceived	0	ip_stats_get_ubus $dev multicast		xsd:unsignedLong		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.MulticastPacketsSent	0	ip_stats_get_sys $dev tx_multicast		xsd:unsignedLong		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.PacketsReceived	0	ip_stats_get_ubus $dev rx_packets		xsd:unsignedLong		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.PacketsSent	0	ip_stats_get_ubus $dev tx_packets		xsd:unsignedLong		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.UnicastPacketsReceived	0	ip_stats_calc_unicast_rx $dev		xsd:unsignedLong		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.UnicastPacketsSent	0	ip_stats_calc_unicast_tx $dev		xsd:unsignedLong		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Stats.UnknownProtoPacketsReceived	0	ip_stats_get_sys $dev rx_nohandler		xsd:unsignedInt		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.Interface.{i}.Status	0	ip_get_status $sec		xsd:string		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.IP.InterfaceNumberOfEntries	0	ip_get_interface_entries		xsd:unsignedInt		tr098/device_ip
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.PPP.	0					tr098/device_ppp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.PPP.Interface.	1	add_ppp_iface		ppp_device_browse_instances $path		tr098/device_ppp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.PPP.Interface.{i}.	1		del_ppp_iface $wan_sec			tr098/device_ppp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.PPP.Interface.{i}.ConnectionStatus	0	ppp_get_connectionstatus $wan_sec		xsd:string		tr098/device_ppp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.PPP.Interface.{i}.Enable	1	ppp_get_enable $wan_sec	ppp_set_enable $wan_sec	xsd:boolean		tr098/device_ppp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.PPP.Interface.{i}.LastChange	0	ppp_get_lastchange $wan_sec		xsd:unsignedInt		tr098/device_ppp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.PPP.Interface.{i}.LastConnectionError	0	ppp_get_lasterror $wan_sec		xsd:string		tr098/device_ppp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.PPP.Interface.{i}.LowerLayers	1	ppp_get_lowerlayers $wan_sec	ppp_set_lowerlayers $wan_sec	xsd:string		tr098/device_ppp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.PPP.Interface.{i}.Name	0	ppp_get_name $wan_sec		xsd:string		tr098/device_ppp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.PPP.Interface.{i}.Password	1	ppp_get_password $wan_sec	ppp_set_password $wan_sec	xsd:string		tr098/device_ppp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.PPP.Interface.{i}.Status	0	ppp_get_status $wan_sec		xsd:string		tr098/device_ppp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.PPP.Interface.{i}.Username	1	ppp_get_username $wan_sec	ppp_set_username $wan_sec	xsd:string		tr098/device_ppp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.RouterAdvertisement.	0					tr098/device_routeradvertisement
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.RouterAdvertisement.InterfaceSetting.	0			ra_browse_instances $path		tr098/device_routeradvertisement
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Device.RouterAdvertisement.InterfaceSetting.{i}.	0					tr098/device_routeradvertisement
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.RouterAdvertisement.InterfaceSetting.{i}.AdvDefaultLifetime	1	ra_get_lifetime $sec	ra_set_lifetime $sec	xsd:unsignedInt		tr098/device_routeradvertisement
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.RouterAdvertisement.InterfaceSetting.{i}.AdvManagedFlag	1	ra_get_managedflag $sec	ra_set_managedflag $sec	xsd:boolean		tr098/device_routeradvertisement
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.RouterAdvertisement.InterfaceSetting.{i}.AdvOtherConfigFlag	1	ra_get_otherflag $sec	ra_set_otherflag $sec	xsd:boolean		tr098/device_routeradvertisement
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.RouterAdvertisement.InterfaceSetting.{i}.Alias	1	ra_get_alias $sec	ra_set_alias $sec	xsd:string		tr098/device_routeradvertisement
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.RouterAdvertisement.InterfaceSetting.{i}.Enable	1	ra_get_enable $sec	ra_set_enable $sec	xsd:boolean		tr098/device_routeradvertisement
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.RouterAdvertisement.InterfaceSetting.{i}.Interface	1	ra_get_interface $sec	ra_set_interface $sec	xsd:string		tr098/device_routeradvertisement
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.RouterAdvertisement.InterfaceSetting.{i}.MaxRtrAdvInterval	1	ra_get_maxinterval $sec	ra_set_maxinterval $sec	xsd:unsignedInt		tr098/device_routeradvertisement
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.RouterAdvertisement.InterfaceSetting.{i}.MinRtrAdvInterval	1	ra_get_mininterval $sec	ra_set_mininterval $sec	xsd:unsignedInt		tr098/device_routeradvertisement
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.RouterAdvertisement.InterfaceSetting.{i}.Prefixes	0	ra_get_prefixes $sec		xsd:string		tr098/device_routeradvertisement
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Device.RouterAdvertisement.InterfaceSetting.{i}.Status	0	ra_get_status $sec		xsd:string		tr098/device_routeradvertisement
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.LTE.	0					tr098/xmpp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.LTE.CINR0	0	lte_get_cinr0		xsd:int		tr098/xmpp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.LTE.CINR1	0	lte_get_cinr1		xsd:int		tr098/xmpp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.LTE.CellID	0	lte_get_cell_id		xsd:unsignedInt		tr098/xmpp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.LTE.DL_Frequency	0	lte_get_dl_frequency		xsd:unsignedInt		tr098/xmpp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.LTE.PCI	0	lte_get_pci		xsd:unsignedInt		tr098/xmpp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.LTE.RSRP0	0	lte_get_rsrp0		xsd:int		tr098/xmpp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.LTE.RSRP1	0	lte_get_rsrp1		xsd:int		tr098/xmpp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.LTE.RSRQ	0	lte_get_rsrq		xsd:int		tr098/xmpp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.LTE.RSSI	0	lte_get_rssi		xsd:int		tr098/xmpp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.LTE.SINR	0	lte_get_sinr		xsd:int		tr098/xmpp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.LTE.TXPower	0	lte_get_tx_power		xsd:int		tr098/xmpp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.LTE.UL_Frequency	0	lte_get_ul_frequency		xsd:unsignedInt		tr098/xmpp
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.	0					tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.STBService.	0					tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.STBService.1.	0					tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.	0					tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.Enable	0	stb_service_get_false		xsd:boolean		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.	0					tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.	0					tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.	0					tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.AudioDecoderStats.	0					tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.AudioDecoderStats.DecodedFrames	0	stb_service_get_zero		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.AudioDecoderStats.DecodingErrors	0	stb_service_get_zero		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.DejitteringStats.	0					tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.DejitteringStats.Overruns	0	stb_service_get_zero		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.DejitteringStats.Underruns	0	stb_service_get_zero		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.MPEG2TSStats.	0					tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.MPEG2TSStats.PacketDiscontinuityCounter	0	stb_service_get_zero		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.MPEG2TSStats.TSPacketsReceived	0	stb_service_get_zero		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.RTPStats.	0					tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.RTPStats.LossEvents	0	stb_service_get_zero		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.RTPStats.PacketsLost	0	stb_service_get_zero		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.RTPStats.PacketsReceived	0	stb_service_get_zero		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.VideoDecoderStats.	0					tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.VideoDecoderStats.DecodedFrames	0	stb_service_get_zero		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.MainStream.1.Total.VideoDecoderStats.LostFrames	0	stb_service_get_zero		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.STBService.1.ServiceMonitoring.ServiceType	0	stb_service_get_default		xsd:string		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.StorageService.	1	add_storage_service_instance	delete_storage_service_instance	browse_storage_service_instances $1		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.StorageService.$2.	1		delete_storage_service_instance $idx			tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.StorageService.$2.Capabilities.	0					tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.Capabilities.FTPCapable	0	get_ftp_capable		xsd:boolean		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.Capabilities.HTTPCapable	0	get_http_capable		xsd:boolean		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.Capabilities.HTTPSCapable	0	get_https_capable		xsd:boolean		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.Capabilities.HTTPWritable	0	get_http_writable		xsd:boolean		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.Capabilities.SFTPCapable	0	get_sftp_capable		xsd:boolean		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.Capabilities.SupportedFileSystemTypes	0	get_supported_filesystems		xsd:string		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.Capabilities.SupportedNetworkProtocols	0	get_supported_network_protocols		xsd:string		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.Capabilities.VolumeEncryptionCapable	0	get_encryption_capable		xsd:boolean		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.Enable	1	get_storage_enable $device	set_storage_enable $device	xsd:boolean		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.StorageService.$2.LogicalVolume.	1	add_logical_volume $device	delete_logical_volume $device	browse_logical_volumes $param $idx $device		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	obj	InternetGatewayDevice.Services.StorageService.$2.LogicalVolume.$3.	1		delete_logical_volume $partition			tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.LogicalVolume.$3.Capacity	0	get_volume_capacity $partition		xsd:unsignedLong		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.LogicalVolume.$3.Enable	1	get_logical_volume_enable $partition	set_logical_volume_enable $partition	xsd:boolean		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.LogicalVolume.$3.Encrypted	0	get_volume_encrypted $partition		xsd:boolean		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.LogicalVolume.$3.FileSystem	0	get_filesystem_type $partition		xsd:string		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.LogicalVolume.$3.FolderNumberOfEntries	0	get_folder_count $partition		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.LogicalVolume.$3.Name	1	get_logical_volume_name $partition	set_logical_volume_name $partition	xsd:string		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.LogicalVolume.$3.PhysicalReference	0	get_physical_reference $partition		xsd:string		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.LogicalVolume.$3.Status	0	get_logical_volume_status $partition		xsd:string		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.LogicalVolume.$3.UsedSpace	0	get_volume_used_space $partition		xsd:unsignedLong		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.LogicalVolumeNumberOfEntries	0	get_logical_volume_count $device		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.PhysicalMediumNumberOfEntries	0	get_physical_medium_count $device		xsd:unsignedInt		tr098/services_storage_service
+8	P8 storage, STB, DOCSIS, LTE, IGD.Device	param	InternetGatewayDevice.Services.StorageService.$2.UserAccountNumberOfEntries	0	get_user_account_count		xsd:unsignedInt		tr098/services_storage_service

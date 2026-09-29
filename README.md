@@ -1,17 +1,18 @@
 # icwmp multi-SDK source delivery
 
 Source: A1 model-neutral layout `libicwmp_dm/src`, ABI/package vẫn `libtr098`.
-TR-098 P1 có 65 param C, phần còn lại vẫn dùng compat. A2–A6 chưa implement.
-**Source/apply tests đã kiểm, chưa build SDK hoặc board-test bản này.**
+TR-098 P1–P5 có 458 param C; các nhánh chưa port vẫn dùng compat. A2, A4, A6
+và P6–P8 còn trong kế hoạch; A3 mới làm một phần. Xem [trạng thái và kế hoạch](docs/README.md).
+**Đã kiểm source và apply; các bản sửa 0056–0066 chưa được build/board-test như một bộ hoàn chỉnh.**
 
 ## Giải nén và apply
 
-Host Linux, Python **3.9+**. Apply không cần compiler và không build/flash tự động.
-Giải nén bên ngoài cây SDK đang build:
+Host Linux, Python **3.6+**. Apply không cần compiler và không build/flash tự động.
+Clone repo bên ngoài cây SDK đang build:
 
 ```sh
-tar -xzf icwmp_multiplatform_port.tar.gz
-cd icwmp_port
+git clone git@github.com:tunguyenvanbn94/icwmpMultiSdk.git
+cd icwmpMultiSdk
 ./apply --sdk bdk /path/to/bcm963xx
 # hoặc
 ./apply --sdk mtk /path/to/2025q3
@@ -77,15 +78,15 @@ Request, GPN/GPV P1 và reload/WebUI/STUN, BDK kiểm cả model 098/181 hiện 
 
 ## Xem từng lần sửa
 
-`MANIFEST.json` ghi baseline, HEAD và commit → patch. `patches/0034-*.patch` là rename A1,
-`0035` trở đi là các thay đổi tiếp theo. Đây là **patch cho repo overlay userspace**, không phải
-patch trực tiếp lên SDK nguyên bản. Bundle đã chứa source sau các patch, apply script **không
-apply lại** các patch review này.
+`MANIFEST.json` ghi baseline và ánh xạ commit gốc sang từng commit trong repo này.
+Commit nền dựng lại trạng thái trước 0034; 33 commit tiếp theo tương ứng từng patch
+0034–0066. Patch files đã xóa sau khi ghi commit, xem phần sửa bằng Git:
 
 ```sh
 sha256sum -c SHA256SUMS
 cat MANIFEST.json
-less patches/0034-*.patch
+git log --reverse --oneline main
+git show --stat HEAD
 ```
 
 `<SDK>/.icwmp-release.json` cho biết source commit/profile đã cài. SHA256 phát hiện bundle thiếu

@@ -14,8 +14,8 @@ from pathlib import Path
 
 
 sys.dont_write_bytecode = True
-ROOT = Path(__file__).resolve().parents[2]
-WORKSPACE = ROOT.parents[5]
+ROOT = Path(__file__).resolve().parents[1]
+WORKSPACE = ROOT.parents[4]
 
 
 def run(bundle, *args, success=True):
@@ -58,16 +58,9 @@ def fixture(root, sdk):
 
 
 def make_test_bundle(dest):
-    shutil.copytree(ROOT, dest / "userspace", ignore=shutil.ignore_patterns(".git", "release"))
-    for source in (ROOT / "release").iterdir():
-        if source.name in ("tests", "export.py"):
-            continue
-        if source.is_dir():
-            shutil.copytree(source, dest / source.name)
-        else:
-            shutil.copy2(source, dest / source.name)
+    shutil.copytree(ROOT, dest, ignore=shutil.ignore_patterns(".git", "docs", "tests", "__pycache__"))
     files = {str(p.relative_to(dest)): hashlib.sha256(p.read_bytes()).hexdigest()
-             for p in dest.rglob("*") if p.is_file()}
+             for p in dest.rglob("*") if p.is_file() and p.name not in ("MANIFEST.json", "SHA256SUMS")}
     (dest / "MANIFEST.json").write_text(json.dumps({"format": 1, "commit": "fixture-working-tree", "files": files}))
 
 

@@ -1,0 +1,115 @@
+{
+  "updated_at": "2026-09-25T15:50:00+07:00",
+  "execution": "PHASE 5 ĐÓNG 83/83. 0061: hợp đồng input của shell (is_safe_input + kiểm kiểu shell) trước mọi setter C — lỗ hổng xuyên suốt P1-P5 đã vá. 0056 sửa lỗi chạy thật trong bản đã build -> PHẢI build lại trước board. Data model C 458/783 (458/778 tới được)",
+  "baseline": "overlay cd93685595d4a52302d5b14adc9cbf38ac82553c",
+  "current": "overlay 1cde441, patch 0034-0061. Data model C 458/783 (P1 65 + P2 70 + P3 67 + P4 173 + P5 83). Bundle 33477b15bf88, 412 file, apply --dry-run exit 0 trên 1_src và 2_src",
+  "next": "Build lại với 33477b15bf88 (0056-0061). Gate board 1 + thử hợp đồng input (analysis §37.5). Code: P6 Firewall/UI/root còn lại (97), P7 79, P8 144 — object ẩn của root dùng DMOBJ.addressed_only (root_hidden_mtk.c)",
+  "phases": [
+    {
+      "id": "A0",
+      "status": "STATIC_VERIFIED",
+      "title": "Pin baseline + inventory",
+      "note": "cd93685 sạch; inventory sửa 23/09 tối: 783 param/184 object (bản cũ 749 vừa bịa 29 path vừa mất 61)"
+    },
+    {
+      "id": "A1",
+      "status": "STATIC_VERIFIED",
+      "title": "Rename libicwmp_dm/src + includes/build/install",
+      "note": "Commit 066a933. Source/include/wrapper/feed/installer đã đổi; SDK build và board chưa chạy"
+    },
+    {
+      "id": "A2a",
+      "status": "PLANNED",
+      "title": "Profile resolver app/lib/package",
+      "note": ""
+    },
+    {
+      "id": "A2b",
+      "status": "PLANNED",
+      "title": "Shared services + xóa model độc lập",
+      "note": ""
+    },
+    {
+      "id": "A2c",
+      "status": "PLANNED",
+      "title": "TR-181 mapping/schema/callback scaffold",
+      "note": ""
+    },
+    {
+      "id": "A3",
+      "status": "PARTIAL",
+      "title": "Service API, registry, transaction/snapshot",
+      "note": "R6 (registry claim conflicts) và R7 (end-of-session rollback) đã code trong 0036; service API/snapshot chưa"
+    },
+    {
+      "id": "A4",
+      "status": "PLANNED",
+      "title": "Migrate P1 sang service contracts",
+      "note": "65 param C hiện có cần migration và kiểm giá trị"
+    },
+    {
+      "id": "P2",
+      "status": "STATIC_VERIFIED",
+      "title": "LAN/DHCP/Hosts/Mesh policy — 70 param",
+      "note": "4 module trong sdk/mtk/dm098, 70/70 tên khớp cây shell, patch 0037; chưa build/board"
+    },
+    {
+      "id": "P3",
+      "status": "STATIC_VERIFIED",
+      "title": "Wi-Fi WLANConfiguration đầy đủ — 67 param",
+      "note": "wlan_mtk.c + wlanassoc_mtk.c (P3a, patch 0038) + wlansec_mtk.c (P3b, patch 0039); 67/67 tên khớp, cả object là C, claim gộp thành một nhánh; chưa build/board"
+    },
+    {
+      "id": "P4",
+      "status": "BUILD_PASS",
+      "title": "WAN/NAT/Stats — 173 param TRỌN VẸN",
+      "note": "P4a 22 (0040) + P4b 35 (0041) + P4c 42 (0052) + P4d 46 (0053) + P4e 26 (0054) + P4f 2 (0055). 173/173 khớp cây shell, thiếu 0 dôi 0. Toàn bộ nhánh WANDevice nay do C trả lời, trừ AddObject/DeleteObject của hai object connection vẫn ở sdk/mtk/compat/. BUILD ĐẠT trên SDK thật 25/09 (libtr098 128.195 B). Lỗi chạy: wanipv6_mtk.c gọi macro dmjson thiếu prototype -> 0056. Board chưa"
+    },
+    {
+      "id": "P5",
+      "status": "STATIC_VERIFIED",
+      "title": "Diagnostics/routing — 83 param TRỌN VẸN (5 lá ma không tới được)",
+      "note": "P5a 22 (0057) IPPing+TraceRoute; P5b 20 (0058) NSLookup+DNS; P5c 26 (0059) TR-143; P5d 12 + P5e 3 (0060) Layer3Forwarding + SelfTest/WiFi ẩn. Engine: DMOBJ.container_leaf, DMOBJ.addressed_only. Chưa build/board"
+    },
+    {
+      "id": "P6",
+      "status": "PLANNED",
+      "title": "Firewall/UI — 97 param",
+      "note": ""
+    },
+    {
+      "id": "P7",
+      "status": "PLANNED",
+      "title": "Operator extensions — 79 param",
+      "note": ""
+    },
+    {
+      "id": "P8",
+      "status": "PLANNED",
+      "title": "Remaining domains — 144 param",
+      "note": ""
+    },
+    {
+      "id": "A6",
+      "status": "PLANNED",
+      "title": "Full-C + ABI/package + export/prune release",
+      "note": ""
+    },
+    {
+      "id": "R8",
+      "status": "STATIC_VERIFIED",
+      "title": "Hợp đồng input của shell trước mọi setter C",
+      "note": "0061: input_contract_mtk.c (is_safe_input + kiểm theo kiểu shell) + shelltypes_mtk.h sinh từ ma trận (186 dòng); dm_platform_param_method ở VALUECHECK. dateTime không mô phỏng. Chưa build/board"
+    }
+  ],
+  "validation": {
+    "static": "PASS — check-cc-syntax.py: lib 41/0, app 17/0 (+ all-C variant of the hook). check-c-sanity 8 lớp: lib/mtk 41/0, app 17/0 x 3 SDK. verify-dm-paths phase 1-5 thiếu 0, phase 5 83/83 dôi 0, 5 không tới được; 126 claim, 21 module, 0 cặp chồng. check-automake-conds OK",
+    "patch": "PASS — 0034-0061 xuất từ commit sạch (git format-patch)",
+    "bundle": "PASS — sha256 33477b15bf88, SHA256SUMS 412 file, apply --dry-run exit 0 trên 1_src và 2_src",
+    "sdk_build": "PASS đến P4f (25/09). 0056-0061 CHƯA build bằng SDK, nhưng mọi file đã qua cross-gcc của chính SDK đó (check-cc-syntax.py)",
+    "board": "NOT_RUN",
+    "release": "NOT_READY — A2–A6 chưa implement, P2–P8 còn shell compat",
+    "docs": "PASS — check-docs, local links, scoped diff check",
+    "cleanup": "DONE — không tạo temp root ngoài scratchpad phiên. ĐÃ XÓA build dir 17 GB do cp -fpR /. sinh ra trên cây user: build_dir/target-aarch64_cortex-a53_musl/linux-airoha_an7583/icwmp_tr098"
+  }
+}

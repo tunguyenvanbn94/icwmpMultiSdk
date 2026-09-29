@@ -1,0 +1,2820 @@
+# Phân tích: đưa icwmp + libtr098 chạy multi-platform (BDK + MTK OpenWrt), TR-098
+
+Snapshot khảo sát: `projects/mtk_openwrt_wifi7/src/2025q3` (git `b207c4518`, 2026-09-18),
+overlay `brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace` (trước refactor
+`f191e18`, sau refactor `99f4988`). Số dòng trích dẫn là anchor của snapshot này.
+
+Nhãn bằng chứng theo [.claude/rules/evidence.md](../../../../.claude/rules/evidence.md):
+**Verified** = đã đọc cả hai đầu và dữ liệu ở ranh giới; **Conditional** = đúng trong điều kiện ghi kèm;
+**Not established** = chưa chứng minh được.
+
+---
+
+## 1. Hiện trạng TR-069 trên 2025q3
+
+**Verified.** Trên cây 2025q3 có **ba** gói liên quan, chỉ một gói được build:
+
+| Gói | Nguồn | Trạng thái trong `profile/HP2236B/config_7583` |
+|---|---|---|
+| `cwmpclient` | `tclinux_phoenix/apps/hni/cwmpclient` (easycwmp 1.8.6 + thư viện hàm của HNI/AIS) | `CONFIG_PACKAGE_cwmpclient=y` — **đang chạy** |
+| `icwmp_tr098` | `tclinux_phoenix/apps/hni/icwmp_tr098` | `# ... is not set` |
+| `libtr098` | `tclinux_phoenix/apps/hni/libtr098` | `# ... is not set` |
+
+`icwmp_tr098` + `libtr098` được đưa vào bằng commit `2d6f314f7` *[ARHT-339] Porting tr069 (iopsys)
+with TR-098 data model* (Steven Tu, 2026-01-11) nhưng **chưa bao giờ được bật**. Diff với bản
+`tunv_bk` (bản gốc lấy trên mạng, cũng là base của overlay BDK):
+
+- `icwmp_tr098` vs `tunv_bk/icwmp098`: 8 file khác nhau, **toàn bộ chỉ là xóa comment**
+  (`// extern char *ns;`, `// TuNV`) — không có thay đổi hành vi.
+- `libtr098` vs `tunv_bk/libtr098`: 2 file — `dmubus.c` xóa comment, `tr098/upnp.c` đổi
+  `enable_natpmp` `1` → `0`.
+
+→ **Cây `icwmp_tr098`/`libtr098` trên 2025q3 = base gốc**, không có công việc port nào bị mất khi
+ghi đè bằng overlay. (Kiểm bằng `diff -rq`, xem §7.)
+
+## 2. Data model TR-098 mà ACS đang dùng
+
+**Verified.** `cwmpclient` không chứa data model trong C: `easycwmpd` fork một shell
+(`/usr/sbin/easycwmp --json-input`, `src/external.c:218`) và thư viện hàm ở
+`/usr/share/easycwmp/functions/*` trả lời từng RPC.
+
+Thống kê (trích tự động → [easycwmp_tr098_inventory.txt](easycwmp_tr098_inventory.txt)):
+
+| | Số lượng |
+|---|---|
+| `common_execute_method_param` (tham số) | **824** |
+| `common_execute_method_obj` (object) | **204** |
+| File script | 63 (`tr098/` 60, `common/` 8, `tr143/` 2) |
+| Dòng shell | ~25 000 |
+
+Các file lớn nhất: `lan_device` (4616 dòng, 147 param), `wan_device` (3230, 207),
+`firewall` (1898, 53), `services_storage_service` (884, 36), `common/common` (1352 — thư viện lõi).
+Vendor tree của nhà mạng: `X_AIS_*` (Mesh, UplinkSetup, WebUserInfo, Logging, CarrierLocking,
+WiFiStatus, Conf, DDNS, SSH, Telnet, …) và `X_HNI_*`/`x_hni_*` (firewall, portfiltering, samba,
+speedtest, …).
+
+**Không established:** không có tài liệu nào trong cây liệt kê tập tham số ACS thực sự dùng; giả
+định an toàn là **toàn bộ** tập trên phải giữ nguyên tên/permission/type.
+
+### Giao thức của thư viện hàm (Verified, `functions/common/common`)
+
+| Entry | Ý nghĩa |
+|---|---|
+| `common_entry_get_value <param>` | GPV; in `{"parameter","value","type"}` từng dòng |
+| `common_entry_get_name <param> <0\|1>` | GPN; in `{"parameter","writable"}` |
+| `common_entry_set_value <param> <value>` | SPV **pha 1**: validate theo `xsd:` type, append `"<param><delim><setcmd><delim><getcmd>"` vào `/tmp/.easycwmp_set_command_tmp` |
+| (easycwmp.sh `apply value <key>`) | SPV **pha 2**: `eval` từng setcmd, lỗi thì `uci revert`, xong thì `uci commit` + ghi `parameter_key` |
+| `common_entry_add_object` / `..._delete_object` | Add/Delete, in `{"status":"1","instance":"N"}` |
+| `common_entry_inform` | tham số forced-inform |
+| (easycwmp.sh `apply service`) | `common_restart_services` (ucitrack) + chạy `/tmp/.easycwmp_apply_service` |
+
+Đúng mô hình 2 pha của `dm_entry_param_method` (VALUECHECK) / `dm_entry_apply` (VALUESET +
+`dm_platform_commit`) trong libtr098 → ánh xạ 1-1 được, **không phải sửa thư viện hàm**.
+
+**Bẫy đã xử lý (Verified):** nhiều hàm trong thư viện gọi `exit` giữa chừng
+(`common_get_name_inparam_isparam_check_param` … `exit 0`) — easycwmp.sh sống được vì mỗi RPC là
+một tiến trình hoặc chạy trong subshell `( … )`. Driver mới phải bọc **mọi** handler trong subshell,
+nếu không shell con chết sau RPC đầu tiên (`icwmp_dm.sh` `handle_request`).
+
+## 3. Ai đang phụ thuộc vào easycwmp (không được phá)
+
+**Verified** (grep toàn cây, loại trừ chính 3 gói cwmp):
+
+| Thành phần | Phụ thuộc |
+|---|---|
+| `hal_unify/src/hal_gateway.c:802,1929,2155` | `HalUtils_cmdExec("/etc/init.d/easycwmpd reload")` |
+| `hal_unify/common/include/hal_params.h:718-721` | `NODE_CWMP "easycwmp"`, `easycwmp.@local[0]`, `@acs[0]`, `@device[0]` (WebUI đọc/ghi UCI này) |
+| `ubusmon/event.c:362` | `(/etc/init.d/easycwmpd reload; /etc/init.d/stuncd reload) &` |
+| `stunclient/files/stuncd.init:21,27-39` | đọc `easycwmp.@local[0].ip`, **sed vào** `/usr/share/easycwmp/functions/management_server` để bật/tắt forced-inform của `UDPConnectionRequestAddress` |
+| `isplocking/utils.c:165` | `ubus call tr069 inform '{"event":"2 PERIODIC"}'` |
+| `backend/api/.../ApiGateway.h:74` | API WebUI `tr069` GET/PUT |
+
+→ Hai ràng buộc thiết kế:
+1. **UCI `easycwmp` phải tiếp tục là config of record** (WebUI ghi thẳng vào đó).
+2. **`/etc/init.d/easycwmpd` và `ubus tr069` phải còn** — giữ tên, đổi ruột.
+
+`stuncd.init` sed vào file thư viện hàm ⇒ **thư viện hàm phải cài đúng chỗ cũ**
+(`/usr/share/easycwmp/functions`), không được đổi path. Gói `icwmp_tr098` mới cài đúng đường dẫn đó.
+
+## 4. Vì sao không viết lại data model bằng C
+
+| Phương án | Đánh giá |
+|---|---|
+| A. Viết lại 824 param bằng C trong `tr098/mtk/` | ~25k dòng shell → vài chục nghìn dòng C, mỗi param là một cơ hội hồi quy trên thiết bị đang chạy thật. Không có lợi ích chức năng. **Loại.** |
+| B. Bỏ icwmp, giữ easycwmpd | Không đạt yêu cầu (một app cho cả hai SDK). **Loại.** |
+| C. libtr098 chạy chính thư viện hàm qua bridge, port dần sang C | Ngày 1 đã tương đương easycwmpd về data model; engine/session/HTTP/backup là của icwmp (được hưởng các fix `0028`..`0031`); port sang C là tuỳ chọn, từng object. **Chọn.** |
+
+**Conditional (chi phí):** mỗi RPC tốn một lần round-trip tới shell con. GPV toàn cây fork vài nghìn
+`uci get` — đây đúng là chi phí mà `easycwmpd` đang trả hôm nay, không tệ hơn. Điểm khác: shell con
+**sống suốt đời icwmpd** (source 25k dòng thư viện **một lần**), trong khi `easycwmpd` cũng giữ một
+tiến trình `--json-input` thường trú → tương đương.
+
+## 5. Kiến trúc đã chọn
+
+### 5.1 libtr098: platform seam 3 nhánh
+
+`platform/dmplatform.h` giữ nguyên contract cũ, thêm nhánh `mtk`. Hai thay đổi ảnh hưởng BDK:
+
+- `dm_platform_commit(struct dmctx *, const char *parameter_key)` — mtk cần ParameterKey để ghi
+  `easycwmp.@acs[0].parameter_key` trong pha `set_apply` (BDK bỏ qua, engine đã ghi UCI `cwmp`).
+- `tr098/bdk/icwmpcfg_bdk.c` → `tr098/common/icwmpcfg.c` (object `X_..._Icwmp.` dùng chung).
+  `DataModel` (tr098↔tr181) trả **9001** khi `dm_platform_name() != "bdk"`.
+
+### 5.2 Định tuyến trong `dmplatform_mtk.c` (Verified theo code engine)
+
+```
+dm_entry_param_method(ctx, cmd, inparam, …)
+  └─ dm_platform_param_method()        ← hook chạy TRƯỚC walk cây tĩnh (dmentry.c:204)
+       ├─ mtk_is_native(inparam)  → return 0   → engine tĩnh phục vụ
+       └─ còn lại                 → script
+            └─ mtk_merge_static(): nếu path phủ cả object C (root) thì walk tĩnh rồi gộp
+```
+
+Gộp list an toàn vì `add_list_paramameter()` (dmtr098.c:673) chèn **theo thứ tự tên và bỏ trùng**.
+
+| RPC | Script command |
+|---|---|
+| GPV / GPN | `get_value` / `get_name` |
+| GPA (GetParameterAttributes) | `get_name` (lấy tên) + notification từ UCI `cwmp.@notifications[0]` của libtr098 |
+| SPA | `dm_set_parameter_notification()` (UCI libtr098) + `END_SESSION_RELOAD` |
+| SPV pha VALUECHECK | `set_check` (thư viện validate + queue), rồi `add_set_list_tmp` |
+| SPV pha VALUESET | không làm gì (đã queue) |
+| `dm_platform_commit` | `set_apply <ParameterKey>` |
+| `dm_platform_revert` | `set_abort` |
+| Add/Delete | `add` / `delete` |
+| Inform | `inform` |
+| `dm_entry_restart_services` | `uci commit` các package cây tĩnh + `apply_service` |
+
+**Notification để ở libtr098, không ở easycwmp** (khác BDK — BDK để trong MDM): thư viện hàm có
+`common_set_parameter_notification` ghi `easycwmp.@notifications[0]`, nhưng icwmp đọc
+`DM_ENABLED_NOTIFY` do libtr098 dựng từ `cwmp.@notifications[0]`; dùng một nguồn duy nhất tránh
+hai danh sách lệch nhau. `dm_platform_enabled_notify()` duyệt các list `passive/active/
+passive_passive_lw/passive_active_lw` (đúng 4 mức mà `enabled_notify_check_param()` ghi ra file,
+dmtr098.c:1745) và GPV từng entry qua script.
+
+### 5.3 `ConnectionRequestURL` (Verified, sửa hành vi)
+
+Thư viện hàm dựng URL từ `easycwmp.@local[0].ip` — giá trị do init script ghi **một lần** lúc start.
+icwmpd có netlink watcher ghi varstate `cwmp.cpe.ip/ipv6` mỗi khi IP WAN đổi (`netlink.c:114-140`)
+và CR server nghe trên `cwmp.cpe.port`. Nếu để script trả giá trị cũ, ACS sẽ giữ URL sai sau khi WAN
+đổi IP. → `mtk_cr_url()` ghi đè giá trị của script bằng `varstate ip` + `cwmp.cpe.port` + path
+`easycwmp.@local[0].path`, cộng override NAT `cwmp.cpe.cr_host/cr_port` (đã có từ patch `0029` cho BDK).
+
+### 5.4 icwmpd: seam `inc/icwmp_platform.h`
+
+6 hook thay các `#ifdef ICWMP_BDK` rải trong `config.c`, `cwmp.c`, `ubus.c`, `backupSession.c`:
+
+| Hook | bdk | mtk | uci |
+|---|---|---|---|
+| `init` | attach MDM | tạo `/etc/icwmpd`, mirror easycwmp→cwmp | – |
+| `config_reload` | – (CMS event đã sync) | mirror easycwmp→cwmp | – |
+| `config_reloaded` | refresh DeviceId + `datamodel` | refresh DeviceId | – |
+| `uloop_register` | fd CMS msg | – | – |
+| `end_session` | sync MDM + save flash | mirror cwmp→easycwmp, rồi easycwmp→cwmp (+reload nếu đổi) | – |
+| `cleanup` | detach MDM | – | – |
+
+`ubus call tr069 dm` (trước chỉ có ở BDK) thành tool chung: `bdk/icwmp_bdk_dm.c` → `icwmp_dm.c`.
+
+### 5.5 Mirror `easycwmp` ↔ `cwmp` (Verified theo cả hai phía)
+
+16 cặp option, có 3 phép biến đổi giá trị:
+
+| easycwmp | cwmp | Biến đổi |
+|---|---|---|
+| `@acs[0].url/username/password` | `cwmp.acs.url/userid/passwd` | – |
+| `@acs[0].periodic_enable` | `cwmp.acs.periodic_inform_enable` | bool |
+| `@acs[0].periodic_interval/periodic_time` | `…inform_interval/inform_time` | – |
+| `@acs[0].cwmpretryinterval / …multiplier` | `retry_min_wait_interval / retry_interval_multiplier` | – |
+| `@acs[0].ssl_verify` | `cwmp.acs.insecure_enable` | `disable` → `1` |
+| `@acs[0].parameter_key` | `cwmp.acs.ParameterKey` | **chiều ngược** (icwmpd sở hữu) |
+| `@local[0].interface/port/username/password/provisioning_code` | `cwmp.cpe.*` | – |
+| `@local[0].logging_level` | `cwmp.cpe.log_severity` | `0..4` → `CRITIC..DEBUG` |
+
+Quy tắc: easycwmp thắng (config of record), trừ `parameter_key` và `@local[0].ip` (icwmpd biết IP
+thật qua netlink).
+
+## 6. Sửa kèm: Connection Request path (Verified — lỗi thật)
+
+`http.c http_cr_new_client()` (bản `0030`) chỉ nhận `GET / HTTP/1.` và tính Digest với URI `"/"`.
+Sản phẩm MTK dùng `easycwmp.@local[0].path='ConnectionRequest'` → URL quảng bá là
+`http://<ip>:7547/ConnectionRequest`; ACS sẽ gửi `GET /ConnectionRequest HTTP/1.1`:
+
+1. `method_is_get` = false → trả **503**, CR không bao giờ chạy;
+2. kể cả nếu qua được, Digest tính theo `uri="/ConnectionRequest"` phía ACS sẽ không khớp với `"/"`.
+
+Sửa: lấy path từ chính request line, dùng đúng path đó khi `http_digest_auth_check()`. Không ảnh
+hưởng BDK (path vẫn là `/`).
+
+## 7. Kiểm tra đã chạy (không có compiler)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `diff -rq` 2025q3 `icwmp_tr098`/`libtr098` vs `tunv_bk` | chỉ khác comment + `enable_natpmp` (§1) |
+| Trích inventory data model easycwmp | 824 param / 204 obj → `easycwmp_tr098_inventory.txt` |
+| Cân bằng `{}` / `()` comment-aware mọi file C mới/sửa | PASS (dmplatform_mtk.c depth 0, parens 0) |
+| Resolve mọi `#include "..."` cục bộ theo đúng `-I` của Makefile.am, cho cả `mtk` và `bdk` | PASS (chỉ thiếu header SDK Broadcom — ngoài overlay) |
+| Symbol: hàm/bảng mà tập source `mtk` tham chiếu nhưng chỉ định nghĩa trong file không link | **rỗng** |
+| `sh -n` cho `icwmp_dm.sh`, `icwmp.sh`, `icwmpd.init`, `easycwmpd`, `wan_interface_up`, `value_monitoring`, `install-mtk.sh` | PASS |
+| `install-mtk.sh --dry-run` trên cây 2025q3 thật | PASS (in đúng lệnh, không ghi gì) |
+| `git status --porcelain` của `src/2025q3` | chỉ còn thay đổi có trước (`hostapd/patches/addr`), **không** do task này |
+
+**Chưa chứng minh được / rủi ro còn lại:**
+
+1. **Chưa compile.** Mọi file C mới chưa qua trình biên dịch. Dự kiến 1-2 vòng sửa lỗi.
+2. **Thời gian GPV toàn cây qua script**: chưa đo. Timeout mặc định 240 s
+   (`DMSCRIPT_TIMEOUT_SEC`). Nếu ACS hay gọi GPV `InternetGatewayDevice.` thì phải đo lại và cân
+   nhắc cache.
+3. **`common_restart_services` trong shell con thường trú**: thư viện dùng biến shell
+   `uci_change_packages` tích luỹ trong tiến trình; vì mỗi handler chạy trong subshell nên biến
+   không sống sót → driver ghi danh sách package ra `/tmp/.icwmp_dm_changed_pkgs` và đọc lại lúc
+   `apply_service`. Chưa test trên board.
+4. **`value_monitoring`** poll `ubus call tr069 notify` mỗi 30 s như bản cũ; đường value-change đi
+   qua script cho từng tham số có notification → nếu ACS bật notification cho nhiều param, mỗi chu kỳ
+   là N lần GPV. Chưa đo.
+5. **TR-181 trên MTK**: chưa làm (ngoài phạm vi lượt này).
+6. **Alias-based addressing / InstanceAlias**: thư viện hàm easycwmp không hỗ trợ; engine libtr098
+   có `update_instance_alias` nhưng chỉ cho cây tĩnh. Nếu ACS dùng alias sẽ hỏng — **Not established**,
+   cần hỏi vận hành. (`cwmp.cpe.instance_mode` mặc định `InstanceNumber`.)
+
+---
+
+## 8. Kiến thức tái sử dụng
+
+Phần dùng lại được cho project khác đã tách sang
+[knowledge/protocol/cwmp-reuse-shell-data-model-bridge.md](../../../../knowledge/protocol/cwmp-reuse-shell-data-model-bridge.md)
+(bridge shell↔C, các bẫy subshell/timeout/fd, cách cùng tồn tại với phần còn lại của sản phẩm,
+bẫy Connection Request path, cách kiểm chứng khi không build được tại chỗ).
+
+---
+
+## 9. Lượt 23/09 — đếm lại data model, tách SDK, data model bằng C
+
+### 9.1 Đính chính số liệu (Verified, thay cho §2)
+
+§2 viết "824 param + 204 object, gồm `X_AIS_*` và `X_HNI_*`". Trích lại bằng bộ trích có resolve
+biến shell và **bỏ dòng comment**, rồi khử trùng theo path:
+
+| Chỉ số | §2 (22/09) | Đúng (23/09) | Vì sao lệch |
+|---|---|---|---|
+| Parameter | 824 | **749** | 824 đếm cả dòng trùng (cùng path khai ở nhiều nhánh `case`) |
+| Object | 204 | **181** | như trên |
+| `X_AIS_*` | "có" | **281 tham số** | — |
+| `X_HNI_*` | "có" | **0 tham số** | toàn bộ `functions/tr098/x_hni_*` bị comment: cả `prefix_list`, cả `entry_execute_method_list`, cả thân hàm |
+
+Cách kiểm lại `X_HNI_*`: mở `functions/tr098/X_HNI_IPFiltering` — dòng 7-8 (`prefix_list`,
+`entry_execute_method_list`) và toàn bộ `entry_execute_method_root_X_HNI_IPFiltering()` đều bắt
+đầu bằng `#`. Các file `x_hni_*` khác giống hệt. **Conditional**: đúng với snapshot `src/2025q3`
+hiện tại; nếu profile khác bật lại thì phải đếm lại.
+
+Hệ quả cho quyết định ở §4: vẫn giữ nguyên kết luận "không viết lại một phát", nhưng lý do mạnh
+nhất không phải "cây vendor khổng lồ" mà là **449 hàm shell** phía sau 692 tham số:
+
+```
+getter là $UCI_GET thuần : 34
+getter là hàm shell      : 692   (449 hàm khác nhau)
+getter là echo hằng số   : 58
+không có getter          : 13
+```
+
+Backend mà các hàm đó gọi (đếm trên toàn thư viện): `$UCI_GET` 939, `$UCI_SET` 1039,
+`ubus call` 127, `jsonfilter` 79, `/sys` 47, `ifconfig` 32, `wlanconfig` 33, `/proc` 23,
+`iwpriv` 12, helper `hni_*` 58.
+
+### 9.2 Tách SDK — cái gì đã đổi
+
+Trước: SDK nằm rải ở 5 chỗ (`platform/<n>/`, `tr098/<n>/`, `scripts/<n>/`, `files/<n>/`,
+`<n>/` trong icwmp) và `configure.ac` + `bin/Makefile.am` liệt kê cứng từng tên.
+
+Sau: **một thư mục một SDK**, mảnh build nằm trong chính thư mục đó, hai file `sdk/enabled.m4` và
+`sdk/enabled.mk` sinh tự động từ các thư mục đang tồn tại.
+
+Chi tiết phải nhớ khi sửa tiếp:
+
+1. **`sdk.m4` được `m4_include` vô điều kiện.** Mọi `AM_CONDITIONAL` trong đó phải được chạy qua
+   trong mọi lần configure, phần riêng của SDK bọc trong `AS_IF([test "x$with_sdk" = "x<n>"], ...)`.
+   Nếu đặt `AM_CONDITIONAL` bên trong nhánh `AS_CASE` thì `config.status` báo
+   *"conditional X was never defined"* khi chọn SDK khác. **Verified** bằng tài liệu automake và
+   bằng cách dựng lại cấu trúc sinh ra.
+2. **`sdk.mk` được `include` ở cuối `bin/Makefile.am`**, nên đường dẫn source trong đó vẫn là
+   `../` (tương đối `bin/`), giống phần còn lại của file.
+3. Trong icwmp, điều kiện của SDK **kèm luôn** `enable_icwmp_tr098=yes`: glue chỉ link vào
+   `icwmp_tr098d`. Bản `icwmpd` (bbfdm/TR-181 của upstream) không dùng trong sản phẩm này và
+   không được hỗ trợ ở đây.
+
+### 9.3 Registry data model (Verified trên source, chưa chạy)
+
+`dm_registry.c`: module tự đăng ký bằng constructor, gộp theo `(order, name)`, merge **đệ quy**
+theo tên object, cây dựng một lần bằng `calloc()` (không phải `dmcalloc()` — bộ nhớ dm chết theo
+dm context), khoá bằng `pthread_mutex` vì icwmpd đụng data model từ hai thread.
+
+Ba thứ registry thay thế:
+
+| Trước | Sau |
+|---|---|
+| `tEntry098Obj[]` viết tay ở `tr098/root.c`, `root_bdk.c`, `root_mtk.c` | `dm_registry_entry(DM_MODEL_TR098)` |
+| `tEntry181Obj[]` trong `root181_bdk.c` | `dm_registry_entry(DM_MODEL_TR181)` |
+| `mtk_native_objs[]` (danh sách path đã port) | `.paths` của từng module + `dm_registry_owns()` |
+
+### 9.4 Kiểm tra tĩnh đã chạy ở lượt này
+
+| Kiểm | Kết quả |
+|---|---|
+| Mọi source mà mảnh build tham chiếu có tồn tại (3 SDK × 2 component) | PASS |
+| Resolve mọi `#include "..."` theo đúng `-I` của từng SDK (6 tổ hợp) | PASS — chỉ còn header ngoài (`cms*.h`, `bcm_generic_hal.h`, `uci_config.h`) đến từ toolchain |
+| Symbol của file **không** được link nhưng bị tham chiếu | rỗng. `tEntry098ObjUPNP` chỉ xuất hiện khi bật `UPNP_TR064` — có từ trước, không phải hồi quy |
+| Cân bằng `#if/#ifdef/#endif` của `dmplatform_mtk.c` sau khi thêm guard | 0 |
+| `sh -n` mọi script mới, `--dry-run` của `install-mtk.sh` (kể cả `--only-mtk`) | PASS |
+| Prune còn build được: copy cây, `./sdk-prune.sh mtk`, kiểm lại source + tên SDK còn sót | PASS |
+| P1: tập tên tham số của module C so với cây shell cũ | 65/65, dôi 19 tham số của icwmp |
+
+**Chưa chứng minh được**: giá trị trả về có khớp client cũ không (phải chạy trên board), thời gian
+GPV cả cây, và hành vi thực của `AliasBasedAddressing`.
+
+### 9.5 Bảng tra để làm tiếp
+
+`tr098_coverage_matrix.tsv` — 930 dòng, mỗi dòng một object/parameter:
+
+```
+phase  phase_name  kind  path  perm  getter  setter  type  forced_inform  easycwmp_file
+```
+
+Lọc việc của một phase:
+
+```sh
+awk -F'\t' '$1=="3" && $3=="param"' tr098_coverage_matrix.tsv | cut -f4,5,6,7
+```
+
+
+## 10. Review kiến trúc 23/09 — Codex, snapshot `d3c82a4`
+
+**Kết luận: đạt bước gom code theo SDK, chưa đạt tiêu chí app unify theo layer hoặc bàn giao
+một datamodel bằng cách xóa code + chọn build profile.** Lượt này chỉ review và cập nhật thiết
+kế, không sửa source, patch hoặc tarball. Các mục dưới thay thế khẳng định quá rộng ở §9 và
+README. Thiết kế đích nằm tại [design §10–17](../../docs/icwmp_multiplatform_tr098_design.md#10-kết-quả-review-và-mục-tiêu-kiến-trúc).
+
+### 10.1 Snapshot và phạm vi bằng chứng
+
+Source được review là **overlay đang phát triển**, không phải code đã cài vào SDK:
+
+- `O = projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/`.
+- `L = O/public/libs/libtr098/libtr098/`, `A = O/public/apps/icwmp/icwmp/`.
+- `F = projects/mtk_openwrt_wifi7/issues/20260922_icwmp_multiplatform_tr098/feeds/`.
+- Anchor `L/...:line`, `A/...:line` dưới đây thuộc commit `d3c82a4`, tìm lại theo symbol nếu
+  snapshot thay đổi. **Verified** nghĩa là đã đối chiếu source, không phải đã chạy trên board.
+
+Nhận bàn giao: overlay HEAD đúng `d3c82a4`, `git status --short` rỗng. `git apply --reverse
+--check` với patch `0033` thành công, chỉ xác nhận patch khớp nội dung đã áp trong overlay,
+**không phải** forward-apply toàn stack hoặc build. Hai source vendor `src/2025q3` và
+`src/bcm963xx` có `git status --porcelain -uno` rỗng. Tarball có SHA-256
+`2a738d0eaa0117a2f57cdf7124e716819647408dcfd243d62b2a8dfc35467214` đúng README.
+Không tạo scratch, không apply, không commit, không build trong lượt review.
+
+### 10.2 Findings theo mức ưu tiên
+
+#### R1 — P1: chưa có lựa chọn build độc lập cho hai model (Verified)
+
+[A/configure.ac:29](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/apps/icwmp/icwmp/configure.ac:29) khai báo `--enable-icwmp_tr098`. [A/bin/Makefile.am:5](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/apps/icwmp/icwmp/bin/Makefile.am:5) chọn
+`icwmp_tr098d`, nhánh kia link `-lbbfdm -lbbf_api` ở `:72`. Nhánh libtr098 link `-ltr098`.
+Đây là lựa chọn **engine**, không phải lựa chọn model ACS. [L/sdk/bdk/sdk.mk:8](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/sdk/bdk/sdk.mk:8) và `:9`
+cùng đưa `root_bdk.c` và `root181_bdk.c` vào một link set, không có conditional model.
+`L/configure.ac` chỉ có lựa chọn SDK/TR-064, chưa có `--enable-model-tr098/tr181`.
+
+**Tác động:** tắt `--enable-icwmp_tr098` để lấy TR-181 sẽ chọn engine khác, không phải TR-181
+đã port trên BDK. Xóa `root181_bdk.c` hiện tại làm thiếu source trong build list. Phải tách
+`DM engine`, `compiled models`, `active model` thành ba khái niệm khác nhau.
+
+#### R2 — P1: TR-181-only còn phụ thuộc code đặt dưới TR-098 (Verified)
+
+Chuỗi phụ thuộc thực tế:
+
+1. [L/bin/Makefile.am:25](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/bin/Makefile.am:25) luôn compile `tr098/managementserver.c`, `softwaremodules.c`,
+   `tr098/common/icwmpcfg.c`, luôn thêm include path `tr098/` và `tr098/common/`.
+2. [L/sdk/bdk/dm098/root181_bdk.c:24](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/sdk/bdk/dm098/root181_bdk.c:24) include `root_bdk.h`, `mlo_bdk.h`, `icwmpcfg.h`,
+   `managementserver.h`. Bảng `tManagementServer181Params` tại `:41` dùng getter/setter
+   của `tr098/managementserver.c`; các bảng MLO/sample cũng đang ở `dm098/`.
+3. [L/sdk/bdk/dmplatform_bdk.c:427](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/sdk/bdk/dmplatform_bdk.c:427) gọi `tr098_bdk_register_all()` vô điều kiện khi init
+   context. Hàm đó tại `dm098/root_bdk.c:57` đăng ký DeviceInfo/LAN/WAN/System TR-098.
+4. Chiều ngược lại: [L/sdk/bdk/dmproxy_bdk.c:113](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/sdk/bdk/dmproxy_bdk.c:113) tham chiếu
+   `tManagementServer181Params` và `tDeviceInfo181Params` được định nghĩa trong root TR-181.
+   Proxy này còn dùng cho `InternetGatewayDevice.X_MARUSYS_COM_Device.` của bản TR-098
+   (`root_bdk.c:44`), nên không thể xóa cả proxy chỉ vì tắt ACS TR-181.
+5. Wrapper install [O/public/libs/libtr098/Makefile:38](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/Makefile:38) copy `tr098/*.h` vô điều kiện,
+   OpenWrt `F/libtr098/Makefile` cũng làm tương tự trong `Build/InstallDev`.
+
+**Tác động:** xóa `tr098/`, `sdk/bdk/dm098/`, hoặc chỉ root181 chưa tạo ra release một model.
+Đưa implementation dùng chung sang `services/`/`common/`, tách bảng path theo model, gate
+registration/include/source/install từ cùng profile. Giữ MDM backend TR-181 của BDK kể cả
+khi ACS chỉ thấy TR-098. Proxy vendor là feature riêng, có thể tắt độc lập.
+
+#### R3 — P1: compat-off chưa kín ở compile và package (Verified / Conditional)
+
+**Verified:** [L/sdk/mtk/sdk.m4:12](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/sdk/mtk/sdk.m4:12) nhận `--disable-dm-script-compat`, và `sdk.mk:14`
+loại `compat/dmscript.c`. `dmplatform_mtk.c:68` guard include `compat/dmscript.h`, nhưng
+các hàm `mtk_get_value()` (`:303`), `mtk_get_name()` (`:315`), `mtk_set_value()` (`:353`)
+và các helper đến `mtk_inform()` vẫn chứa `dmscript_request()` ngoài guard. Nhánh hook
+runtime đã được guard ở `:594`, nhưng đó không loại các helper khỏi translation unit.
+
+**Conditional:** compiler có thể báo implicit declaration, build với cảnh báo thành lỗi
+sẽ fail. Undefined reference còn lại ở link phụ thuộc tối ưu loại bỏ static function và
+link flags, chưa chạy compiler nên không khẳng định mọi profile đều lỗi link.
+
+**Verified:** `F/libtr098/Makefile` vẫn cài `sdk/mtk/compat/icwmp_dm.sh` vô điều kiện trong
+`Package/libtr098/install`. Nếu đã xóa thư mục compat, bước install này dùng đường dẫn
+không tồn tại. Feed chưa có Kconfig/profile gate truyền compat-off. `F/icwmp_tr098/Makefile`
+vẫn copy function library từ `cwmpclient` vô điều kiện.
+
+**Tác động:** cân bằng `#if/#endif` và kiểm file tồn tại ở profile mặc định không chứng minh
+feature-off an toàn. Cần gate đủ source, include, dependency, install, init và runtime.
+Giữ riêng phần tích hợp `easycwmp` mà WebUI/STUN còn cần, không đồng nhất nó với shell DM.
+
+#### R4 — P1: runtime không kiểm model có trong binary (Verified)
+
+[L/tr098/common/icwmpcfg.c:98](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/tr098/common/icwmpcfg.c:98) chỉ kiểm `dm_platform_name() == "bdk"` để cho đổi DataModel.
+Không kiểm capability của binary. [L/sdk/bdk/dmproxy_bdk.c:130](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/sdk/bdk/dmproxy_bdk.c:130) đọc config rồi chuyển root
+ở `:147`; [L/dmentry.c:115](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/dmentry.c:115) luôn dựng TR-098 trước rồi mới gọi SDK đổi root.
+[L/dm_registry.c:181](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/dm_registry.c:181) dựng entry ngay cả khi không có module và đánh dấu `built=1`.
+
+**Conditional:** nếu tương lai chỉ bỏ model registration mà giữ nhánh runtime, cấu hình cũ
+có thể chọn model rỗng hoặc trả cây chỉ còn provider động. Hiện chưa có single-model build
+để runtime-test kịch bản này. Ngoài ra app giữ `bdkTr181` riêng ([A/sdk/bdk/icwmp_bdk.c:98](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/apps/icwmp/icwmp/sdk/bdk/icwmp_bdk.c:98)),
+lib giữ `proxy_tr181` riêng: hai consumer cần dùng cùng model selection đã resolve.
+
+**Sửa thiết kế:** model registry trả descriptor/capability hợp lệ, chọn một lần cho session.
+Từ chối model không compile. Profile một model bỏ quyền chuyển model hoặc công bố read-only.
+Config cũ sai model phải báo lỗi rõ, không tự rơi về một cây khác.
+
+#### R5 — P2: "portable" đang lẫn với "dùng lại được trên schema UCI cũ" (Verified)
+
+[L/dmentry.c:79](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/dmentry.c:79) tạo global UCI contexts trực tiếp, `:81` init store tên `tr098` và
+`L/bin/Makefile.am` link UCI/ubus cho mọi SDK. Điều này không tự nó là bug: UCI có thể là
+**app-private store** dùng chung cả BDK. Tuy nhiên đọc schema thiết bị phải nằm phía adapter.
+Ví dụ [L/tr098/softwaremodules.c:149](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/tr098/softwaremodules.c:149) gọi `swmodules.environment`, `:166` gọi
+`swmodules.du_list`. Ubus transport dùng chung không đảm bảo SDK khác có hai service đó.
+Module stock khác cũng đọc schema sản phẩm trực tiếp.
+
+Khẳng định "không file ngoài SDK nhắc SDK" cũng quá rộng: [A/config.c:64](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/apps/icwmp/icwmp/config.c:64), `:1017`, `:1149`
+còn `ICWMP_BDK`, CLI `-S/-X`, gọi `icwmp_bdk_set_shm_id()`/`set_boot_launched()`.
+[L/tr098/common/icwmpcfg.c:101](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/tr098/common/icwmpcfg.c:101) còn so literal `bdk`.
+
+**Khuyến nghị:** phân biệt common utility, app store và device backend. Tách CLI SDK qua hook,
+DataModel dùng capability. Không cần loại UCI khỏi toàn binary hoặc đổi SONAME chỉ để đẹp layout.
+
+#### R6 — P2: registry không thực thi hợp đồng một path một chủ (Verified)
+
+[L/dm_registry.c:99](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/dm_registry.c:99) (`merge_leaf`) ghi đè leaf trùng bằng module sau; `merge_entry()`
+chỉ ghi đè callback non-NULL. Không có khai báo override target, không phát hiện xung đột
+kiểu/access/owner. `dm_registry_owns():244` chỉ duyệt union các prefix `.paths`, không
+kiểm overlap hoặc xác nhận claim khớp leaf thực sự hiện diện. `root181_bdk.c` còn không
+có `.paths`, BDK dùng `proxy_local_objs`/`proxy_static_leaves` viết tay riêng.
+
+Do đó câu ".paths đảm bảo một path một chủ" ở §9 là **ý định thiết kế, chưa được thực thi**.
+Với claim cả subtree, chỉ nên loại fallback khi subtree đã port đủ. Nếu chỉ port vài leaf
+cần claim theo leaf/instance pattern và xử lý enumerate parent rõ ràng.
+
+`merge_leaf/merge_obj` trả cây cũ khi `calloc` fail (`:110`, `:161`), nhưng `build()` vẫn
+đánh dấu hoàn tất. `dm_registry_add():45` bỏ qua overflow/registration muộn và duplicate
+name không báo lỗi. Đây là fail-open ở khâu dựng schema, cần trả lỗi init thay vì publish
+cây thiếu module. Bộ nhớ merge trung gian giữ lại là vấn đề startup hữu hạn, chưa có bằng
+chứng leak tăng theo từng RPC. Mutex registry không bảo vệ toàn bộ global UCI/dmmem/dmroot.
+
+#### R7 — P1 trước rollout: VALUECHECK/VALUESET chưa chứng minh atomic transaction (Verified / Not established)
+
+**Verified:** [L/dmentry.c:343](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/libtr098/dmentry.c:343) apply từng leaf rồi `:362` gọi commit SDK, cuối cùng mới
+commit UCI/ParameterKey ở `:366`. Khi VALUESET fail, gọi `dmuci_revert` + platform revert.
+Khi SDK commit fail, chỉ gọi `dmuci_revert` tại `:364`.
+
+MTK `time_mtk.c:202` sửa UCI và `:203` gọi `mtk_apply_service()` ngay trong VALUESET.
+`dmmtk.c:193` append trực tiếp file `/tmp/.easycwmp_apply_service`; platform revert
+(`dmplatform_mtk.c:536`) không xóa các entry C của RPC thất bại. Cuối session
+`dm_platform_restart_services():549` chạy hàng đợi. **Conditional:** một RPC có Time setter
+đã chạy, sau đó leaf khác hoặc commit thất bại, có thể để lại restart đã xếp hàng dù SPV fault.
+
+BDK gọi batch HAL tại `dmplatform_bdk.c:482` rồi engine mới commit UCI. Một batch HAL không
+chứng minh atomic xuyên MDM + UCI + persistence. **Not established:** khả năng rollback
+mọi SDK, mọi leaf hoặc lỗi giữa các store; cần fault injection trên SDK/board.
+
+Hợp đồng đích phải có transaction-local pending writes/actions, abort trên mọi đường lỗi,
+phân biệt apply runtime với persist và nêu rõ giới hạn backend. Hai pha validate/apply là
+cần thiết nhưng không được dùng làm bằng chứng "transaction giống nhau trên mọi SDK".
+
+#### R8 — P2: build profile chưa là nguồn lựa chọn chung app/lib/package (Verified)
+
+[O/public/libs/libtr098/Makefile:20](/home/nvtu/workspace/AI-WORKSPACE-v2/projects/brcm_ap_wifi7_mvn/issues/20260916_tr069_app_use_icwmp/sdk-overlay/userspace/public/libs/libtr098/Makefile:20) chỉ configure nếu chưa có generated Makefile. Đổi SDK
+hoặc feature khi reuse build directory có thể giữ config cũ. App/lib có biến chọn SDK riêng,
+scanner chỉ biết directory tồn tại, không kiểm khả năng của cặp SDK × model × feature.
+`L/sdk/bdk/sdk.mk` bật `BDK_SAMPLE_OBJECT` trực tiếp. Packaging/headers nằm ngoài scanner.
+
+Cần profile manifest chung, fingerprint build, báo cấu hình effective, clean/reconfigure khi
+profile đổi và kiểm app/lib cùng fingerprint lúc startup. Kiểm source reference và grep tên
+SDK là static audit, **không phải** `autoreconf/configure/build/install` PASS.
+
+### 10.3 Quyết định thiết kế được đề xuất
+
+- Một binary chọn đúng một SDK khi build. Model compiled có thể là TR-098, TR-181 hoặc cả hai,
+  chỉ một model active trong mỗi session. Product profile chọn board/operator/features.
+- Layers: protocol app → DM engine/facade → service contracts → SDK backend. Model binding riêng
+  SDK được phép ở `sdk/<sdk>/models/<model>/`, gọi backend của chính SDK qua private API.
+- Tách `services` dùng chung (identity, agent settings, transaction, action queue, instance
+  identity) khỏi bảng path của model. Giữ implementation dùng chung nếu model kia bị xóa.
+- Giữ ABI/package `libtr098` trong đợt đầu. Đổi tên logic engine bằng API/manifest trước,
+  không đổi binary/package đồng thời với semantics và persistence.
+- Ưu tiên đóng R1–R4 và lỗi transaction/registry cần thiết trước khi mở rộng P2–P8. Chưa nên
+  viết thêm hàng trăm getter dựa vào helper chưa có hợp đồng transaction/capability rõ.
+
+### 10.4 Verification và giới hạn
+
+- Đã trace caller/callee và build fragments cho R1–R8. `sdk-scan.sh --check` PASS cho cả app/lib.
+  Không chạy negative build bằng compiler.
+- Patch `0033` reverse-check PASS trên overlay hiện tại, tarball hash khớp, vendor source read-only.
+- `check-docs.sh` PASS kiểm hiện có (Mermaid semicolon, patch header/path), cảnh báo 9 issue khác
+  thiếu chatlog đã có trước lượt này. Đây không phải Mermaid render hoặc kiểm kiến trúc C.
+- Build SDK, link/install từng profile, runtime model switch, rollback, giá trị P1 và coverage
+  P2–P8 vẫn **NOT RUN / chưa hoàn tất**. Không gắn nhãn release-ready cho bản `0033`.
+
+---
+
+## 11. Đồng bộ 23/09 16:30 — trả lời review, sửa R3
+
+Lượt này **có sửa source** (khác lượt review §10). Overlay `d3c82a4` → `cd93685`, vẫn trong
+patch `0033`.
+
+### 11.1 R3 — compat-off chưa kín ở compile: ĐÃ SỬA (Verified)
+
+Review đúng: §9 chỉ guard **hook runtime** (`dm_platform_param_method`, `commit`, `revert`,
+`restart_services`, hai hàm enabled-notify), còn các helper `mtk_get_value()`, `mtk_get_name()`,
+`mtk_set_value()`, `mtk_add_object()`, `mtk_del_object()`, `mtk_inform()` vẫn nằm trong
+translation unit và vẫn gọi `dmscript_request()` khi `--disable-dm-script-compat`.
+
+Sửa: bọc **cả khối transport** — từ `mtk_script_path()` tới hết `mtk_merge_static()`, kèm
+`struct mtk_reply`, `mtk_line_cb()`, `mtk_reply_init()`, `mtk_xsd_type()`, `mtk_cr_url()` — trong
+một `#ifdef DM_MTK_SCRIPT_COMPAT`. Hai khai báo biến `struct mtk_reply r;` trong
+`dm_platform_commit()` và `dm_platform_restart_services()` cũng phải chuyển vào trong guard,
+nếu không chúng tham chiếu một kiểu không còn tồn tại.
+
+Cách kiểm (không có compiler): bỏ mọi khối `#ifdef DM_MTK_SCRIPT_COMPAT` theo đúng ngữ nghĩa
+`#else`, rồi tìm symbol của lớp compat trong phần còn lại.
+
+```
+bản --disable-dm-script-compat còn tham chiếu symbol của compat: KHÔNG
+số dòng code còn lại khi tắt compat: 196
+```
+
+Phần package trong R3 giữ nguyên có chủ ý: feed `libtr098` vẫn cài `icwmp_dm.sh` vô điều kiện,
+**đúng** với bản đang ship vì feed không truyền `--disable-dm-script-compat`. Khi bật cờ đó thì
+hai dòng install phải bỏ cùng lúc — đã ghi comment ngay tại chỗ trong `feeds/libtr098/Makefile`.
+
+### 11.2 Ba lỗi build do refactor, phát hiện khi người dùng hỏi về BDK (Verified)
+
+| Lỗi | Hậu quả | Sửa |
+|---|---|---|
+| `tr098_bdk_register_all()` thành `static` (`root_bdk.c`) nhưng `dmplatform_bdk.c:427` vẫn gọi | BDK **lỗi link** | trả lại non-static; registry vẫn gọi qua `.init`, cờ `done` chặn chạy hai lần |
+| `static get_empty()` trong `deviceinfo_mtk.c` trùng hàm engine `dmtr098.h:485` cùng chữ ký | MTK **lỗi compile** (`static declaration follows non-static`) | bỏ, dùng `get_empty()` của engine |
+| Bỏ `--enable-bdk` | script build BDK cũ **âm thầm rơi về SDK `uci`** | trả lại làm alias; generator không còn xoá `$with_sdk` đã đặt trước |
+
+Phép kiểm mới, bổ sung vào bộ "không có compiler": **tìm hàm `static` mà file khác trong cùng
+link set gọi**. Bộ kiểm trước chỉ so link set với **file không được link**, nên không thấy lỗi
+thứ nhất. Chạy cho cả 4 tổ hợp (libtr098/icwmp × bdk/mtk) — sạch sau khi sửa.
+
+### 11.3 BDK có còn chạy được không (Verified ở mức source)
+
+So **nội dung từng file** của 15 file BDK giữa `99f4988` (trước refactor) và hiện tại: thay đổi
+duy nhất là đường `#include`, thay `tEntry098Obj[]`/`tEntry181Obj[]` bằng khai báo module cho
+registry (**cùng bảng** `tRoot_098_Obj`/`tRoot_098_Params`), `ctx->dm_entryobj =
+dm_registry_entry(DM_MODEL_TR181)`, và comment. **Không dòng logic nào của getter/setter/hook
+BDK thay đổi.** Danh sách source BDK giống hệt (10 file), CFLAGS giống hệt —
+`-DDM_PLATFORM_BDK` nay đến từ `AC_DEFINE` qua `$(DEFS)` vì tree không dùng `AC_CONFIG_HEADERS`.
+
+**Ranh giới cần nhớ**: bản đã chạy được trên board Broadcom của người dùng là
+`icwmp_bdk_port_overlay_2_brcm_20260921_OK.tar.gz` = tới patch **`0031`**. Cả `0032` và `0033`
+đều **chưa từng build trên BDK**.
+
+### 11.4 Trạng thái các finding còn lại
+
+R1, R2, R4, R5, R6, R7, R8 **còn mở**, là thiết kế đích trong design §10–18 và gói A0–A6 của
+`tr098_c_port_phases.md` §6, **chưa implement**. Rẻ nhất và nên làm trước trong source hiện tại:
+R6 (registry báo trùng owner, ~20 dòng) và R7 (gắn transaction cho action queue).
+
+
+## 12. Hoàn thiện layout, component flow và execution plan — 23/09, Codex
+
+### 12.1 Baseline mới đã xác minh khi resume
+
+**Verified:** overlay HEAD cd93685, worktree sạch. `git diff d3c82a4 cd93685` chỉ đổi
+`public/libs/libtr098/libtr098/sdk/mtk/dmplatform_mtk.c`: guard toàn khối compat transport và
+chuyển biến phụ thuộc vào đúng nhánh. Ba sửa lỗi §11.2 đã nằm trong d3c82a4, không phải delta
+mới này. R3 sửa source guard được xác nhận, **chưa compile/link**; feed/package compat-off
+và release xóa thư mục vẫn cần gate riêng. Kết quả strip không chứng minh build thành công.
+
+MTK HEAD b207c4518 và BDK HEAD 7f837f5f6 không đổi, tracked worktree sạch. Re-extract inventory
+MTK qua script hiện có, so 930 row với TSV: 749 param/181 object, không thêm/bớt/đổi row.
+Tarball MTK hiện tại SHA256 `841b582c0f531b2884e1cc80185ae7d9ab728baf45051366a83ba8bb63d3e059`.
+Lượt thiết kế này không sửa overlay/vendor source, patch, tarball hay feed.
+
+### 12.2 Layout và hai model
+
+Đề xuất source canonical **public/libs/libicwmp_dm/src/**, wrapper nằm một cấp trên, public
+include dưới `include/icwmp_dm/`. Engine phục vụ hai facade nên không giữ tên thư mục theo
+TR-098. SONAME/package cũ có thể giữ chuyển tiếp trong A1, đổi bằng gói có clean rebuild consumer
+riêng. Không di chuyển persistent state chỉ vì rename source.
+
+TR-098 implement thật theo inventory sản phẩm. TR-181 BDK reuse provider hiện có. Phần thiếu
+có semantic mapping manifest, schema và callback body TODO, trạng thái theo SDK/operation.
+Chỉ generate boilerplate từ mapping đã duyệt, không generate semantics bằng đổi root string.
+Stub development trả lỗi rõ, không mutate. Production không enumerate stub. Counterpart chưa
+xác định giữ mapping_todo, không bịa path chuẩn. Chi tiết [design §12 và §18](../../docs/icwmp_multiplatform_tr098_design.md#12-source-layout-đề-xuất-và-bản-đồ-di-chuyển).
+
+### 12.3 Component/process flow và những boundary cần giữ
+
+[Flow chi tiết](../../docs/icwmp_multiplatform_tr098_flow.md) có overview cùng MTK WAN/LAN,
+Wi-Fi/STA/Stats, Mesh và BDK Distributed MDM. Source anchors nằm ngay trong tài liệu đó.
+
+- **Verified:** hni.wan là ubus object trong ubusmon, gọi HAL set/commit. Mutation có side effects,
+  không đưa vào VALUECHECK. **Not established:** atomic rollback nhiều WAN field/store.
+- **Verified:** HalWifi_getAssocDeviceList join host information và bỏ station chưa có IP.
+  Canonical station inventory cần raw association riêng, Hosts chỉ enrich. Một số legacy Wi-Fi
+  counter đọc br-lan, không xem nó là canonical BSS counter. Mỗi stats field phải có scope/unit/epoch.
+- **Conditional:** HAL vendor GET_STA → OSAL/vendor driver theo build flag. Exact loaded .ko,
+  firmware ABI và HW-offload counter semantics vẫn cần board evidence.
+- **Verified:** Mesh topology dùng mapd control/file dump. Proposed snapshot có lock, timeout,
+  freshness, unique path, không dùng projection /tmp/P_CPE10 làm source of truth.
+- **Verified/Conditional theo nhánh:** BDK giữ MDM owner dispatch, Wi-Fi STL/rutWifi helper,
+  wldataeld/WBD collector đã có. Không dựng lại controller trong agent. WAN/PON lower callback
+  chưa trace đủ thì ghi Not established, không suy driver từ tên parameter.
+
+### 12.4 Thứ tự triển khai và giới hạn
+
+[Phase plan §6](tr098_c_port_phases.md#6-kế-hoạch-thực-thi-từ-source-hiện-tại--2309) là nguồn kế hoạch:
+A0 baseline → A1 rename → A2 profile/model/scaffold → A3 service/registry/transaction →
+A4 migrate 65 param P1 → A5 P2–P8 theo domain → A6 full-C/export/prune/build/board/soak.
+P2/P3/P4 chia gói nhỏ, mỗi gói có TR-181 disposition và acceptance. Full Mesh topology ngoài
+749 baseline có inventory extension riêng. R6/R7 phải xong trước nhân rộng port, không coi R7
+là sửa rẻ theo số dòng. Nếu xử lý sớm trên layout cũ, tính vào A3 thay vì làm lại.
+
+Các API/profile mới là Proposed. Không có rename/implementation patch mới trong lượt này.
+Build, link/install và board tests vẫn NOT RUN. Bản BDK đã chạy trên board là tới 0031,
+không dùng bằng chứng đó để xác nhận 0032/0033 hay thiết kế mới.
+
+
+### 12.5 Kiểm tài liệu và bàn giao
+
+- `./scripts/check-docs.sh`: PASS, 9 cảnh báo chatlog thuộc issue khác giữ nguyên.
+- Local link target/whitespace cho design, flow, phase plan, README: PASS. Có 6 Mermaid diagram
+  trong flow chi tiết. Chưa chạy Mermaid renderer, checker không thay cho render.
+- `git diff --check` trong phạm vi memory/knowledge: PASS. Không tạo scratch/copy source.
+- Đóng riêng phần thiết kế `_1` sau khi lưu kết quả. Giữ phiên gốc PAUSED để nhận build/board
+  và triển khai code theo phase, không coi toàn issue đã hoàn thành.
+
+
+## 13. Thực thi A1 theo yêu cầu — 23/09, Codex
+
+User yêu cầu code và command theo dõi. Đã rename overlay library sang libicwmp_dm/src, update
+app includes/autodetect, BDK wrapper, SDK prune, shared header installer, feed MTK và hai installer.
+Giữ SONAME/package libtr098, source C/header parity 228 file chỉ khác include paths. Không đổi
+semantics getter/setter và không implement các phase A2–A6 ở gói layout này.
+
+Đã thêm `progress.py [--watch [seconds] | --json]` và `implementation-status.json`, hiển thị phase,
+current/next, pending tasks và validation. Trạng thái lưu bền vững, không giả làm live heartbeat AI.
+
+[Hướng dẫn](a1-implementation.md), [verification](a1-verification.md), patch overlay 0034,
+bundle standalone icwmp_a1_port.tar.gz. Installer BDK reject integration profile không khớp trước
+khi archive/copy, sau khi test phát hiện thứ tự cũ có thể ghi source rồi mới fail.
+
+Static + fixture + patch replay PASS. Không compiler/SDK build/board, không commit, không apply
+vendor src. A1 build gate là bước kế tiếp trước A2 semantics, session gốc giữ để tiếp tục.
+
+## 14. Lượt 23/09 tối — R6, R7, P2 và inventory bị sai (Claude Code)
+
+### 14.1 Inventory cũ vừa thừa vừa thiếu
+
+`gen-coverage-matrix.py` gom phép gán biến theo **file** rồi mới bung, lại `setdefault` nên
+**gán đầu tiên thắng**. Với thư viện shell này, `base`/`obj`/`stats_path` được đặt lại trong từng
+hàm, nên:
+
+| Hậu quả | Số lượng | Ví dụ |
+|---|---|---|
+| Path **bịa ra** (ghép `base` của hàm này với tên lá của hàm khác) | 29 | `WLANConfiguration.{i}.WPSAlias`, `WPSStatus`, `WPS.Stats.BytesSent` |
+| Path thật **bị mất** (không bung được → không bắt đầu bằng `InternetGatewayDevice.` → loại im lặng) | 61 | 8 leaf port của `LANEthernetInterfaceConfig`, 17 leaf `WLANConfiguration.AssociatedDevice`, 36 leaf `Firewall.X_AIS_*` |
+| Leaf gán nhầm nhánh | 2 | `Prefix`, `PrefixLen` vào `IPV4ServiceControl`, trong source chỉ `IPV6ServiceControl` có (`functions/tr098/firewall:422`) |
+
+Đã sửa thành quét **tuần tự, gán sau đè gán trước**. Bảng mới sinh lại khớp byte-for-byte,
+**968 dòng = 184 object + 783 param**, `X_AIS_*` 235, `X_HNI_*` 0, getter `$UCI_GET` thuần 33.
+Phase đổi: P2 62 → **70**, P3 75 → **67**, P6 63 → **97**.
+
+Bảng cũ không được giữ lại: nó chứa path không tồn tại, giữ lại chỉ tạo rủi ro có người port theo.
+Dựng lại bản bất kỳ bằng chính `gen-coverage-matrix.py` trên snapshot tương ứng.
+
+### 14.2 R6 — registry báo trùng chủ sở hữu path
+
+`dm_registry_owns()` quét module theo thứ tự và trả về ngay khi khớp, nên hai module cùng khai một
+path thì cầu nối compat lọc theo một chủ **tùy ý** và một trong hai cây im lặng biến mất.
+`check_claims()` chạy trong `build()` báo từng cặp chồng nhau (bằng nhau hoặc một bên là tiền tố),
+`dm_registry_conflicts()` trả số. Không fatal: cây sai lúc chạy còn tệ hơn log ồn lúc dev.
+
+Cách mở rộng object của module khác **không** đổi: khai `.objs` cùng tên object và **không khai
+`.paths`** — đúng pattern `managementserver_core_mtk.c` đang dùng.
+
+### 14.3 R7 — transaction cho hàng đợi action cuối phiên
+
+Setter xếp action (reboot, factory reset, diagnostic) vào `list_execute_end_session` **trong lúc**
+RPC còn đang ghi. Khi RPC fault, engine `dmuci_revert()` + `dm_platform_revert()` nhưng hàng đợi
+vẫn còn — một SetParameterValues đã rollback vẫn reboot được board.
+
+`dm_end_session_mark()` chụp đuôi danh sách + `end_session_flag`, `dm_end_session_rollback()` bỏ
+mọi action xếp sau mốc và khôi phục cờ. Gọi ở cả ba nhánh fault của `dm_entry_apply`
+(SET_VALUE per-param, SET_VALUE commit hỏng, SET_NOTIFICATION).
+
+Sửa kèm: nhánh `dm_platform_commit()` hỏng trước đây chỉ `dmuci_revert()`, không gọi
+`dm_platform_revert()` — hàng đợi phía platform còn nguyên cho RPC sau. Đã thêm. An toàn trên cả ba
+SDK: BDK `bdk_pending_free_all()` idempotent, MTK gửi `set_abort`, uci là no-op.
+
+### 14.4 P2 — nhánh LAN bằng C, 70/70
+
+| File | Nhánh | Backend giữ nguyên như shell |
+|---|---|---|
+| `lan_mtk.c` | `LANDevice.1` + `LANHostConfigManagement` + `IPInterface.1` | `dhcp.lan.*`, `network.lan.*`, `/rom/etc/config` cho default, `wireless.<radio>.txpower` |
+| `lanhosts_mtk.c` | `Hosts.Host.{i}` | UCI `lanhost` (section `host`), `/tmp/dhcp.leases` cho lease |
+| `laneth_mtk.c` | `LANEthernetInterfaceConfig.{i}` + `Stats` | `network.@SwitchPara[i-1]`, `/proc/tc3162/gsw_stats`, `/sys/.../eth0.{i}/statistics`, `ethphxcmd`, `switchmgr` |
+| `x_ais_mesh_mtk.c` | `X_AIS_Mesh` (4 leaf forced-inform) | `wireless.*.map_mode`, `1905d_cfg.map.max_hop`, `clay.opermode`, `mapd_cli dump_topology_v1` |
+
+Giữ nguyên có chủ ý:
+
+- `dhcp.lan.configurable=0` chặn ghi với **9002**, riêng `MaxAddress` trả **9007** — đúng như shell.
+- Các leaf writable nhưng shell không có setter (`ReservedAddresses`, `AssociatedConnection`,
+  `PassthroughMACAddress`, `AllowedMACAddresses`, `UseAllocatedWAN`, `PassthroughLease`,
+  `IPInterface.1.Enable/Alias/AddressingType`) vẫn **nhận rồi bỏ**, không đổi thành 9008 — đổi sẽ
+  làm hỏng script provisioning đang ghi chúng nhiều năm nay.
+- `LANEthernetInterfaceConfig` luôn công bố **4 instance**, như `sub_entry_LANEthIfConfig_all()`
+  lặp 1..4 bất kể `LANEthernetInterfaceNumberOfEntries`.
+- Reload dịch vụ và reboot của mesh **xếp vào apply-service**, không gọi thẳng trong setter: shell
+  commit UCI ngay trong hàm rồi mới gọi, engine thì commit ở cuối RPC, nên xếp hàng mới đúng thứ tự.
+
+Khác biệt có chủ ý: `MeshEnabled`/`MeshMode` thiếu option UCI thì trả mặc định mà không fault
+(shell trả 9002). Một fault giữa GetParameterValues toàn cây làm hỏng cả RPC.
+
+### 14.5 Kiểm tĩnh đã chạy (chưa có compiler)
+
+| Kiểm | Kết quả |
+|---|---|
+| Tên tham số P2 so cây shell | **70/70**, 0 dôi |
+| Cân bằng brace/paren/bracket/`#if` (nhận biết comment + string) | PASS 4 module P2 + `dmmtk.c/h` |
+| Symbol dùng nhưng không có khai báo | PASS (rỗng) |
+| Hàm `static` bị file khác trong link set gọi | PASS (3 kết quả đều nằm trong comment) |
+| Sinh lại ma trận từ source | PASS byte-for-byte |
+| Bundle giao + `apply --dry-run` hai cây SDK thật | PASS (sha256 `76f032df3193`) |
+
+**Chưa compile, chưa link, chưa chạy trên board.**
+
+## 15. P3a — Wi-Fi bằng C, 54/67 (Claude Code, 24/09)
+
+### 15.1 Chia P3 làm hai
+
+67 tham số của `WLANConfiguration` không port một lượt: 13 leaf bảo mật quyết định việc khách có
+vào được Wi-Fi hay không, sai một bước ánh xạ `encryption` là khoá máy khách ngoài mạng. Tách:
+
+- **P3a (lượt này, 54)**: radio/identity, kênh + auto channel, công suất, chuẩn và tốc độ,
+  MU-OFDMA, bộ đếm, WPS, `AssociatedDevice`.
+- **P3b (kế tiếp, 13)**: `BeaconType`, `BasicAuthenticationMode`, `BasicEncryptionModes`,
+  `WPAAuthenticationMode`, `WPAEncryptionModes`, `IEEE11iAuthenticationMode`,
+  `IEEE11iEncryptionModes`, `KeyPassphrase`, `PreSharedKey.1.KeyPassphrase`,
+  `PreSharedKey.1.PreSharedKey`, `WEPEncryptionLevel`, `WEPKeyIndex`, `WEPKey.{i}.WEPKey`.
+
+### 15.2 Bản đồ instance là hợp đồng với ACS
+
+| Instance | Interface | Vai trò |
+|---|---|---|
+| 1–4 | `ra0` `ra1` `ra2` `ra3` | 2.4 GHz fronthaul |
+| 5–8 | `rai0` `rai1` `rai2` `rai3` | 5 GHz fronthaul |
+| 9 | `rai4` | 5 GHz backhaul |
+| 10 | `ra4` | 2.4 GHz backhaul |
+| 11, 12 | `ra5` `rai5` | cặp MLO fronthaul |
+
+Thứ tự này **không được sắp lại cho gọn**: ACS đã provision theo đúng số instance. Instance 9 là
+`rai4` chứ không phải `ra4` — nhìn thì lệch, nhưng đó là cây hiện hành.
+
+### 15.3 Hai cặp phải đồng bộ, và mapd
+
+Setter nào đụng `ssid`/`disabled` đều phải ghi cả cặp và cả section MLO, đúng như
+`mlo_sync_*`/`backhaul_sync_*`:
+
+| Cặp | Thành viên | Section MLO |
+|---|---|---|
+| Fronthaul MLO | `ra5` ↔ `rai5` | `apmld1` |
+| Backhaul | `ra4` ↔ `rai4` | `apmld2` |
+
+Khi mesh đang bật (`map_mode` khác 0 trên **cả hai** radio), giá trị còn phải ghi sang node riêng
+của mapd (`mapd.1` … `mapd.12`) — nếu không, lần `wifi reload` sau mapd ghi đè `wireless` từ
+config của nó và thay đổi của ACS biến mất. `SSIDAdvertisementEnabled` là chỗ dễ sai nhất: mapd
+đánh vần `Y`/`N` và **ngược nghĩa** với `hidden` của `wireless`.
+
+### 15.4 AssociatedDevice: bỏ được lớp cache tạm
+
+Shell phải spool `ubus call hni getWlanDeviceList` ra `/tmp/…cache` vì hàm shell không giữ được
+state giữa các lần getter trong cùng một RPC, kèm theo cả cơ chế "ai là chủ cache" để dọn. Trong C,
+callback browse đọc một lần rồi phát từng station cho instance của nó — bỏ hẳn file tạm, biến đếm
+chủ sở hữu và bước dọn. Interface đang `disabled` thì không gọi ubus, đúng như `assoc_build_cache`.
+
+### 15.5 Registry: claim theo segment, có wildcard
+
+Nửa còn lại của chính object này vẫn do cầu nối shell trả lời, nên không được claim cả nhánh
+`WLANConfiguration.` — claim vậy sẽ **giấu mất** 13 leaf bảo mật. Mà claim từng path cụ thể thì
+phải liệt kê 12 instance × 30 leaf.
+
+`dm_registry.c` được bổ sung `path_match()` so khớp theo **segment**:
+
+| Dạng claim | Nghĩa |
+|---|---|
+| `IGD.Foo.` | object đó và mọi thứ bên dưới |
+| `IGD.Foo.Bar` | đúng một leaf đó — trước đây `strncmp` khiến nó nuốt cả `IGD.Foo.BarBaz` |
+| `IGD.Foo.{i}.Bar` | leaf đó của **mọi** instance |
+
+Nhờ vậy P3a claim 30 leaf + `Stats.` + `WPS.` + `AssociatedDevice.` bằng 33 dòng, không đụng vào
+phần shell còn giữ. Đây cũng là thứ P4 (WAN, nhiều object có instance) sẽ cần.
+
+### 15.6 Kiểm tĩnh
+
+| Kiểm | Kết quả |
+|---|---|
+| Tên tham số P3a | **54/54**; P2+P3a **124/124**, dôi 0, thiếu đúng 13 leaf P3b |
+| `path_match()` — wildcard, leaf chính xác, prefix, đối xứng cho `covers`/`check_claims` | 23/23 case |
+| 44 claim của P2+P3a chồng nhau | 0 cặp |
+| Cân bằng brace/paren/`#if` | PASS |
+| Symbol dùng nhưng không khai báo | PASS |
+| Bundle + `apply --dry-run` hai cây SDK thật | PASS, sha256 `fa0db684e98d`, 371 file |
+
+Matcher được kiểm bằng cách **port thuật toán sang Python rồi chạy bảng case** — host không có
+compiler, nên đây là kiểm *thuật toán*, không phải kiểm cú pháp C. **Chưa compile, chưa board.**
+
+## 16. P3b — bảo mật Wi-Fi, xong cả phase P3 (Claude Code, 24/09)
+
+### 16.1 Một option quyết định tất cả
+
+13 leaf còn lại đều đọc/ghi `wireless.<iface>.encryption`. Bảng chính tả của sản phẩm:
+
+| `encryption` | Nghĩa |
+|---|---|
+| `none` | mở |
+| `wep+shared+64` / `+128` | WEP 40 bit / 104 bit, key nằm ở `key1..key4` |
+| `psk` | WPA personal, TKIP |
+| `psk2+ccmp` | WPA2 personal, AES |
+| `psk-mixed+ccmp` | WPA/WPA2 mixed, AES |
+| `psk-mixed+tkip+ccmp` | WPA/WPA2 mixed, TKIP + AES |
+| `sae` / `sae-mixed` | WPA3 / WPA3 transition |
+
+### 16.2 Hai cái bẫy giữ nguyên, không dọn
+
+1. **`.key` mang hai nghĩa.** Với WPA nó là passphrase; với WEP nó là **số thứ tự key** (1–4) còn
+   key thật nằm ở `key1..key4`. `set_wep_key_index()` ghi số vào đúng option đó. Nhìn như bug,
+   nhưng WebUI và mapd đang đọc theo quy ước này.
+2. **Chỉ 3 trong 6 setter đẩy sang mapd.** `BeaconType`, `BasicAuthenticationMode`,
+   `WEPEncryptionLevel` ghi `authmode`/`EncryptType` vào node mapd; `WPA*` và `IEEE11i*` **chưa
+   từng** làm. Port sang C giữ y nguyên — "sửa cho nhất quán" sẽ đổi thứ mapd ghi đè ở lần reload
+   sau, đó là quyết định của sản phẩm chứ không phải của lớp CWMP.
+
+### 16.3 `KeyPassphrase` ≠ `PreSharedKey.1.*`
+
+Hai leaf trông như một, hành vi khác hẳn — cả hai được giữ:
+
+| | `WLANConfiguration.KeyPassphrase` | `PreSharedKey.1.{KeyPassphrase,PreSharedKey}` |
+|---|---|---|
+| Từ chối khi đang WEP | mọi `wep+` | chỉ `wep+shared+64/128` |
+| Kiểm độ dài | **không** | 8–63, ngoài khoảng → 9007 |
+| Ghi thêm | — | `key1` = 5 ký tự đầu (digest WebUI hiển thị) |
+| Đồng bộ cặp MLO | **có** | không |
+| Getter | trả `key` hiện tại | trả rỗng |
+
+### 16.4 Một khác biệt có chủ ý
+
+`BeaconType` = `11i` hoặc `WPAand11i` khi BSS **đang chạy SAE** thì giữ nguyên `sae`/`sae-mixed`
+thay vì ghi đè `psk2+ccmp`. Shell cũng có nhánh này, và nó quan trọng: ACS đọc `BeaconType` ra
+`11i` rồi ghi lại đúng giá trị đó là chuyện thường, nếu hạ xuống `psk2` thì một BSS WPA3 bị âm
+thầm hạ cấp và client chỉ hỗ trợ SAE rớt mạng.
+
+### 16.5 Claim gộp lại sau khi cả object là C
+
+P3a phải claim **30 leaf** vì nửa còn lại của object vẫn do shell trả lời. Xong P3b thì cả
+`WLANConfiguration` là C, nên:
+
+- `wlan_mtk.c` giữ **một** claim nhánh `InternetGatewayDevice.LANDevice.1.WLANConfiguration.`
+- `wlanassoc_mtk.c` và `wlansec_mtk.c` **không claim gì** — claim thêm sẽ là trùng chủ sở hữu,
+  đúng thứ `check_claims()` (R6) báo.
+
+Kiểm lại toàn bộ 7 module MTK: **16 claim, 0 cặp chồng nhau.**
+
+### 16.6 Kiểm tĩnh, và một báo động giả
+
+| Kiểm | Kết quả |
+|---|---|
+| Tên tham số P3 đầy đủ | **67/67**; P2+P3 **137/137**, thiếu 0, dôi 0 |
+| Claim chồng nhau giữa 7 module | 0 cặp |
+| Cân bằng brace/paren/`#if` | PASS |
+| Symbol dùng nhưng không khai báo | PASS |
+| Bundle + `apply --dry-run` hai cây SDK thật | PASS, sha256 `62195378bfc4`, 373 file |
+
+Lần chạy đầu script kiểm claim báo **15 cặp chồng** với `InternetGatewayDevice.` của `root_mtk.c`.
+Đó là lỗi của **script**, không phải của code: claim thật là
+`"InternetGatewayDevice." CUSTOM_PREFIX "Icwmp."` — ba literal C nối lại lúc biên dịch thành
+`InternetGatewayDevice.X_HNI_Icwmp.`, còn regex thì tách rời từng literal. Đã sửa script nối
+literal liền nhau và bung `CUSTOM_PREFIX` trước khi so.
+
+**Chưa compile, chưa link, chưa board.**
+
+## 17. P4a — khung `WANDevice` bằng C, 22/173 (Claude Code, 24/09)
+
+Phase lớn nhất (173 param) nên chia làm năm bước, bước này là **P4a**: khung nhánh cộng ba object
+không phụ thuộc entry WAN nào. Patch `0040`, overlay `3cf999f`.
+
+| Object | Param | Nguồn dữ liệu |
+|---|---|---|
+| `WANDevice.1.WANCommonInterfaceConfig.` | 9 | `clay.opermode.uplink`, `pon.xpon_link.trafficStatus`, `/sys/class/net/<uplink>/statistics/*` |
+| `WANDevice.1.WANEthernetInterfaceConfig.` | 4 | hằng số (`get_fake_WANEthernet*`) |
+| `WANDevice.1.WANEthernetInterfaceConfig.Stats.` | 4 | cùng bộ đếm uplink như trên |
+| `WANDevice.1.WANConnectionDevice.1.WANDSLLinkConfig.` | 5 | hằng số (`wan_dsl_link_*`) |
+
+`WANIPConnection` / `WANPPPConnection` vẫn do `sdk/mtk/compat/` trả lời, nên `.paths` chỉ claim ba
+nhánh trên chứ không claim cả `WANDevice.`.
+
+### 17.1 `WANAccessType` rỗng — lỗi có thật của sản phẩm, giữ nguyên
+
+`functions/tr098/wan_device:3095` đăng ký getter `wan_common_get_access_type`. Hàm đó **không được
+định nghĩa ở bất kỳ đâu** trong `ext/` — `grep -rn wan_common_get_access_type` trên cả cây cho
+đúng một dòng, chính là dòng đăng ký. `common_get_value_param()` chạy `` local val=`$getcmd` `` nên
+lệnh không tồn tại → `val` rỗng → ACS nhận chuỗi rỗng cho một tham số mà TR-098 định nghĩa là enum
+`DSL | Ethernet | POTS`.
+
+Bản C trả về `""` **y như thiết bị đang chạy**. Điền `"Ethernet"` là đổi hành vi sản phẩm: ACS đã
+đọc rỗng suốt vòng đời máy, và luật provisioning phía ACS có thể đang rẽ nhánh theo giá trị rỗng
+đó. Đây là quyết định của sản phẩm, không phải của lớp CWMP — ghi lại ở đây để lúc nào chốt thì
+sửa một dòng trong `get_wancommon_access_type()`.
+
+### 17.2 Hai thứ "giả" được giữ nguyên
+
+`WANEthernetInterfaceConfig` và `WANDSLLinkConfig` là hằng số — chính shell đặt tên hàm là
+`get_fake_*` và `wan_dsl_link_*`. Máy này là gateway PON/Ethernet, không có đường DSL. Giữ vì
+template của ACS vẫn duyệt qua các object đó, bỏ đi là mất object trong GPN.
+
+Đáng chú ý: `WANEthernetInterfaceConfig.Status` luôn là `"Down"` kể cả khi uplink đang chạy —
+`PhysicalLinkStatus` của `WANCommonInterfaceConfig` mới là cái bám trạng thái thật
+(`pon.xpon_link.trafficStatus`). Không sửa, vì cùng lý do 17.1.
+
+### 17.3 Leaf ghi được nhưng không có setter
+
+`WANEthernetInterfaceConfig.Enable` khai permission `1` với setter là **literal `true`** — tức là
+`/bin/true`: nhận lệnh ghi, thành công, không làm gì. Bốn leaf của `WANDSLLinkConfig` dùng
+`wan_dsl_link_set_fake()` cũng vậy. Bản C dùng `set_accept_and_drop()`, giống hệt cách P2 xử lý
+nhóm leaf này. Trả `9008` sẽ làm fault những script provisioning đã ghi thành công nhiều năm.
+
+### 17.4 Chính tả boolean giữ đúng chữ của shell
+
+`Enable` của cả hai object trả `"true"` (shell là `echo true`), còn `EnabledForInternet` trả `"1"`
+(shell là `echo 1`). Engine **không chuẩn hoá** giá trị boolean trên đường ra — `add_list_paramameter()`
+đẩy nguyên chuỗi của getter. Đổi `"true"` thành `"1"` sẽ làm gate 2 trên board (so từng giá trị
+với client cũ) báo lệch ở chỗ thực ra không lệch.
+
+### 17.5 Kiểu trên dây: hai leaf là `xsd:string`, không phải số
+
+`MaxBitRate` và `Status` được shell đăng ký **không có tham số type** (`$5` rỗng), và
+`mtk_xsd_type("")` trả `DMT_TYPE[DMT_STRING]`. Nên bản C để `DMT_STRING`. Trùng hợp là TR-098 cũng
+định nghĩa `MaxBitRate` là string enum, nên vừa đúng chuẩn vừa không đổi định dạng trên dây.
+
+Sẽ gặp lại ở P4b: nhiều dòng `Stats.*` của `WANIPConnection` truyền `"xsd:unsignedInt"` **vào ô
+setter** (`$4`) thay vì ô type (`$5`), nên cũng đang đi ra dưới dạng `xsd:string`.
+
+### 17.6 Object container không claim — và vì sao không sinh dòng đôi
+
+`WANDevice.`, `WANDevice.1.`, `WANConnectionDevice.`, `WANConnectionDevice.1.` do **cả hai bên**
+sinh ra: cây C (vì phải có đường tới ba object đã port) và shell (vì `WANIPConnection` vẫn của nó).
+Không sinh dòng trùng trong GPN vì `add_list_paramameter()` (`dmtr098.c:673`) chèn theo thứ tự tên
+và `strcmp == 0` thì **return ngay**. Đây cũng là lý do P2 claim từng object chứ không claim cả
+`LANDevice.`.
+
+### 17.7 Công cụ mới: `verify-dm-paths.py`
+
+Các phase trước so **tên leaf**; từ đây so **đường dẫn đầy đủ**. Script dựng lại cây từ bảng
+`DMOBJ`/`DMLEAF` rồi đối chiếu với `tr098_coverage_matrix.tsv`:
+
+```sh
+./verify-dm-paths.py --phase 4        # theo phase của ma trận
+./verify-dm-paths.py --prefix InternetGatewayDevice.WANDevice.
+./verify-dm-paths.py --claims         # .paths có cặp nào phủ nhau không
+```
+
+Ba thứ phải làm đúng mới ra số đúng, cả ba đều là lỗi tôi mắc rồi sửa trong lượt này:
+
+1. **Chỉ đọc file build thật sự biên dịch** — lấy danh sách `.c` từ `bin/Makefile.am` cộng
+   `sdk/<sdk>/sdk.mk`. Quét cả thư mục sẽ kéo vào model portable của iopsys (`tr098/landevice.c`)
+   — không nằm trong build MTK và **trùng tên bảng** với module MTK (`tIPInterfaceParam`,
+   `tWepKeyParam`), làm kết quả sai lặng lẽ.
+2. **Gộp cây theo tên object trước khi duyệt**, đúng như `dm_registry.c` gộp. `lanhosts_mtk.c` để
+   `browseinstobj` của `LANDevice` là `NULL` và mượn `{i}` của `lan_mtk.c`; duyệt từng bảng riêng
+   thì `Hosts.Host.{i}.*` bị dựng thành `LANDevice.Hosts...`, thiếu `{i}`.
+3. **Quy một chính tả cho số instance.** Bộ trích xuất giữ lại biến shell (`$1`, `$2`, `$3`) và cả
+   số viết cứng (`IPInterface.1.`); cây C dùng `{i}`. Quy mọi segment toàn chữ số về `{i}` ở cả
+   hai phía.
+
+Bằng chứng script đúng: chạy lại trên phase đã chốt bằng tay cho **đúng con số cũ** —
+P2+P3 `137/137, thiếu 0, dôi 0`. P1 `thiếu 0, dôi 11` (11 tham số `ManagementServer` mà model C
+portable có còn shell không đăng ký — đã biết, không phải lỗi).
+
+### 17.8 Kết quả kiểm tĩnh P4a
+
+| Kiểm | Kết quả |
+|---|---|
+| Đường dẫn đầy đủ vs cây shell | `WANCommonInterfaceConfig` 9/9, `WANEthernetInterfaceConfig` 8/8, `WANDSLLinkConfig` 5/5 — **22/22, dôi 0** |
+| Phase 4 tổng | 22 đã port, 151 còn lại (P4b–P4e), **dôi 0** |
+| Claim chồng nhau | 27 claim của 11 module đang build, **0 cặp** |
+| Ngoặc `{} () []` | cân bằng |
+| Symbol trong bảng | đều định nghĩa trong chính file |
+| Patch `0040` | `git apply --check` và `patch -p1 --dry-run --fuzz=0` sạch; replay lên `HEAD~1` cho tree `f31952b8ba16`, **trùng HEAD thật** |
+| Bundle | `78d6b8d8e5b4`, `SHA256SUMS` 376 file, `apply --dry-run` PASS trên cả hai cây SDK thật |
+
+**Chưa compile, chưa link, chưa board.**
+
+## 18. P4b — `WANIPConnection` bằng C, 35 param (Claude Code, 24/09)
+
+Patch `0041`, overlay `418aedf`, file `sdk/mtk/dm098/wanip_mtk.c`. Đây là object WAN mà ACS đụng
+nhiều nhất, và là chỗ **mô hình instance dễ sai nhất trong cả bản port**.
+
+### 18.1 Instance là `id + 1`, không phải vị trí section
+
+```sh
+# functions/tr098/wan_device
+wan_device_get_total_entry()     # $i:$id:$default_gw:$isWanTr069
+sub_entry_wandevice_..._ip()     # object_idx=$((wan_id + 1))
+```
+
+Entry là các section ẩn danh `config entry` của UCI package `wan`, duyệt theo thứ tự file và
+**dừng ở section đầu tiên không có option `id`** (đúng vòng `while :; do ... wan.@entry[$i].id`).
+Số instance CWMP lấy từ chính option `id` cộng 1, **không** phải chỉ số `@entry[i]`. Nhờ vậy ACS
+đã provision `WANIPConnection.3` vẫn nói chuyện với đúng entry đó sau khi một entry khác bị xoá.
+Bản C giữ cả hai con số: `id` để đánh số instance, `idx` để gọi `ubus hni.wan set {"index": idx}`.
+
+### 18.2 Một object, hai loại entry
+
+| Loại | Điều kiện UCI | netdev | Nằm ở |
+|---|---|---|---|
+| IPoE định tuyến | `switch_mode=0` **và** `conn_type=0` | `network.if<id>` / `if<id>_6` | `WANIPConnection` |
+| Bridge | `switch_mode=1` | `network.if_wanbr<id>`, device section `dev_wanbr<id>` | `WANIPConnection` |
+| PPPoE | `switch_mode=0` **và** `conn_type=2` | — | `WANPPPConnection` (P4c) |
+
+Entry thiếu hẳn `switch_mode` bị **cả hai** bỏ qua — so sánh chuỗi, không phải so số, nên option
+không đặt thì không bằng `"0"`.
+
+### 18.3 Bốn thứ của sản phẩm giữ nguyên
+
+1. **Entry bridge trả hằng số cho nhóm leaf IP**: `SubnetMask`/`DefaultGateway` là `0.0.0.0`,
+   `NATEnabled` false, `DNSServers` rỗng, `AddressingType` rỗng. Shell không hỏi interface, và
+   template ACS đọc WAN bridge đang chờ đúng các chuỗi đó.
+2. **`ExternalIPAddress` forced-inform theo từng instance**, không phải theo leaf: entry routed
+   khi mang bit dịch vụ TR-069 (`service_type & 2`), entry bridge khi `id = 0` và
+   `clay.opermode.mode = ap` (lúc đó nó báo địa chỉ LAN chứ không phải `0.0.0.0`). Cài bằng
+   callback `get_forced_inform` của `struct dm_forced_inform_s`, đúng chỗ shell truyền tham số
+   thứ sáu của `common_execute_method_param`.
+3. **Ghi `X_AIS_VLAN8021P` lên entry bridge thất bại.** Shell truyền `$iface4` — biến mà hàm
+   bridge **không bao giờ đặt** — nên `wan_device_set_vlan_priority()` đi tìm device tên rỗng,
+   không thấy, trả internal error. Bản C trả `9002` đúng như vậy. Làm cho nó chạy được nghĩa là
+   bắt đầu ghi `ingress/egress_qos_mapping` trên một đường sản phẩm chưa từng chạy.
+4. **`MaxMTUSize` ngoài khoảng trả `9005`** ("invalid parameter name"), không phải `9007`. Đó là
+   mã lỗi shell trả. Nhìn là biết shell nhầm hằng số, nhưng ACS đã thấy `9005` nhiều năm.
+
+Ngoài ra ba setter `ExternalIPAddress`/`SubnetMask`/`DefaultGateway` vẫn **từ chối bằng `9001`**
+khi `v4_mode = 0` (DHCP), và `DNSServers` từ chối khi `v4_static_dns = 0` — giữ nguyên.
+
+### 18.4 Ba khác biệt cố ý, đều là *thêm*, không đổi giá trị nào
+
+| Khác biệt | Vì sao |
+|---|---|
+| Instance bridge có thêm `Alias`, `X_AIS_DefaultRoute`, `X_AIS_IPMode` | Cây C tĩnh có **một** bảng leaf cho mỗi object, shell thì đăng ký tập leaf khác nhau cho từng loại entry. Getter vẫn đọc đúng option UCI đó, không bịa: `Alias` của bridge là `cpe-other`, đúng thứ `wan_device_get_alias()` trả |
+| `Stats.*` là `xsd:unsignedInt` cho mọi instance | Shell truyền type **vào ô setter** (`$4`) ở nhánh routed nên chúng đi ra dưới dạng `xsd:string`, còn nhánh bridge truyền đúng ô nên là `unsignedInt`. Một leaf không thể mang hai kiểu — lấy chính tả vừa đúng TR-098 vừa đang dùng cho một nửa số instance |
+| MTU / VLAN ID / VLAN priority không phải số bị từ chối `9007` | Shell viết `[ "$v" -lt 1 ]`, với chuỗi không phải số thì `[` lỗi, `if` rơi xuống nhánh else và **ghi thẳng chuỗi đó vào UCI** |
+
+### 18.5 Hoãn có chủ ý: `X_AIS_ServiceList`
+
+Getter đơn giản (map `service_type` → `INTERNET`/`TR069`/`INTERNET_TR069`/`OTHER`), nhưng **setter
+là một máy trạng thái ~200 dòng**: bật/tắt `easycwmp.@acs[0].enablecwmp`, gọi
+`wan_device_update_internet_access` (rule firewall), `wan_device_configure_easycwmpd`, và ở chế độ
+bridge còn ép `OTHER`. Nó sửa chính cấu hình của client TR-069 đang chạy phiên đó. Không claim,
+để `sdk/mtk/compat/` giữ, tách thành bước **P4f** riêng.
+
+### 18.6 Object-level: add/delete viết sẵn nhưng đang ngủ
+
+`AddObject`/`DeleteObject` trên `WANIPConnection.` vẫn do shell xử lý, vì **đường dẫn object không
+được claim** — `path_match()` trả 0 cho một claim leaf khi path hết sớm hơn claim. Hai hàm C
+(`add_ipconn_instance`, `del_ipconn_instance`) vẫn được viết để lúc claim cả nhánh (bỏ compat) thì
+object không hụt chức năng. Ghi lại một điểm lạ để sau khỏi ngạc nhiên: **instance mà sản phẩm trả
+về sau `AddObject` là SỐ LƯỢNG entry, không phải `id + 1`** — đó là thứ shell `echo` ra và là thứ
+ACS đã nhận.
+
+### 18.7 Hai lỗi của chính tôi, đã sửa trong lượt này
+
+1. **Trùng tên bảng giữa hai file.** `wan_mtk.c` và `wanip_mtk.c` cùng đặt `tWanConnectionDeviceObj`.
+   C không báo lỗi (cả hai `static`), nhưng `verify-dm-paths.py` dùng một không gian tên chung nên
+   dựng sai cây và **im lặng làm biến mất cả nhánh `WANDSLLinkConfig`**. Đã đổi tên bên `wanip_mtk.c`
+   thành `tWanCxDevIp*`, **và** sửa script: bảng `static` chỉ nhìn thấy trong file của nó, chỉ bảng
+   không `static` (như `tIcwmpCfgParam`) mới dùng chung.
+2. **Hàng bảng trải hai dòng bị bỏ qua.** Parser khớp theo từng dòng vật lý, mà hàng
+   `{"WANIPConnection", ... tWanCxDevIpObj, tWanCxDevIpParam, NULL},` dài quá nên xuống dòng →
+   script báo cây C có 22 param thay vì 57. Đã cho parser gom dòng tới khi ngoặc cân bằng.
+
+Cả hai đều là lỗi **công cụ đo**, không phải lỗi code — nhưng cái thứ nhất che mất một nhánh thật,
+nên đáng ghi. Bằng chứng công cụ vẫn đúng sau khi sửa: chạy lại phase đã chốt cho đúng số cũ
+(P2+P3 `137/137`, thiếu 0, dôi 0).
+
+### 18.8 Kết quả kiểm tĩnh P4b
+
+| Kiểm | Kết quả |
+|---|---|
+| Đường dẫn `WANIPConnection.{i}.` | 34/34 (25 leaf + 9 `Stats`), cộng `WANIPConnectionNumberOfEntries` = **35** |
+| Phase 4 tổng | 57 đã port / 116 còn lại, **dôi 0** |
+| Thiếu ngoài nhánh đã hoãn | **không có** — mọi path còn thiếu đều thuộc `PortMapping`, `X_AIS_IPv6`, `WANPPPConnection` hoặc `X_AIS_ServiceList` |
+| Claim chồng nhau | 54 claim của 12 module, **0 cặp** |
+| Ngoặc `{} () []` | cân bằng |
+| Symbol trong bảng | đều định nghĩa trong chính file |
+| Patch `0041` | replay lên `HEAD~1` cho tree `2640fe21e4d9`, **trùng HEAD thật** |
+| Bundle | `404cd03f4d01`, `SHA256SUMS` 378 file, `apply --dry-run` PASS trên cả hai cây SDK thật |
+
+**Chưa compile, chưa link, chưa board.** Đây là bản người dùng sẽ mang đi build thử.
+
+## 19. Lần build đầu: apply chết vì API Python 3.9 (Claude Code, 24/09)
+
+Không phải lỗi biên dịch — apply dừng **trước khi ghi bất cứ file nào** trên máy build:
+
+```
+File "apply.py", line 246, in main
+    if HERE == target or HERE.is_relative_to(target) or target.is_relative_to(HERE):
+AttributeError: 'PosixPath' object has no attribute 'is_relative_to'
+```
+
+`Path.is_relative_to()` là API của **Python 3.9**. Máy workspace này chạy 3.10 nên toàn bộ test
+nội bộ (`release/tests/verify-apply.py`, 6 case PASS) không bao giờ chạm phải. Máy build SDK cũ
+hơn. Patch `0042`.
+
+### 19.1 Vì sao test không bắt được
+
+Test chạy cùng interpreter với code. Mọi API chỉ có ở bản mới sẽ **im lặng đi qua** ở đây và chỉ
+nổ ở nơi giao hàng. Đây là loại lỗi mà thêm test case không giải quyết được — phải kiểm **mặt
+bằng phiên bản**, không phải hành vi.
+
+### 19.2 Sửa
+
+`within()` thay cho `is_relative_to()`:
+
+```python
+def within(path, other):
+    try:
+        path.relative_to(other)
+        return True
+    except ValueError:
+        return False
+```
+
+Cộng một kiểm phiên bản ở đầu file để interpreter quá cũ báo một câu đọc được thay vì traceback
+giữa chừng. Quét AST cả `apply.py` xác nhận đó là **dòng duy nhất** dùng API mới hơn 3.6.
+`export.py` chỉ chạy trong workspace này nên không ràng buộc.
+
+### 19.3 Hai lớp chặn mới, đặt trong chính bộ test
+
+| Lớp | Bắt được gì |
+|---|---|
+| Quét AST `apply.py` | mọi tên chỉ có từ 3.7+: `is_relative_to`, `with_stem`, `readlink`, `removeprefix`, `removesuffix`, `root_dir`, `link_to`, `missing_ok`, `dirs_exist_ok`, `capture_output`, walrus `:=`, `match` |
+| Chạy dry-run cả hai fixture dưới interpreter **đã gỡ** method pathlib của 3.9 | chỗ nào thực sự gọi tới chúng lúc chạy, kể cả đường nhánh mà quét tĩnh bỏ sót |
+
+Kiểm ngược: đặt lại dòng cũ thì gate báo
+`apply.py uses APIs newer than Python 3.6: [(262, 'is_relative_to', '3.9')]`.
+
+### 19.4 Trạng thái sau khi sửa
+
+| Kiểm | Kết quả |
+|---|---|
+| `verify-apply.py` | 6/6 PASS, gồm cả hai lớp chặn mới |
+| Bundle `2e351f8813d7` | `SHA256SUMS` 379 file OK |
+| `apply --dry-run` hai cây SDK thật | PASS |
+| Cũng vậy dưới shim gỡ method 3.9 | PASS |
+| Vendor tree sau mọi dry-run | không đổi (1 và 9 file có sẵn) |
+| SDK build | **chưa tới bước compile** |
+
+Data model không bị đụng: `0040` và `0041` giữ nguyên.
+
+## 20. Lỗi compile đầu tiên: một dấu `*/` trong comment (Claude Code, 24/09)
+
+```
+../sdk/mtk/dm098/wlan_mtk.c:181:39: error: unknown type name 'backhaul_sync_'
+  181 |  * when mesh is running -- mlo_sync_*/backhaul_sync_* of the shell. */
+```
+
+`mlo_sync_*/` — **`*/` đóng block comment ngay tại đó**. Phần còn lại của dòng
+(`backhaul_sync_* of the shell. */`) bị trình biên dịch đọc như code, và định nghĩa
+`static void wlan_sync_option(...)` ngay dưới bị nuốt theo, nên dòng 234 báo tiếp
+`implicit declaration of function 'wlan_sync_option'`. Patch `0043`, sửa chữ trong comment,
+**không đổi một dòng code nào**.
+
+### 20.1 Đọc được gì từ log này
+
+Automake biên dịch theo thứ tự `sdk.mk`, nên dừng ở `wlan_mtk.c` nghĩa là **10 file trước nó
+compile sạch**: `dmplatform_mtk`, `dmmtk`, `root`, `deviceinfo`, `time`, `managementserver` (2),
+`lan`, `lanhosts`, `laneth`, `x_ais_mesh`. Đó là toàn bộ P1 và P2. Ba file sau `wlan_mtk.c`
+(`wlansec`, `wan`, `wanip`) **chưa được compiler xác nhận** — lần build tới mới biết.
+
+### 20.2 Cảnh báo `const` đi kèm, đã dọn luôn
+
+```
+wlan_mtk.c:530:29: warning: passing argument 2 of 'mtk_uci' discards 'const' qualifier
+```
+
+`radio_of()` trả `const char *`, `mtk_uci()` nhận `char *`. Không phải lỗi (không có `-Werror`),
+nhưng sẽ lặp lại ở mọi module sau. Sửa tại gốc: `mtk_uci`, `mtk_varstate`, `mtk_varstate_set`,
+`mtk_uci_default` nhận `const char *` và tự ép kiểu khi gọi `dmuci_*`. **Không đụng `dmuci.h`** —
+đó là API dùng chung với BDK.
+
+Trong `wanip_mtk.c` bỏ `const` ở con trỏ `struct wan_entry *` lấy từ `data`: `e->if4`/`e->dev`
+đi thẳng vào `dmuci_set_value()` nên giữ `const` chỉ sinh cảnh báo và ép phải rải `(char *)`
+khắp nơi.
+
+### 20.3 Vì sao kiểm tĩnh cũ không thấy
+
+Bộ kiểm trước đó **bỏ comment trước rồi mới đếm ngoặc** — tức là nó dùng chính quy tắc sai mà
+trình biên dịch dùng đúng, nên với nó file vẫn cân bằng. Không có compiler trên máy này thì lỗi
+loại "comment nuốt code" là điểm mù hoàn toàn.
+
+Đã viết [`check-c-sanity.py`](check-c-sanity.py), chạy máy trạng thái ký tự đúng như trình biên
+dịch và bắt bốn thứ:
+
+| Bắt | Cách |
+|---|---|
+| `*/` đóng comment sớm | đang trong block comment mà gặp `*/` có ký tự ngay trước là chữ/số/`_`/`)`/`]` → gần như chắc là wildcard kiểu `foo_*/bar`, không phải dấu đóng cố ý |
+| comment hoặc chuỗi không đóng tới hết file | trạng thái máy khi hết input |
+| ngoặc `{} () []` lệch | đếm sau khi bỏ comment/chuỗi **đúng luật** |
+| gọi hàm không định nghĩa, không khai báo ở header nào của cây | trừ libc/libubox/json-c, macro, và tham số con trỏ hàm |
+
+Chạy trên 15 file MTK: **0 vấn đề**. Chạy ngược trên bản trước khi sửa thì nó chỉ đúng dòng 181.
+
+Bản thân bộ kiểm cũng có một lỗi phải sửa khi viết: trạng thái comment `//` không có nhánh nào
+tăng con trỏ → vòng lặp vô hạn trên mọi file có `//`. Đã thêm nhánh và một `i += 1` cuối thân
+vòng để không bao giờ rơi ra mà quên tăng.
+
+### 20.4 Trạng thái
+
+| Kiểm | Kết quả |
+|---|---|
+| `check-c-sanity.py` | 15/15 file sạch |
+| `verify-dm-paths.py` | P2+P3 137/137, P4 57/57, dôi 0 |
+| claim | 54 claim, 12 module, 0 cặp chồng |
+| Bundle | `249ae7447807`, 380 file, `apply --dry-run` PASS hai cây SDK |
+| SDK build | **PARTIAL** — 10 file đầu sạch, `wlansec`/`wan`/`wanip` chưa được xác nhận |
+
+## 21. Lỗi compile thứ hai: `static get_empty` trùng khai báo của engine (Claude Code, 24/09)
+
+```
+../sdk/mtk/dm098/wlansec_mtk.c:400:12: error: static declaration of 'get_empty'
+                                      follows non-static declaration
+../dmtr098.h:485:5: note: previous declaration of 'get_empty' was here
+```
+
+`dmtr098.h` khai báo `int get_empty(...)` và `dmtr098.c:667` định nghĩa nó, đúng thân hàm mà tôi
+viết lại (`*value = ""`). Bỏ bản `static`, dùng của engine. Patch `0044`.
+
+**Đây là lần thứ hai.** `deviceinfo_mtk.c` đã dính đúng lỗi này và đã ghi vào mục 11 —
+nhưng không có gì kiểm, nên nó quay lại ở file khác. Bài học không nằm ở chỗ "nhớ kỹ hơn".
+
+### 21.1 Lần này build đi xa hơn
+
+Dừng ở `wlansec_mtk.c` nghĩa là **12/15 file MTK đã compile sạch**, gồm cả `wlan_mtk.c` và
+`wlanassoc_mtk.c` (P3a). Còn `wan_mtk.c` và `wanip_mtk.c` — P4a và P4b — chưa compiler nào nhìn qua.
+
+### 21.2 Kiểm mới: `static` đụng khai báo non-static trong header ĐƯỢC include
+
+Quét thô "tên `static` nào trùng tên hàm non-static trong bất kỳ header nào của cây" cho **10 kết
+quả**, trong đó 9 là nhiễu: `tr098/landevice.h` và `sdk/bdk/dm098/landevice_bdk.h` khai báo
+`get_wlan_enable`, `browseHostInst`, `browseWepKeyInst`… nhưng **không file MTK nào include chúng**,
+nên không có xung đột. `wlan_mtk.c` compile sạch với 5 "va chạm" loại này là bằng chứng.
+
+Cái lọc đúng là **bao đóng include**: chỉ tính header mà file thực sự kéo vào, kể cả gián tiếp
+(`dmmtk.h` → `dmtr098.h`). Lọc theo bao đóng cho **đúng 1 kết quả**, khớp compiler.
+
+Thêm luôn lớp thứ sáu: **hai file đang build cùng định nghĩa một hàm không `static`** — trùng
+symbol lúc link, thứ chỉ nổ ở bước cuối khi mọi `.o` đã xong.
+
+### 21.3 Bộ kiểm lại có lỗi của chính nó, lần thứ hai
+
+`include_closure()` dùng `strip()` để bỏ comment trước khi tìm `#include`. Nhưng `strip()` thay
+nội dung **mọi chuỗi** bằng rỗng, nên `#include "dmtr098.h"` thành `#include ""` — bao đóng luôn
+rỗng và kiểm mới im lặng trả OK. Chỉ phát hiện vì tôi chạy kiểm ngược trên bản chưa sửa và nó
+**không** báo lỗi.
+
+Sửa: chỗ tìm `#include` chỉ bỏ comment, không đụng chuỗi.
+
+> Luật rút ra cho mọi kiểm tĩnh viết sau: **mỗi lớp kiểm phải có một lần chạy ngược trên bản lỗi
+> thật**. Kiểm "trả OK" không chứng minh gì cả nếu chưa thấy nó biết kêu.
+
+### 21.4 `check-c-sanity.py` hiện bắt sáu lớp
+
+| # | Lớp | Đã bắt được lỗi thật |
+|---|---|---|
+| 1 | `*/` đóng block comment sớm | `wlan_mtk.c:181` (0043) |
+| 2 | comment / chuỗi không đóng tới hết file | — |
+| 3 | ngoặc `{} () []` lệch | — |
+| 4 | gọi hàm không định nghĩa, không khai báo | — |
+| 5 | `static` trùng khai báo non-static trong header được include | `wlansec_mtk.c:400` (0044) |
+| 6 | hai file cùng định nghĩa một hàm không `static` | — |
+
+Chạy trước mỗi lần giao:
+
+```sh
+./check-c-sanity.py && ./verify-dm-paths.py --phase 4 && ./verify-dm-paths.py --claims
+```
+
+### 21.5 Trạng thái
+
+| Kiểm | Kết quả |
+|---|---|
+| `check-c-sanity.py` | 15/15 file sạch; chạy ngược bản chưa sửa → báo đúng `get_empty` |
+| `verify-dm-paths.py` | P2+P3 137/137, P4 57/57, dôi 0 |
+| claim | 54 claim, 12 module, 0 cặp chồng |
+| Bundle | `8abe6a04018b`, 381 file, `apply --dry-run` PASS hai cây SDK |
+| SDK build | **PARTIAL** — 12/15 sạch, `wan_mtk.c` và `wanip_mtk.c` chưa xác nhận |
+
+## 22. `libtr098` build xong; gói app dừng ở automake (Claude Code, 24/09)
+
+**Mốc đáng kể: thư viện data model đã build và link sạch trên SDK thật.** Cả 15 file MTK qua
+compiler, gồm `wan_mtk.c` (P4a) và `wanip_mtk.c` (P4b) — 259 tham số C không còn lỗi cú pháp hay
+symbol nào. Build chuyển sang gói app `icwmp_tr098` và dừng ở **automake**, chưa tới compiler.
+
+```
+sdk/bdk/sdk.mk:4: error: cannot apply '+=' because 'icwmp_tr098d_SOURCES' is not
+    defined in the following conditions: ICWMP_SDK_BDK and !ICWMP_TR098
+```
+
+### 22.1 Nguyên nhân
+
+`bin/Makefile.am` của app định nghĩa `icwmp_tr098d_SOURCES/CFLAGS/LDFLAGS/LDADD` **bên trong**
+`if ICWMP_TR098`. Mỗi `sdk/<name>/sdk.mk` lại `+=` vào chúng nhưng chỉ tự bảo vệ bằng
+`if ICWMP_SDK_<X>`.
+
+automake **kiểm tĩnh trên mọi tổ hợp điều kiện**, không phải trên tổ hợp mà `configure` thực sự
+chọn. Tổ hợp `ICWMP_SDK_MTK && !ICWMP_TR098` có một phép `+=` mà không có `=` nào đứng trước →
+lỗi. Trên thực tế feed luôn truyền `--enable-icwmp_tr098`, nên tổ hợp đó không bao giờ xảy ra —
+nhưng automake không quan tâm.
+
+Sửa (patch `0045`): lồng `if ICWMP_SDK_<X>` vào trong `if ICWMP_TR098` ở cả ba fragment. **Không
+đổi thứ gì được build**: ở nhánh `!ICWMP_TR098` app dựng `icwmpd` với bbfdm và lớp glue SDK vốn
+chưa từng đóng góp gì cho nó.
+
+### 22.2 Vì sao `libtr098` không dính
+
+`bin/Makefile.am` của thư viện định nghĩa `libtr098_la_SOURCES =` **không điều kiện** ngay đầu
+file, nên `+=` trong `sdk/mtk/sdk.mk` hợp lệ ở mọi tổ hợp. Hai cây cùng một kiểu bố cục nhưng
+khác nhau đúng chỗ đó — và đó là lý do lỗi chỉ lộ ra ở gói thứ hai.
+
+### 22.3 Kiểm mới: `check-automake-conds.py`
+
+Máy này không có automake, nên phải mô phỏng đúng cái luật đó:
+
+> một `VAR +=` chỉ hợp lệ nếu tập điều kiện bao quanh nó **bao hàm** tập điều kiện mà `VAR =`
+> được định nghĩa.
+
+Script đọc `bin/Makefile.am` lấy `VAR =` cùng ngăn xếp `if/else/endif` bao quanh, rồi đọc từng
+`sdk/*/sdk.mk` lấy `VAR +=` cùng ngăn xếp của nó, và báo phần điều kiện còn thiếu. Chạy cho cả
+hai cây (app và lib).
+
+**Chạy ngược trên bản chưa sửa** (bắt buộc, theo luật ở mục 21.3): báo đúng
+`sdk.mk:4, :8, :9  icwmp_tr098d_SOURCES/CFLAGS += thiếu điều kiện ICWMP_TR098` — trùng dòng
+automake chỉ ra. Chạy trên bản đã sửa: **0 vấn đề** ở cả hai cây.
+
+### 22.4 Trạng thái
+
+| Kiểm | Kết quả |
+|---|---|
+| Gói `libtr098` trên SDK thật | **BUILD XONG** — 15/15 file compile + link |
+| Gói `icwmp_tr098` | dừng ở automake (đã sửa `0045`), chưa tới compile app |
+| `check-c-sanity.py` | 15/15 sạch |
+| `check-automake-conds.py` | 2 cây OK; chạy ngược bản lỗi báo đúng 3 dòng |
+| `verify-dm-paths.py` | P2+P3 137/137, P4 57/57, dôi 0 |
+| claim | 54 claim, 12 module, 0 cặp chồng |
+| Bundle | `4ea92258d6b1`, 382 file, `apply --dry-run` PASS hai cây SDK |
+
+---
+
+## 23. `dm_add_end_session` — cùng một lớp lỗi, lần thứ ba, lần đầu ở cây app
+
+Gói app qua được automake và tới compiler, dừng ở file đầu tiên dùng data model:
+
+```
+../icwmp_dm.c:139:13: error: conflicting types for 'dm_add_end_session'
+  139 | static void dm_add_end_session(unsigned int flags)
+.../usr/include/icwmp_dm/dmtr098.h:532:5: note: previous declaration was here
+  532 | int dm_add_end_session(struct dmctx *ctx, void(*function)(...), int action, void *data);
+```
+
+### 23.1 Hai hàm khác hẳn nhau, trùng tên
+
+| | Của ai | Làm gì |
+|---|---|---|
+| `dm_add_end_session(unsigned int flags)` | `icwmp_dm.c:139`, `static`, của app | Xếp **tên** các cờ end-session mà setter để lại vào mảng blobmsg của reply ubus |
+| `dm_add_end_session(struct dmctx *, void(*)(...), int, void *)` | `dmtr098.c:3116`, của engine | **Xếp hàng** một hành động end-session để chạy cuối phiên |
+
+`inc/cwmp.h:24-25` include `<icwmp_dm/dmentry.h>` và `<icwmp_dm/dmtr098.h>`, nên khai báo
+non-static của engine có mặt ở **mọi** file của app. `static` đi sau khai báo non-static là lỗi,
+không phải cảnh báo.
+
+Sửa (patch `0046`): đổi tên thành `dm_add_end_session_list()`, theo đúng dáng của hai helper nằm
+ngay cạnh là `dm_add_fault_list()` và `dm_add_param_list()`. App chưa bao giờ gọi hàm của engine,
+nên hành vi không đổi.
+
+### 23.2 Vì sao kiểm tĩnh không bắt được từ trước
+
+`check-c-sanity.py` đã có lớp 5 cho đúng lỗi này từ patch `0044` — nhưng nó **chỉ chạy trên cây
+`libtr098`**. Cây app có hai khác biệt mà script chưa biết:
+
+1. App include header của thư viện bằng `<icwmp_dm/dmtr098.h>` (ngoặc nhọn, có tiền tố). Trên máy
+   build đó là bản đã install vào `staging_dir`; `include_closure()` chỉ đi theo `#include "..."`
+   nên không thấy gì.
+2. `bin/Makefile.am` của app dựng **bốn** binary. `icwmp_xmppd`, `icwmp_twampd`,
+   `icwmp_udpechoserverd` mỗi cái có bản `dmuci_set_value`/`dmuci_walk_section` riêng và không
+   link với `libtr098`. Gộp chung nguồn của cả bốn thì lớp 6 báo trùng symbol nhầm — thử nghiệm
+   đầu tiên ra đúng hai ca đó.
+
+`check-c-sanity.py` nay nhận `--tree app|lib` và `--sdk mtk|bdk|uci`:
+
+- `ANGLE_PREFIX` map `icwmp_dm/` về gốc cây `libtr098`, nên `<icwmp_dm/dmtr098.h>` tra được.
+- `collect_sources()` bám theo từng khối `<var>_SOURCES = ... \` nên lọc được đúng binary
+  (`icwmp_tr098d`).
+
+### 23.3 Ba lớp phải chỉnh lại vì cây app là code upstream
+
+Chạy lần đầu trên cây app ra **5 vấn đề, cả 5 đều sai**. Mỗi cái lộ một khiếm khuyết thật của
+script, sửa tại gốc chứ không thêm ngoại lệ:
+
+| Lớp | Báo sai ở | Vì sao | Sửa |
+|---|---|---|---|
+| 1 — comment đóng sớm | `/* Only One instance should run*/` | chỉ nhìn ký tự **trước** `*/` | phải dính chữ ở **cả hai** phía, đúng dáng `foo_*/bar_*` |
+| 3 — lệch ngoặc | `config.c` 230 mở / 229 đóng | `#ifdef ICWMP_BDK` và `#else` mỗi nhánh mở một `while (...) {`, đóng một lần ở ngoài | `one_branch()` bỏ nhánh `#elif/#else` trước khi đếm, như compiler thấy |
+| 4 — gọi hàm không khai báo | 140 dòng trên file upstream | thành viên struct (`ctx->get_permission()`), con trỏ hàm tham số (`cb`), tên nối token (`dmuci_delete_by_section_unnamed_##UCI_PATH`), thiếu tên libubox/uci | bỏ qua truy cập thành viên, bỏ qua tên còn xuất hiện **không kèm `(`**, nhận tiền tố `##`, bổ sung `EXTERNAL` |
+
+Sau khi sửa: **lib 34 file 0 vấn đề, app 17 file 0 vấn đề** ở cả ba SDK.
+
+### 23.4 Chạy ngược — bắt buộc, và lần này bắt được lỗi của chính bài test
+
+Bốn bản hỏng, tái tạo đúng bốn lỗi đã từng ra tới máy build:
+
+| Test | Bản hỏng | Script báo |
+|---|---|---|
+| NEG 1 | `icwmp_dm.c` với `dm_add_end_session` cũ | `:137 static dm_add_end_session trùng khai báo non-static ở libtr098/dmtr098.h` |
+| NEG 2 | `wlan_mtk.c` với comment `mlo_sync_*/backhaul_sync_*` | `:181 comment đóng SỚM ở ` `_*/b` |
+| NEG 3 | `wlansec_mtk.c` thêm lại `static get_empty` | `:589 static get_empty trùng khai báo non-static` |
+| NEG 4 | `wlan_mtk.c` xoá định nghĩa `wlan_sync_option` | 3 dòng `gọi wlan_sync_option() mà không thấy định nghĩa` |
+
+NEG 3 lần chạy đầu ra `OK` — tưởng là script hỏng, hoá ra **file test rỗng**: `awk 'NR==FNR{next}'`
+với `/dev/null` làm file thứ nhất thì `NR==FNR` đúng cho mọi dòng của file thứ hai, nên `next` bỏ
+sạch. File chỉ còn khối `get_empty` vừa nối thêm, không còn `#include "dmtr098.h"` → include
+closure rỗng → không có gì để trùng.
+
+Bài học cộng thêm vào luật ở mục 21.3: **bản hỏng dùng để chạy ngược cũng phải được kiểm là đúng
+bản hỏng** — ở đây chỉ cần `wc -l` và `grep -c '#include "dmtr098.h"'`. Một test âm chạy trên file
+rỗng luôn luôn "đạt" theo hướng sai.
+
+### 23.5 Trạng thái
+
+| Kiểm | Kết quả |
+|---|---|
+| Gói `libtr098` trên SDK thật | **BUILD XONG** — 15/15 file compile + link |
+| Gói `icwmp_tr098` | qua automake, qua ~20 file app, dừng ở `icwmp_dm.c` (đã sửa `0046`) |
+| `check-c-sanity.py --tree lib` | 34 file, 0 vấn đề |
+| `check-c-sanity.py --tree app --sdk mtk\|bdk\|uci` | 17 file, 0 vấn đề, cả ba |
+| Chạy ngược | 4/4 bản hỏng bị bắt đúng dòng |
+| `check-automake-conds.py` | 2 cây OK |
+| `verify-dm-paths.py` | P2+P3 137/137, P4 57/57, dôi 0 |
+| Bundle | `968140592ac7`, 384 file, `apply --dry-run` PASS hai cây SDK |
+
+---
+
+## 24. `CWMP_LOG` mang sẵn dấu `;` — lỗi mà đếm ngoặc không bao giờ thấy
+
+```
+../sdk/mtk/icwmp_mtk.c:179:4: error: expected '}' before 'else'
+../sdk/mtk/icwmp_mtk.c:183:2: error: expected identifier or '(' before 'if'
+../sdk/mtk/icwmp_mtk.c:185:2: error: conflicting types for 'uci_free_context'
+../sdk/mtk/icwmp_mtk.c:186:2: error: expected identifier or '(' before 'return'
+```
+
+**Một lỗi, không phải năm.** Từ dòng 183 trở đi là parser đã rơi ra file scope sau khi hỏng ở
+179 — `uci_free_context(c);` khi đó bị đọc như một khai báo hàm ở top level, nên mới đụng khai
+báo thật trong `uci.h:84`.
+
+### 24.1 Nguyên nhân
+
+`inc/log.h:45` định nghĩa logger **kèm luôn dấu chấm phẩy**:
+
+```c
+#  define CWMP_LOG(SEV,MESSAGE,args...) puts_log(SEV,MESSAGE,##args);
+```
+
+Nên đoạn này:
+
+```c
+if (is_secret(m->cwmp))
+        CWMP_LOG(INFO, "... (masked)", m->cwmp);
+else
+        CWMP_LOG(INFO, "...=%s", m->cwmp, v);
+```
+
+khai triển thành `if (x) puts_log(...); ; else ...` — câu lệnh `if` kết thúc ở dấu `;` đầu,
+dấu `;` thứ hai là một câu lệnh rỗng, và `else` không còn `if` nào để gắn vào.
+
+Upstream icwmp chưa bao giờ viết `CWMP_LOG` làm thân của một `if` **có `else`**, nên cái bẫy này
+chưa từng lộ. Quét cả hai cây: chỉ 5 chỗ dùng `CWMP_LOG` làm thân không ngoặc, và chỉ đúng cặp
+`if/else` này là lỗi biên dịch — ba chỗ còn lại (`external.c:284`, `xml.c:2623`,
+`icwmp_mtk.c:235`) là `if` đơn, khai triển ra thêm một câu lệnh rỗng, vô hại.
+
+Sửa (patch `0047`): bọc cả hai nhánh bằng `{}`. Bọc luôn `icwmp_platform_init()` — chỗ đó biên
+dịch được ở cả hai cấu hình `WITH_CWMP_DEBUG`, nhưng là **cùng một construct**, và câu lệnh nào
+thêm vào dưới nó sau này sẽ hỏng âm thầm.
+
+### 24.2 Vì sao lớp 3 (đếm ngoặc) mù hoàn toàn
+
+Lớp 3 đếm `{}` trên văn bản nguồn — **trước khi preprocessor chạy**. Ở đây văn bản nguồn cân
+bằng tuyệt đối: lỗi chỉ xuất hiện sau khi `CWMP_LOG` nở ra thêm một dấu `;`. Cùng một hạng lỗi
+với mục 20 (comment nuốt code) ở chỗ: **bộ kiểm đang nhìn một văn bản khác với văn bản mà
+compiler nhìn.** Mỗi lần khoảng cách đó chưa được mô hình hoá là một lần lỗi lọt ra máy build.
+
+### 24.3 Lớp 7
+
+`check-c-sanity.py` thêm lớp: quét header lấy mọi macro **có tham số mà thân kết thúc bằng `;`**
+(`CWMP_LOG`, `DD`, `DMFREE`), rồi báo khi một macro như vậy làm thân **không ngoặc** của `if` mà
+ngay sau là `else`.
+
+Không báo trường hợp `if` đơn — nó biên dịch được ở cả hai cấu hình, và báo nó sẽ gây nhiễu trên
+code upstream. Lớp này bám đúng một thứ: dự đoán compiler sẽ hỏng ở đâu.
+
+**Chạy ngược (NEG 5)**: bỏ ngoặc lại trong `icwmp_mtk.c` → báo
+`:178 CWMP_LOG(...) không ngoặc làm thân if, ngay sau là else`. gcc chỉ dòng 179 (`else`), script
+chỉ dòng 178 (thân) — cùng một chỗ.
+
+Bốn bản hỏng cũ (NEG 1–4) chạy lại sau khi thêm lớp 7: vẫn bắt đúng dòng, không hồi quy. Cả năm
+bản hỏng đều được kiểm là **đúng bản hỏng** trước khi chạy (số dòng + `grep -c` cái đặc trưng),
+theo luật rút ra ở mục 23.4.
+
+### 24.4 Trạng thái
+
+| Kiểm | Kết quả |
+|---|---|
+| Gói `libtr098` | **BUILD XONG** — 15/15 file compile + link |
+| Gói `icwmp_tr098` | qua automake, qua `icwmp_dm.c`, dừng ở `sdk/mtk/icwmp_mtk.c` (đã sửa `0047`) |
+| `check-c-sanity.py` (7 lớp) | lib 34 file 0 vấn đề · app 17 file 0 vấn đề × 3 SDK |
+| Chạy ngược | 5/5 bản hỏng bị bắt đúng dòng |
+| `check-automake-conds.py` | 2 cây OK |
+| `verify-dm-paths.py` | P2+P3 137/137, P4 57/57, dôi 0 |
+| Bundle | `e2a7f19e05e3`, 385 file, `apply --dry-run` PASS hai cây SDK |
+
+---
+
+## 25. `libz.so.1` — compile và link đã xong, chặn ở bước đóng gói
+
+```
+Package icwmp_tr098 is missing dependencies for the following libraries:
+libz.so.1
+```
+
+**Mốc: toàn bộ gói app đã compile và link sạch.** Binary đã được dựng, đã `install` vào cây
+ipkg; thứ duy nhất còn thiếu là **metadata của gói**, không phải code.
+
+### 25.1 Nguyên nhân
+
+`bin/Makefile.am:131` đưa `$(LIBZ_LIBS)` (= `-lz`, `configure.ac:86`) vào `icwmp_tr098d_LDADD`,
+cho `zlib.c` (nén SOAP). `zlib.c` nằm trong `icwmp_tr098d_SOURCES` không điều kiện.
+
+Gói `cwmpclient` cũ mà bản này thay **chưa bao giờ link zlib** —
+`DEPENDS:=+libubus +libuci +libubox +libmicroxml +libjson-c +libcurl +curl`. Nên đây là
+**dependency mới do iCWMP mang vào**, không phải cái tôi làm rơi mất khi port.
+
+Sửa (patch `0048`): thêm `+zlib` vào DEPENDS của `feeds/icwmp_tr098/Makefile`. Tên gói trong SDK
+này là `zlib` (`package/libs/zlib/Makefile`), đúng quy ước feed đang dùng — `stunnel` cũng viết
+`+zlib`.
+
+### 25.2 Hai mục nữa, và lý do xử lý khác nhau
+
+| `-l` | Gói | Có trong ELF? | Quyết định |
+|---|---|---|---|
+| `-lubox` | `libubox` | **có** — binary NEED `libubox.so` | **thêm `+libubox`**. Nó vẫn được cài nhờ `+libblobmsg-json` (cùng source package) nên `ipkg-build` không kêu, nhưng phụ thuộc gián tiếp là may mắn, không phải thiết kế. `libtr098` đã khai báo tường minh. |
+| `-lcrypto`, `-lssl` | `libopenssl` | **không** | **không thêm**. Có trên dòng link nhưng không file nào ở đây gọi OpenSSL (curl gọi), nên `--as-needed` bỏ. Thêm `+libopenssl` là kéo openssl vào image vô cớ. |
+
+`ipkg-build` chỉ báo `libz.so.1` — nó đọc **NEEDED thật của ELF**, nên đó là bằng chứng rằng
+`libubox` đã được thoả gián tiếp còn openssl thì không cần.
+
+### 25.3 Kiểm mới: `check-pkg-deps.py`
+
+Lớp lỗi này khác hẳn 20–24: không phải cú pháp C, mà là **metadata gói lệch với dòng link**. Mất
+trọn một vòng build mới lộ, vì nó nằm sau compile và link.
+
+Script so `<target>_LDADD` với `DEPENDS`, và **tra tên gói từ chính cây SDK** thay vì bảng đoán
+sẵn: tìm Makefile nào install `lib<x>.so`, ưu tiên khối `define Package/<tên>/install` chứa nó.
+
+Một khiếm khuyết lộ ngay khi chạy: `-lpthread` bị map thành `toolchain` (rơi về `PKG_NAME`) vì
+`package/libs/toolchain/Makefile:559` viết `define` **có thụt lề**, regex neo `^define` không
+khớp. Sửa regex → `libpthread`, và mục này biến mất khỏi danh sách vì DEPENDS đã có nó.
+
+Script **không thay `ipkg-build`** và nói rõ điều đó: `--as-needed` khiến một `-l` vắng trong
+DEPENDS chưa chắc đã hỏng. Vì vậy mặc định là **cảnh báo, thoát 0**; `--strict` mới thoát 1.
+
+**Chạy ngược (NEG 6)**: đọc DEPENDS từ bản `HEAD` chưa sửa → báo đúng
+`-lz -> cần +zlib (package/libs/zlib/Makefile)`, thoát 1 với `--strict`. Bản hỏng được kiểm là
+đúng bản hỏng trước khi chạy (`grep -c 'DEPENDS.*zlib'` = 0).
+
+### 25.4 Trạng thái
+
+| Kiểm | Kết quả |
+|---|---|
+| Gói `libtr098` | **BUILD XONG** |
+| Gói `icwmp_tr098` | **compile + link XONG**, chặn ở `ipkg-build` (đã sửa `0048`) |
+| `check-c-sanity.py` (7 lớp) | lib 34 file 0 vấn đề · app 17 file 0 vấn đề × 3 SDK |
+| `check-pkg-deps.py` | còn `-lcrypto`/`-lssl` (cố ý), chạy ngược báo đúng `+zlib` |
+| `check-automake-conds.py` | 2 cây OK |
+| `verify-dm-paths.py` | P2+P3 137/137, P4 57/57, dôi 0 |
+| Bundle | `e9ac9a691e1f`, 386 file, `apply --dry-run` PASS hai cây SDK |
+
+---
+
+## 26. Cùng một lỗi lần thứ hai, với cây nguồn đã đúng — `src-cpy`
+
+Người dùng apply bản `e9ac9a691e1f` (đã có `+zlib`) rồi build lại, và nhận **đúng** thông báo cũ:
+
+```
+Package icwmp_tr098 is missing dependencies for the following libraries:
+libz.so.1
+make[2]: Leaving directory '.../feeds/airoha/package/airoha/apps/icwmp_tr098'
+```
+
+Patch `0048` không sai. Nó chưa bao giờ tới được build.
+
+### 26.1 Hai đường, chỉ một được cập nhật
+
+`feeds.conf.default` khai báo feed airoha bằng **`src-cpy`** — feed được **copy**, không symlink:
+
+| Thứ | Đường | Ai ghi | Build đọc ở đâu |
+|---|---|---|---|
+| Nguồn C | `tclinux_phoenix/apps/hni/icwmp_tr098/` | `apply` | `Build/Prepare` → `$(CP) $(PKG_SOURCE)/. $(PKG_BUILD_DIR)`, tức **đọc thẳng** |
+| Makefile của gói | `airoha_feeds/package/airoha/apps/icwmp_tr098/Makefile` | `apply` | **không** — build đọc bản copy ở `feeds/airoha/package/airoha/apps/icwmp_tr098/Makefile` |
+
+Vì `PKG_SOURCE` là **đường tuyệt đối ngoài feed** (`apply.py:145` ghi Makefile, `:143` copy
+nguồn), mọi patch sửa `.c` đều vào ngay — đó là lý do `0043`–`0047` đều có hiệu lực và không ai
+nghi ngờ gì. Chỉ `0048` sửa **Makefile của feed**, và đúng thứ đó thì bị bản copy che mất.
+
+Dòng `Leaving directory '.../feeds/airoha/...'` trong log đã nói rõ build đang ở cây copy.
+
+### 26.2 Vì sao lỗi này là của tôi, không phải của người dùng
+
+`build-commands.md` mục **1.3** đã ghi đúng từ trước, kể cả câu:
+
+> `./apply` sửa đúng hai file Makefile này, nên **lần chạy đầu sau khi apply phải làm bước trên**.
+
+Nhưng hai lượt trả lời gần nhất tôi đưa chuỗi lệnh rút gọn `./apply … && make
+package/icwmp_tr098/{clean,compile}` và **bỏ mất bước đó**. Người dùng làm theo tin nhắn, không
+theo tài liệu — đúng như mọi người vẫn làm.
+
+`apply` cũng im lặng về nó. Lệnh build đầy đủ mà `apply` in ra thì **không** dính, vì
+`airoha_script/airoha-compile.sh:113` gọi `airoha-feeds-prepare.sh`, và file đó chạy
+`./scripts/feeds update airoha` (`:33-35`). Chỉ vòng lặp nhanh từng gói là thiếu.
+
+### 26.3 Sửa
+
+Patch `0049`: `apply` in thêm, ngay dưới danh sách lệnh build, chỉ cho SDK mtk:
+
+```
+Building one package instead of the whole image?  Refresh the
+feed first -- apply rewrote two feed Makefiles and the airoha feed
+is src-cpy, a copy:
+cd openwrt-21.02/openwrt-21.02.1_dev
+./scripts/feeds update airoha
+./scripts/feeds install -p airoha -f libtr098 icwmp_tr098
+make package/icwmp_tr098/{clean,compile} V=sc -j1
+```
+
+Hướng dẫn nằm **cạnh đúng những lệnh người ta copy**, chứ không chỉ trong một mục của tài liệu.
+`release/tests/verify-apply.py`: 6/6 PASS, gồm cả quét nguồn Python 3.6 và chạy apply dưới shim
+3.6.
+
+Không cần sửa nguồn gì thêm: `0048` đã đúng và đã nằm trên cây của người dùng.
+
+### 26.4 Bài học
+
+Ba lượt trước tôi dựng ba bộ kiểm tĩnh cho ba lớp lỗi. Lỗi này **không lớp nào bắt được**, vì cây
+nguồn hoàn toàn đúng — sai ở **quy trình giao hàng**, giữa "đã ghi vào đĩa" và "build thật sự
+đọc".
+
+Quy tắc rút ra: **lệnh build in cho người dùng phải là lệnh chạy được từ trạng thái sau `apply`,
+không phải lệnh rút gọn cho ngắn.** Mỗi lần tôi tóm tắt lại một quy trình đã được viết đủ là một
+lần có thể đánh rơi một bước, và người đọc không có cách nào biết.
+
+### 26.5 Trạng thái
+
+| Kiểm | Kết quả |
+|---|---|
+| Gói `libtr098` | **BUILD XONG** |
+| Gói `icwmp_tr098` | **compile + link XONG**, chờ `feeds update` để `+zlib` có hiệu lực |
+| `verify-apply.py` | 6/6 PASS |
+| `check-c-sanity.py` (7 lớp) | lib 34 file 0 vấn đề · app 17 file 0 vấn đề × 3 SDK |
+| `check-pkg-deps.py` | chỉ còn `-lcrypto`/`-lssl` (cố ý) |
+| `check-automake-conds.py` | 2 cây OK |
+| `verify-dm-paths.py` | P2+P3 137/137, P4 57/57, dôi 0 |
+| Bundle | `5d7cf30b602b`, 387 file, `apply --dry-run` PASS hai cây SDK |
+
+---
+
+## 27. `cp -fpR /.` — `PKG_SOURCE` rỗng, build dir phình 17 GB
+
+```
+Build/Prepare
+mkdir -p .../build_dir/.../icwmp_tr098
+cp -fpR /. .../build_dir/.../icwmp_tr098
+cp: cannot copy a directory, '/.', into itself
+```
+
+`$(PKG_SOURCE)/.` ra `/.` nghĩa là **`PKG_SOURCE` rỗng**. `$(CP)` của OpenWrt là `cp -fpR`, nên
+mỗi lần `Build/Prepare` chạy là một lần copy **toàn bộ filesystem gốc** vào build dir. Lúc phát
+hiện, thư mục đã **17 GB** và chứa `boot/`, `home/`. Lần này `cp` mới dừng vì nó nhận ra đang
+copy chính đích vào đích.
+
+### 27.1 Vì sao biến rỗng
+
+`PKG_SOURCE:=$(APP_HNI_ICWMP_TR098_DIR)`, và biến đó được export ở
+`feeds/airoha/target/linux/airoha/dir.mak:894`. File `dir.mak` **chỉ được include từ Makefile của
+TARGET** (`feeds/airoha/target/linux/airoha/Makefile:21`):
+
+| Kiểu build | Có include target Makefile? | `APP_HNI_ICWMP_TR098_DIR` |
+|---|---|---|
+| Ảnh đầy đủ (`make -j16`) | có | đúng đường dẫn |
+| Gói lẻ (`make package/icwmp_tr098/compile`) | **không** | **rỗng** |
+
+Đây là lý do `libtr098` chưa bao giờ dính: nó dùng `$(TRUNK_DIR)/apps/hni/libicwmp_dm`, y như gói
+`cwmpclient` gốc của vendor.
+
+Dòng `PKG_SOURCE:=$(APP_HNI_ICWMP_TR098_DIR)` có từ bản baseline trước bundle này — bản
+`.icwmp-backups/.../original/` trên cây người dùng cũng có, với `$(CP) $(PKG_SOURCE)/*`. Tức lỗi
+đã nằm đó từ đầu, chỉ chưa lộ vì build gói lẻ luôn chạy với bản feed copy cũ (mục 26).
+
+### 27.2 Biến thứ hai: `TRUNK_DIR` cũng không tự có
+
+Đổi sang `$(TRUNK_DIR)` chưa đủ. `TRUNK_DIR` được ghi vào `include/ecnt-trunkdir.mk` bởi
+`airoha_script/airoha-compile.sh`, nhưng **không file nào trong cây OpenWrt include file đó** —
+`rules.mk`, `toplevel.mk`, `package.mk`, `target.mk`, `kernel.mk` đều không nhắc tới. Nó chỉ có
+mặt khi shell gọi build đã export sẵn, tức ngay sau `airoha-compile.sh` chứ không phải trong một
+terminal mới.
+
+Nên cả hai feed Makefile nay tự kéo vào:
+
+```make
+-include $(TOPDIR)/include/ecnt-trunkdir.mk
+```
+
+`-include` để cây không có file đó vẫn parse được.
+
+### 27.3 Lá chắn
+
+Một đường dẫn sai không được phép tốn 17 GB. Cả hai `Build/Prepare` nay từ chối chạy khi
+`PKG_SOURCE` rỗng hoặc không phải thư mục:
+
+```make
+@test -n "$(strip $(PKG_SOURCE))" -a -d "$(PKG_SOURCE)" || { \
+        echo "ERROR: PKG_SOURCE is empty or not a directory: '$(PKG_SOURCE)'"; \
+        echo "Without this guard the next line copies all of / into $(PKG_BUILD_DIR)."; \
+        exit 1; }
+```
+
+### 27.4 Kiểm mới trong `check-pkg-deps.py`
+
+Thêm lớp: biến mà feed Makefile **thay vào một câu lệnh** không được là biến chỉ do
+`target/linux/**/*.mak` định nghĩa.
+
+Hai tinh chỉnh phải làm ngay khi chạy thử, vì cả hai đều là khiếm khuyết thật:
+
+- **Bỏ comment trước khi quét.** Chính comment tôi viết để giải thích lỗi có nhắc
+  `$(APP_HNI_ICWMP_TR098_DIR)`, nên bản đã sửa vẫn bị báo.
+- **Biến chỉ nằm trong `ifeq`/`ifdef` là cờ tính năng, không phải giá trị.**
+  `ifeq ($(TCSUPPORT_VOIP),y)` không định nghĩa nghĩa là nhánh tắt — đúng như mong đợi. Chỉ biến
+  được thay vào câu lệnh mới nguy hiểm.
+
+**Chạy ngược (NEG 7)**: đọc Makefile bản `HEAD` chưa sửa → báo đúng
+`BIẾN $(APP_HNI_ICWMP_TR098_DIR): chỉ định nghĩa trong target/linux/** -- build gói lẻ không
+include, sẽ RỖNG`.
+
+### 27.5 Đã làm trực tiếp trên cây build của người dùng
+
+Người dùng cho phép thao tác trên `1_src/2025q3` để rút ngắn vòng lặp:
+
+| Việc | Kết quả |
+|---|---|
+| Xóa build dir 17 GB | `build_dir/.../linux-airoha_an7583/icwmp_tr098` — đã sạch, `/home` còn trống 26 GB |
+| Apply bundle `a01a585a0fb5` | 2 Makefile feed + `.icwmp-release.json`, backup `20260924-162110-p7d9ygy3` |
+| Đồng bộ feed copy | copy thẳng hai Makefile sang `feeds/airoha/package/airoha/apps/` (đúng việc `feeds install` làm với `src-cpy`) |
+| Xác minh | `PKG_SOURCE` → `/home/nvtu/workspace/openwrt/1_src/2025q3/tclinux_phoenix/apps/hni/icwmp_tr098`, thư mục **có thật**, chứa nguồn app |
+
+`./scripts/feeds update` không chạy được từ phiên này (`Unsupported version of make found`) và
+**build cũng không**: host này không có `make` lẫn `gcc` trong PATH. Nên bước compile vẫn do người
+dùng chạy — không có kết quả build nào được khẳng định ở đây.
+
+### 27.6 Trạng thái
+
+| Kiểm | Kết quả |
+|---|---|
+| Gói `libtr098` | BUILD XONG (lần build trước) |
+| Gói `icwmp_tr098` | compile + link đã xong trước đó; nay sửa `Build/Prepare`, **chưa build lại** |
+| `check-pkg-deps.py` | chỉ còn `-lcrypto`/`-lssl` (cố ý); chạy ngược NEG 7 đạt |
+| `check-c-sanity.py` (7 lớp) | lib 34 file 0 vấn đề · app 17 file 0 vấn đề × 3 SDK |
+| `check-automake-conds.py` | 2 cây OK |
+| `verify-dm-paths.py` | P2+P3 137/137, P4 57/57, dôi 0 |
+| Bundle | `a01a585a0fb5`, 389 file, đã apply lên cây người dùng |
+
+---
+
+## 28. Cổng build ĐẠT — hai `.ipk` đã ra
+
+Ngày 2026-09-24, trên `1_src/2025q3`:
+
+| Gói | File | Kích thước | Giờ |
+|---|---|---|---|
+| `libtr098` | `libtr098_3_aarch64_cortex-a53.ipk` | 117.605 B | 17:35 |
+| `icwmp_tr098` | `icwmp_tr098_3-2_aarch64_cortex-a53.ipk` | 202.786 B | 17:41 |
+
+### 28.1 Kiểm nội dung gói
+
+`libtr098`: `/usr/lib/libtr098.so.3.0.0` + `/usr/share/icwmp/icwmp_dm.sh` (cầu shell compat).
+
+`icwmp_tr098`: 85 file. Binary `/usr/sbin/icwmp_tr098d` **214.488 B**, init `icwmpd` và
+`easycwmpd`, `/etc/config/cwmp` + `/etc/config/easycwmp`, thư viện hàm easycwmp dưới
+`/usr/share/easycwmp/functions/`.
+
+`Depends:` của gói xác nhận hai patch cuối đã có tác dụng thật:
+
+```
+Depends: libc, libubus20210630, libuci20130104, libubox20210516, libcurl,
+         libmicroxml, libjson-c5, libblobmsg-json20210516, libpthread,
+         zlib, libtr098
+Conflicts: cwmpclient
+```
+
+`zlib` và `libubox` có mặt (patch `0048`), `Conflicts: cwmpclient` giữ đúng ý thay thế client cũ.
+
+### 28.2 Chuỗi lỗi đã đi qua
+
+| Patch | Chặn ở | Lớp lỗi |
+|---|---|---|
+| `0043` | compile `libtr098` | comment nuốt code |
+| `0044` | compile `libtr098` | `static` trùng khai báo engine |
+| `0045` | automake gói app | `+=` ngoài điều kiện của `=` |
+| `0046` | compile app | `static` trùng khai báo engine (cây app) |
+| `0047` | compile app | macro mang sẵn `;` làm `else` mồ côi |
+| `0048` | `ipkg-build` | DEPENDS thiếu `+zlib` |
+| `0049` | — | apply không nói bước `feeds update` (mất một vòng build) |
+| `0050`+`0051` | `Build/Prepare` | `PKG_SOURCE` rỗng → `cp -fpR /.` |
+
+Sáu lỗi biên dịch/đóng gói, hai lỗi quy trình. Ba bộ kiểm tĩnh bắt trước được `0043`, `0044`,
+`0045`, `0046`, `0047`, `0048`, `0050`; hai lỗi quy trình (`0049`) thì không lớp nào bắt được vì
+cây nguồn luôn đúng.
+
+### 28.3 Còn lại
+
+Cổng build xong không có nghĩa là chạy được. Tiếp theo là **gate board 1**: cài `.ipk` lên
+HP2236B, `icwmpd` lên được và `tr069 dm` đọc ra tham số. Rồi gate 2 (so giá trị với client cũ,
+phiên ACS) và gate 3 (Connection Request / Download / Upload / reboot / factory reset).
+
+---
+
+## 29. P4c — `WANPPPConnection.{i}`, 42 tham số
+
+Nguồn: `sub_entry_wandevice_wanconnectiondevice_ppp()` (dòng 323 của
+`functions/tr098/wan_device`), `wan_device_browse_instances_wancxdev_ppp()` (dòng 533) và nửa PPP
+của `wan_device_get_total_entry()`.
+
+Data model C: **259 → 301 / 783 tham số (38,4%)**.
+
+### 29.1 Vì sao thêm vào `wanip_mtk.c` chứ không tạo file mới
+
+Quy ước của bản port là một file một nhánh object. Ở đây phá lệ, có lý do:
+
+- Shell phục vụ **cả hai** object bằng một cặp hàm, chỉ khác tham số
+  `$targe_conn_type` (0 cho IPoE, 2 cho PPPoE).
+- Entry PPP gọi **đúng những `wan_device_get_*` mà entry IP gọi** cho 30 trên 42 leaf.
+
+Tách file thì phải hoặc export 30 helper ra header kèm tiền tố (đổi tên 30 hàm trong một file
+vừa build sạch trên SDK thật), hoặc nhân bản chúng và để hai bản trôi khỏi nhau. Cả hai đều tệ
+hơn việc để chung. File thành 1755 dòng.
+
+### 29.2 Instance — giống P4b, chỉ khác bộ lọc
+
+`wan_entries()` thành `wan_entries_kind(out, max, kind)`:
+
+| kind | Lọc | Object |
+|---|---|---|
+| `WAN_KIND_IP` | `switch_mode==1`, hoặc `switch_mode==0 && conn_type==0` | `WANIPConnection` |
+| `WAN_KIND_PPP` | `switch_mode==0 && conn_type==2` | `WANPPPConnection` |
+
+Instance vẫn là `id + 1`, vẫn dừng ở section đầu tiên không có `id`. **Mỗi entry thuộc đúng một
+trong hai object**, nên `WANIPConnection.2` và `WANPPPConnection.2` là hai entry khác nhau — đúng
+như sản phẩm vẫn báo.
+
+### 29.3 12 leaf không dùng chung
+
+| Leaf | Nguồn |
+|---|---|
+| `TransportType` | hằng `PPPoE` |
+| `PossibleConnectionTypes`, `ConnectionType` (get) | hằng `IP_Routed` — **khác** object IP (`IP_Routed,IP_Bridged`) |
+| `Username` | `wan.@entry[i].ppp_username`, set ghi thêm `network.if<id>.username` |
+| `Password` | xem 29.4 |
+| `RemoteIPAddress` | ubus `network.interface.if<id> status` → `$["ipv4-address"][0].ptpaddress` |
+| `MaxMRUSize` | `network.if<id>.mtu`, mặc định `1492` khi chưa đặt |
+| `CurrentMRUSize` | `/sys/class/net/<l3_device>/mtu` |
+| `MaxMTUSize` | xem 29.5 |
+| `Reset` | xem 29.4 |
+| `Stats.*` | **`l3_device`** từ ubus, không phải `network.if<id>.device` |
+
+`Stats` là chỗ dễ bỏ sót nhất: `wan_device_get_eth_stats()` có **ba** nhánh, và nhánh PPP đọc
+netdev mà ppp daemon tạo ra, không phải ethernet bên dưới. `stat_of()` nay phân ba nhánh theo
+`e->ppp` / `e->bridge`.
+
+Quyền cũng không giống object IP: `DefaultGateway` và `RemoteIPAddress` **chỉ đọc**, còn
+`ExternalIPAddress` và `DNSEnabled` nhận setter `"true"` của shell — chấp nhận lệnh ghi rồi không
+làm gì.
+
+### 29.4 Hai khác biệt cố ý
+
+**`Password` đọc ra rỗng.** Shell trả về `uci get wan.@entry[i].ppp_password`, tức giao mật khẩu
+PPP cho bất cứ ai hỏi. TR-098 quy định tham số này đọc ra chuỗi rỗng, và ACS không bao giờ cần
+đọc lại giá trị nó vừa ghi. Ghi vẫn nguyên vẹn.
+
+**`Reset` xếp hàng thay vì chạy ngay.** Shell chạy `ifdown; sleep 1; ifup` **inline**. Trên đúng
+WAN đang mang phiên CWMP, nó cắt kết nối **trước khi** response kịp gửi — ACS thấy timeout chứ
+không thấy `SetParameterValuesResponse`. Ở đây lệnh vào danh sách apply-service, chạy sau khi
+phiên kết thúc, cùng chỗ với mọi thay đổi khác của object này.
+
+Cả hai đều là thay đổi hành vi. Nếu muốn giống sản phẩm tuyệt đối thì nói, sửa lại mất hai dòng.
+
+### 29.5 Một bug được chép lại nguyên
+
+`MaxMTUSize` của nhánh PPP gọi `wan_device_get_mtu $iface` và `wan_device_set_br_mtu $device`
+trong một hàm **không hề đặt** hai biến đó (locals chỉ có `iface4`, `iface6`, `ifaceName`...).
+Hệ quả thật trên sản phẩm:
+
+- getter đọc `uci get network..device` → rỗng → `cat /sys/class/net//mtu` → **trả rỗng**,
+- setter kiểm tra range rồi `uci set network..mtu=...` → path không hợp lệ → **báo thành công,
+  không đổi gì**.
+
+Chép lại y nguyên, cùng lý do đã ghi cho `X_AIS_VLAN8021P` của entry bridge ở mục 18: làm cho nó
+chạy tức là bắt đầu đổi MTU của một link PPP mà sản phẩm chưa từng đụng tới.
+
+### 29.6 Kiểm
+
+| Kiểm | Kết quả |
+|---|---|
+| `verify-dm-paths.py --phase 4` | 99/173 param, **dôi 0**; dưới `WANPPPConnection.{i}` không còn thiếu gì ngoài P4d/P4e/P4f |
+| `verify-dm-paths.py --phase 2/3` | thiếu 0 |
+| `--claims` | 88 claim, 12 module, **0 cặp chồng** |
+| `check-c-sanity.py` | lib 34 file 0 vấn đề, app 17 file 0 vấn đề |
+| `check-automake-conds.py` | 0 vấn đề |
+| `check-pkg-deps.py` | không có biến nào sai phạm vi |
+| Bundle | `a9dd185b8c7f`, 390 file, `apply --dry-run` PASS hai cây SDK |
+
+**CHƯA BUILD-TEST**: host này không có compiler. Gói đã build sạch ở vòng trước nên rủi ro thấp,
+nhưng vẫn phải build lại.
+
+---
+
+## 30. P4d — `X_AIS_IPv6` của cả hai object WAN, 46 tham số
+
+Nguồn: `wan_device_v6_*` cho nhánh `X_AIS_IPv6.`, `wan_device_{get,set}_x_ais_ipv6_*` cho các
+leaf phẳng, cộng `json_get_gw()` và `is_ipv6_public()` của `functions/common/common`.
+
+Data model C: **301 → 347 / 783 (44,3%)**.
+
+### 30.1 File mới, và một header dùng chung
+
+Lần này **tách file** (`wanipv6_mtk.c`, 1025 dòng): 46 tham số này không dùng chung getter nào
+với các leaf IPv4 — chúng đọc `wan.@entry[i].v6_*` và `ubus network.interface.if<id>_6`.
+
+Thứ duy nhất dùng chung là **mô hình entry**. Nên `struct wan_entry` cùng phép duyệt chuyển sang
+`wanconn_mtk.h`, và `wanip_mtk.c` export 8 helper. Bốn cái tên quá chung được đổi ra khỏi vùng
+dễ đụng độ:
+
+| Cũ (static) | Mới (export) |
+|---|---|
+| `sect_opt` | `wan_sect_opt` |
+| `entry_opt` | `wan_entry_opt` |
+| `str_is_uint` | `wan_str_is_uint` |
+| `iface_status` | `wan_iface_status` |
+
+Bốn cái còn lại đã có tiền tố `wan_` nên giữ nguyên tên, chỉ bỏ `static`. P4e và P4f sẽ dùng
+đúng header này — đó là lý do bỏ công tách bây giờ thay vì để `wanip_mtk.c` phình tới 3000 dòng.
+
+Sau refactor: `check-c-sanity` 34 file 0 vấn đề, `verify-dm-paths` phase 4 vẫn 99/0 — không hồi quy.
+
+### 30.2 Hai hình dạng, và chúng KHÔNG cùng một tập
+
+| | `X_AIS_IPv6.` (nhánh) | `X_AIS_IPv6<Name>` (phẳng) |
+|---|---|---|
+| `WANIPConnection` | 13 leaf | **12** leaf, status tên `X_AIS_IPv6ConnStatus` |
+| `WANPPPConnection` | 13 leaf, **giống hệt** | **8** leaf, status tên `X_AIS_IPv6ConnectionStatus` |
+
+Object PPP **không có** `GatewayType`, `GatewayAddress`, `DNSType`, `PrefixDelegationType`,
+`GUAFromPrefixEnable`. Giữ nguyên bất đối xứng đó: một template ACS viết cho object này không
+được đột nhiên thấy tham số mới ở object kia.
+
+Nhánh giống hệt nhau nên **một cặp bảng phục vụ cả hai**, `dm_registry` merge theo tên object.
+
+### 30.3 Chỗ trùng tên nhưng không phải alias
+
+| Cặp | Khác nhau ở đâu |
+|---|---|
+| `X_AIS_IPv6.AddressingType` vs `X_AIS_IPv6AddressingType` | leaf nhánh đọc `v6_mode` một mình; leaf phẳng đọc `v6_active` trước và trả `"None"` khi IPv6 tắt |
+| `X_AIS_IPv6AutoModeEnable` | `true` → DHCP (1), `false` → Static (2). **Không bao giờ** đưa entry về SLAAC được — chỉ `AddressingType` làm được |
+| `X_AIS_IPv6.DefaultGateway` vs `X_AIS_IPv6GatewayAddress` | leaf nhánh lấy nexthop của route `::` (và đọc nhánh `inactive` khi `defaultroute=0`); leaf phẳng lấy thẳng `route[0].nexthop`. Setter leaf nhánh chặn nếu không Static, leaf phẳng **không chặn gì** |
+
+### 30.4 Guard rail giữ nguyên từng cái
+
+Đây là phần ACS sẽ đụng thật:
+
+| Leaf | Điều kiện | Fault |
+|---|---|---|
+| `IPAddress`, `PrefixLength`, `DefaultGateway`, `ExternalAddress` | phải đang Static | `9001` |
+| `Pd.Enable`, `X_AIS_IPv6PdEnable` | **không** được Static | `9001` |
+| `DNSServers` | `v6_static_dns` phải khác `0` | `9001` |
+| `ManualDNS` | không tắt được khi đang Static | `9007` |
+| `PrefixLength` | `> 128` | `9005` (đúng mã shell trả) |
+
+### 30.5 Hai chi tiết triển khai
+
+**`/proc/net/if_inet6` thay cho `ip -6 addr show`.** `wan_device_v6_get_ipaddr()` có đường lùi:
+khi ubus không báo `ipv6-address`, shell chạy `ip -6 addr show dev <l3_device> | ... | head -1`.
+Ở đây đọc `/proc/net/if_inet6` (32 hex + ifindex + prefixlen hex + scope + flags + tên dev) rồi
+`inet_ntop()` về đúng dạng rút gọn mà `ip` in ra — cùng nguồn dữ liệu, không phải fork process.
+
+**`X_AIS_IPv6DNSServers1/2` không theo entry.** Chúng đọc và ghi danh sách cách nhau bằng dấu
+cách `dhcp.lan.dns` — DNS mà LAN phát ra. Mọi instance của mọi object đều thấy cùng một cặp, và
+ghi một cái vẫn giữ các phần tử khác của danh sách. Đó là hành vi sản phẩm, và là lý do hai leaf
+này không nằm trong nhánh `X_AIS_IPv6.`.
+
+### 30.6 Một khác biệt cố ý
+
+`X_AIS_IPv6ConnStatus` **ghi được** trong sản phẩm: kiểm enum rồi `ifup`/`ifdown`. Shell chạy
+inline — cùng lỗi với `WANPPPConnection.Reset` ở mục 29.4: cắt phiên đang trả lời. Ở đây xếp vào
+apply-service, chạy sau khi phiên kết thúc.
+
+### 30.7 Kiểm
+
+| Kiểm | Kết quả |
+|---|---|
+| `verify-dm-paths --phase 4` | **145/173**, dôi **0**; 28 còn lại đúng bằng PortMapping 26 + X_AIS_ServiceList 2 |
+| `--phase 2/3` | thiếu 0 |
+| `--claims` | **111 claim**, 13 module, **0 cặp chồng** |
+| `check-c-sanity.py` | lib **35** file 0 vấn đề, app 17 file 0 vấn đề |
+| `check-automake-conds.py` | 0 vấn đề |
+| Bundle | `c1c470a0651e`, 393 file, `apply --dry-run` PASS hai cây SDK |
+
+**CHƯA BUILD-TEST.**
+
+---
+
+## 31. P4e — `PortMapping` dưới cả hai object WAN, 26 tham số
+
+Nguồn: `sub_entry_port_mapping_wanconnectiondevice()`, `port_mapping_browse_instances()`,
+`wan_device_get_port_mapping_number()`, `port_mapping_add_entry()`,
+`port_mapping_delete_entry()` và 12 cặp `port_mapping_{get,set}_*`.
+
+Data model C: **347 → 373 / 783 (47,6%)**. Phase 4 còn **2** — chỉ `X_AIS_ServiceList`.
+
+### 31.1 Rule nằm ở một chỗ, chia theo `interface`
+
+Rule là section `config port_forwarding` của gói UCI **`firewall_clay`**, dùng chung cho mọi
+WAN connection. Thứ chia chúng về từng instance là option `interface`, và tên đem so **không
+phải netdev**:
+
+| Loại entry | Tên đem so | Nguồn |
+|---|---|---|
+| Routed IPoE | `pon` hoặc `pon.<vlan_id>` | `get_ipoe_interface_name()`: `vlan_active==1` và có `vlan_id` thì mới có hậu tố |
+| PPPoE | `pppoe-if<id>` | `"$protocol-$iface4"` |
+| Bridged | *(không có)* | nhánh bridge chưa bao giờ đăng ký `PortMapping` |
+
+### 31.2 Instance là VỊ TRÍ, và nó không ổn định
+
+Số instance = **thứ tự trong danh sách rule khớp**, đếm từ 1, theo thứ tự file UCI. Không phải
+chỉ số section. **Xoá rule 2 trong 3 rule thì rule thứ ba thành số 2.** Đó đúng là biến
+`rule_index` của shell, và ACS duyệt lại object mỗi phiên vẫn thấy y như trước.
+
+Khác hẳn `WANIPConnection`/`WANPPPConnection`, nơi instance là `id + 1` và **ổn định**. Hai quy
+tắc đánh số khác nhau nằm cạnh nhau trong cùng một cây — ghi rõ ở đây vì đây là chỗ dễ sửa nhầm
+cho "nhất quán".
+
+### 31.3 Chép nguyên, từng cái một
+
+1. **`X_AIS_Name` và `PortMappingDescription` là CÙNG một option** `service_type`. Ghi cái này
+   đổi cái kia. Chỉ khác khi option rỗng: `Name` trả `"-"`, `Description` trả `""`. Và khác giới
+   hạn độ dài: 128 với `Name`, 256 với `Description`.
+2. **Ghi `RemoteHost` hoặc `X_AIS_RemoteHostEndRange` bằng giá trị RỖNG xoá CẢ HAI đầu**
+   (`remote_start_ip` và `remote_end_ip`). Chỉ trường hợp rỗng mới đối xứng như vậy; một địa chỉ
+   thật chỉ ghi option của chính nó.
+3. **`udp/tcp` và `both` đều lưu thành `tcp/udp`**, và enum nhận không phân biệt hoa thường
+   (`validate_protocol()`).
+4. **Mọi setter xếp hàng** `ubus call hni.service commit '{"param":"PortForwarding","action":"ApplyRule"}'`
+   vào apply-service. Không có gì được áp dụng giữa phiên.
+5. **AddObject trả về TỔNG số section `port_forwarding`** — không phải vị trí rule mới, cũng
+   không phải số rule của connection này. Chép nguyên: đó là số instance ACS vẫn được nhận.
+
+### 31.4 Một khác biệt, mang tính bổ sung
+
+Shell chỉ đăng ký `PortMapping` khi `ip route` có default gateway — một điều kiện **toàn cục**,
+giống nhau cho mọi entry, tính một lần mỗi phiên. Cây C tĩnh không thể làm object hiện ra rồi
+biến mất, nên ở đây nó **luôn có mặt**.
+
+Không giá trị nào đổi: rule đến từ `firewall_clay`, không đến từ bảng định tuyến. Chỉ khác ở chỗ
+`GetParameterNames` nay liệt kê object trên một máy không có default route, nơi shell bỏ qua nó.
+
+Object path `PortMapping.` **được claim** — khác các object connection phía trên: `AddObject` và
+`DeleteObject` của một port mapping nay do module này xử lý, không còn về `sdk/mtk/compat/`.
+
+### 31.5 Lớp kiểm 8 — `NULL` vào out-parameter
+
+Bản nháp đầu gọi:
+
+```c
+dmuci_add_section(PM_PACKAGE, PM_TYPE, &added, NULL);
+```
+
+`dmuci.c` ghi `*value` trên **mọi** đường ra, kể cả hai đường lỗi:
+
+```c
+if (dmuci_lookup_ptr(...)) { *value = ""; return -1; }
+```
+
+Compiler hoàn toàn hài lòng — `NULL` là `char **` hợp lệ. Trên thiết bị đó là segfault ngay lần
+`AddObject` đầu tiên.
+
+Lớp 8 **tự suy ra** danh sách out-parameter thay vì dùng bảng liệt kê sẵn: quét mọi định nghĩa
+hàm trong cây, tham số nào có dạng `T **p` mà thân hàm có `*p = ...` thì đánh dấu; rồi báo mọi
+lời gọi truyền `NULL` đúng vị trí đó.
+
+**Chạy ngược (NEG 8)** trên bản nháp: `:393 dmuci_add_section() nhận NULL ở tham số 4, nhưng hàm
+ghi *p = ... qua nó -- segfault lúc chạy`. Trên cây đã sửa: 36 file, 0 vấn đề. Quét toàn cây
+không tìm thấy call site nào khác cùng lỗi.
+
+### 31.6 Kiểm
+
+| Kiểm | Kết quả |
+|---|---|
+| `verify-dm-paths --phase 4` | **171/173**, dôi **0**; còn đúng `X_AIS_ServiceList` × 2 |
+| `--phase 2/3` | thiếu 0 |
+| `--claims` | **115 claim**, 14 module, **0 cặp chồng** |
+| `check-c-sanity.py` (8 lớp) | lib **36** file 0 vấn đề, app 17 file 0 vấn đề × 3 SDK |
+| `check-automake-conds.py` | 0 vấn đề |
+| Bundle | `1c4bddb90f9e`, 395 file, `apply --dry-run` PASS hai cây SDK |
+
+**CHƯA BUILD-TEST.**
+
+---
+
+## 32. P4f — `X_AIS_ServiceList`, và PHASE 4 ĐÓNG
+
+Nguồn: `wan_device_get_x_ais_service_list()`, `wan_device_set_x_ais_service_list()`,
+`wan_device_update_internet_access()`, `wan_device_configure_easycwmpd()`,
+`wan_device_get_physical_interface()`.
+
+Data model C: **373 → 375 / 783 (47,9%)**. **Phase 4: 173/173, thiếu 0, dôi 0.**
+
+Hai tham số, và là hai tham số nặng nhất cả nhánh WANDevice: setter quyết định một WAN mang lưu
+lượng khách, mang quản lý TR-069, hay cả hai — và trên đường đi nó viết lại firewall cùng chỗ
+bind của chính client CWMP. Để cuối cùng là có lý do.
+
+### 32.1 Setter đụng vào những gì
+
+| Nơi | Khi nào |
+|---|---|
+| `wan.@entry[i].service_type` | luôn luôn |
+| `easycwmp.@acs[0].enablecwmp` | các chuyển đổi cắt qua ranh giới TR-069 |
+| `easycwmp.@local[0].interface` / `.network` | bind/unbind client vào một WAN |
+| Rule firewall `tr069_block_<wan_if>` + `iptables FORWARD ... -j DROP` | chế độ TR069-only chặn LAN |
+
+### 32.2 Hai cái bẫy trong bản gốc, chép lại cả hai
+
+1. **Chế độ bridge chỉ nhận `OTHER`.** `INTERNET`, `TR069`, `INTERNET_TR069` đều trả `9007`.
+   Getter cũng luôn trả `OTHER` cho entry bridge, bất kể `service_type` ghi gì.
+2. **Ở chế độ router, `OTHER` được lưu thành `INTERNET`** (`num=1`). ACS ghi `OTHER` rồi đọc lại
+   ra `INTERNET` — đã như vậy từ trước tới nay.
+
+### 32.3 Và một cái bản nháp đầu làm sai
+
+Mọi nhánh của shell là `case "$old_service_type" in 3|2|1|4)` — **không có arm mặc định**. Một
+entry chưa từng đặt `service_type` rơi khỏi tất cả: giá trị được ghi lại và **không một side
+effect nào chạy**.
+
+Bản nháp đầu của tôi chạy chúng. Hậu quả nếu lọt: lần đầu ACS ghi `X_AIS_ServiceList` lên một
+entry mới, firewall và chỗ bind của client CWMP bị viết lại — trên một entry mà sản phẩm chưa
+từng chạm vào. Đã sửa bằng `old_known`, tái tạo đúng fall-through.
+
+Không lớp kiểm tĩnh nào bắt được loại này. Nó lộ ra vì **đọc lại từng nhánh của shell đối chiếu
+với code vừa viết** trước khi commit.
+
+### 32.4 Khác biệt duy nhất, và là khác biệt bắt buộc
+
+Shell chạy nửa gây gián đoạn **INLINE** — `iptables`, `/etc/init.d/firewall reload &`,
+`/etc/init.d/easycwmpd restart &` — ngay trong `SetParameterValues` mà nó đang trả lời. Khởi động
+lại client CWMP giữa phiên nghĩa là **ACS không bao giờ nhận được response của chính lệnh vừa
+gửi**.
+
+Ở đây: nửa UCI chạy ngay, cùng transaction với phần còn lại của phiên; chỉ nửa mệnh lệnh mới xếp
+vào apply-service, chạy sau khi phiên đóng. Lệnh xếp hàng là **lệnh của chính shell, nguyên văn**.
+
+`/etc/init.d/easycwmpd restart` đúng trong bản build này chứ không phải sót lại:
+`sdk/mtk/files/easycwmpd` là shim một dòng `exec /etc/init.d/icwmpd "$@"`.
+
+### 32.5 Một lỗ hổng đã biết, cố ý để nguyên
+
+`easycwmp.@acs[0].enablecwmp` được ghi y như trước, nhưng bảng mirror easycwmp → cwmp trong
+`apps/icwmp/sdk/mtk/icwmp_mtk.c` **không mang option đó**. Nên trong bản build này `icwmpd`
+không bị nó gate như `easycwmpd` trước kia.
+
+Thêm nó vào mirror sẽ cho phép ACS **tắt hẳn client CWMP** bằng cách ghi `X_AIS_ServiceList` —
+đó là quyết định của sản phẩm, không phải của bản port. Ghi lại ở đây để người quyết định có đủ
+dữ kiện.
+
+### 32.6 Phase 4 khép lại
+
+| Phase | Param | Patch |
+|---|---|---|
+| P4a khung `WANDevice` | 22 | `0040` |
+| P4b `WANIPConnection` | 35 | `0041` |
+| P4c `WANPPPConnection` | 42 | `0052` |
+| P4d `X_AIS_IPv6` | 46 | `0053` |
+| P4e `PortMapping` | 26 | `0054` |
+| P4f `X_AIS_ServiceList` | 2 | `0055` |
+| **Tổng** | **173** | |
+
+| Kiểm | Kết quả |
+|---|---|
+| `verify-dm-paths --phase 4` | **173/173, thiếu 0, dôi 0** |
+| `--phase 2/3` | thiếu 0 |
+| `--claims` | **117 claim**, 15 module, **0 cặp chồng** |
+| `check-c-sanity.py` (8 lớp) | lib **37** file 0 vấn đề, app 17 file 0 vấn đề × 3 SDK |
+| `check-automake-conds.py` | 0 vấn đề |
+| Bundle | `ef3bd5c483f1`, 397 file, `apply --dry-run` PASS hai cây SDK |
+
+**CHƯA BUILD-TEST.** Bốn phase (P4c–P4f, 116 tham số, 3 file mới + 1 header) chưa qua compiler
+lần nào — đây là khối code lớn nhất chưa build kể từ đầu bản port.
+
+## 33. Build P4c–P4f ĐẠT, cổng compile thật, và P5a — `IPPingDiagnostics` + `TraceRouteDiagnostics`
+
+### 33.1 Build P4c–P4f — ĐẠT (Verified)
+
+Người dùng build lại với bundle `ef3bd5c483f1`. Kiểm trên cây `1_src` (25/09):
+
+| Bằng chứng | Giá trị |
+|---|---|
+| `libtr098_3_aarch64_cortex-a53.ipk` | 128.195 B, 13:40 (bản 24/09: 117.605 B) |
+| `icwmp_tr098_3-2_aarch64_cortex-a53.ipk` | 202.856 B, 13:47 |
+| object của P4c–P4f trong `build_dir/.../libtr098/sdk/mtk/dm098/` | `wanip_mtk.o`, `wanipv6_mtk.o`, `portmapping_mtk.o`, `servicelist_mtk.o` — 13:40 |
+| symbol trong `libtr098.so.3.0.0` | `browsePortMappingInst`, `svc_acs_enablecwmp`, `svc_configure_cwmpd`, `svc_internet_access`, ... |
+
+116 tham số, 3 file mới + 1 header đã qua compiler và linker. Board: chưa chạy.
+
+### 33.2 Cổng compile thật — `check-cc-syntax.py`
+
+Cây build của người dùng có sẵn cross-gcc của SDK
+(`staging_dir/toolchain-aarch64_cortex-a53_gcc-10.2.0_musl`). `check-cc-syntax.py` chạy nó với
+`-fsyntax-only` trên **đúng** danh sách file mà `libtr098` và `icwmp_tr098d` build, lấy nguồn từ
+overlay, header `icwmp_dm/` dựng tạm trỏ về nguồn hiện tại (không dùng bản cũ trong
+`staging_dir`), không ghi gì vào cây SDK. Cảnh báo gây lỗi lúc chạy được nâng thành lỗi:
+`implicit-function-declaration`, `int-conversion`, `incompatible-pointer-types`, `return-type`,
+`implicit-int`, `format-security`. 53 file, khoảng 1 giây.
+
+Lần chạy đầu bắt được **hai lỗi mà 8 lớp của `check-c-sanity.py` đều cho qua**:
+
+| Lỗi | Ở đâu | Hậu quả |
+|---|---|---|
+| định danh `D` chưa khai báo | `ipping_mtk.c` bản nháp — `sed` đổi `(D, ` nhưng sót `(D);` | không build được, bắt trước khi giao |
+| `__dmjson_get_value_in_array_idx` **không có prototype** | macro trong `dmjson.h:38`, hàm định nghĩa ở `dmjson.c:210` | gcc 10 coi nó trả `int` và **chỉ cảnh báo** — build SDK vẫn ra `.ipk`. Trên aarch64 con trỏ `char *` mất 32 bit cao |
+
+Lỗi thứ hai là **lỗi chạy thật trong bản đã build**:
+
+- `wanipv6_mtk.c:455-456` (P4d, `X_AIS_IPv6...DNSServers`) gọi macro đó. Chuỗi trả về nằm trong
+  heap json-c hoặc `.rodata` của thư viện — trên aarch64 đều ở trên 4 GB, nên con trỏ bị cắt trỏ
+  vào vùng không map. **Conditional**: bố cục địa chỉ của tiến trình; chưa chạy trên board.
+- `tr098/deviceinfo.c:698-703` (upstream) cũng gọi, và ép `(char *)` nên **che cả cảnh báo**.
+  File này không build trên MTK.
+
+Sửa: khai báo `____dmjson_get_value_in_array_idx()` và `__dmjson_get_value_in_array_idx()` trong
+`dmjson.h`, đúng chữ ký ở `dmjson.c:181,210` (patch `0056`).
+
+Cùng lần chạy, ba chỗ không đổi hành vi, sửa để cổng về 0:
+
+| File | Sửa |
+|---|---|
+| `dmuci.h` | prototype `dmuci_delete_by_section_unnamed_tr098` — sinh bởi `NEW_UCI_PATH`, `dmcommon.c:1087` gọi không khai báo (trả `int`, vô hại) |
+| `dmentry.c` | `#include <ctype.h>` cho `isdigit()` |
+| `netlink.c:247` | `bind()` nhận `struct sockaddr *`, không phải `sockaddr_in6 *` |
+
+`collect_sources()` (dùng chung cho cả hai checker) nay hiểu khối `if/else/endif` của automake.
+Trước đó nó kiểm cả 4 file `upnp/*` — **không** build trên SDK nào (`UPNP_TR064` chỉ bật bằng
+`--enable-tr064`, không feed nào truyền; `config.log`: `UPNP_TR064_TRUE='#'`). Danh sách file giờ
+khớp **tuyệt đối** với object trong `build_dir`: lib 36 (= 33 đã build + 3 file mới của P5a), app
+17 = 17.
+
+**Bài học:** kiểm tĩnh bằng regex không thay được compiler. Có compiler trong tầm tay thì chạy nó
+trước khi giao — ghi nhận "không có compiler trên máy workspace" của các lượt trước đúng với
+`gcc` hệ thống, nhưng cross-gcc của SDK thì luôn có trên máy build.
+
+### 33.3 P5a — hai diagnostic, 22 tham số
+
+Nguồn: `functions/tr098/ipping_diagnostic`, `functions/tr098/traceroute_diagnostic`,
+`functions/common/{ipping,traceroute}_launch`.
+
+**Cơ chế của shell (Verified):** diagnostic là một mặt tiền mỏng trước một launcher.
+
+```
+SPV DiagnosticsState=Requested
+  -> <x>_stop_diagnostic ; DiagnosticsState=Requested (uci -P <dir>)
+  -> common_execute_command_in_apply_service "/bin/sh $FUNCTION_PATH/<x>_launch run &"
+hết phiên -> apply-service chạy launcher nền
+  -> launcher đo, ghi kết quả vào cùng <dir>
+  -> ubus -t 1 call tr069 inform '{"event":"8 DIAGNOSTICS COMPLETE"}'   (thử lại tới 200 lần)
+```
+
+Hợp đồng với `icwmpd` (Verified): `ubus.c` `cwmp_handle_inform` → `cwmp_get_int_event_code()`
+(`cwmp.c:66`) nhận ký tự đầu `'8'` → `EVENT_IDX_8DIAGNOSTICS_COMPLETE` → event container → phiên
+mới. Cả 6 launcher đã nằm trong `.ipk` tại `/usr/share/easycwmp/functions/`. **Launcher giữ nguyên
+là shell** — chúng là bộ đo, không phải data model.
+
+**Mỗi diagnostic một kho riêng** — điểm dễ sai nhất:
+
+| Shell | Kho |
+|---|---|
+| `ipping_diagnostic` | `uci -P /var/state` |
+| `traceroute_diagnostic` | `uci -P /var/state/traceroute` |
+| `nslookup_diagnostic` | `uci -P /var/state/nslookup` (+ `nslookup_result`) |
+| `dns_diagnostics` | `uci -P /var/state/dnsDiagnostics` (+ `dnsDiagnostics_result`) |
+| `tr143/download_diagnostic` | `uci -P /var/state/downloadDiag` |
+| `tr143/upload_diagnostic` | `uci -P /var/state/uploadDiag` |
+
+Cùng tên option `easycwmp.@local[0].DiagnosticsState` nhưng là sáu giá trị khác nhau.
+`mtk_varstate()` có sẵn đi qua context dùng chung đã gắn `/var/state` làm delta path — đọc kho
+traceroute qua nó sẽ **lẫn delta của ping vào**. Vì vậy thêm `mtk_state(dir, ...)`: context mới
+mỗi lần gọi, đúng những gì `uci -P <dir>` làm (`uci_add_delta_path(savedir)` rồi
+`uci_set_savedir(dir)`).
+
+**Mã mới:**
+
+| File | Nội dung |
+|---|---|
+| `dmmtk.[ch]` | `mtk_state()/mtk_state_set()`, `mtk_kill_cmdline()` (`pgrep -f \| kill -9`, trừ chính mình), `mtk_netdev_exists()`, `mtk_ere_match()` (ERE, `REG_NEWLINE` như grep) |
+| `dm098/diag_mtk.[ch]` | khung chung cho cả 7 diagnostic: bảng kho, `diag_get` (`${val:-def}`), `diag_stop`, `diag_store_value` (đuôi chung của mọi setter), `diag_request`, `diag_check_uint`, `diag_host_valid` |
+| `dm098/ipping_mtk.c` | 12 tham số |
+| `dm098/traceroute_mtk.c` | 10 tham số + `RouteHops.` |
+
+**Quirk của vendor, chép nguyên và ghi trong file:**
+
+1. `IPPingDiagnostics.Interface` nhận **đường dẫn TR-098** và dịch bằng bảng cứng
+   (`resolve_trpath_to_ifname`): LAN IPInterface → `network.lan.ifname`, mọi `WANPPPConnection` →
+   `network.if0.ifname`, mọi `WANIPConnection` → **`eth0.1` viết cứng**.
+2. Setter đó gọi **`nslookup_stop_diagnostic`** chứ không phải của ping — lỗi copy-paste. Ghi
+   `Interface` sẽ **giết một NSLookup đang chạy** và reset state của nó, còn ping đang chạy thì để
+   nguyên.
+3. `TraceRouteDiagnostics.Interface` lại nhận **tên thiết bị mạng**, mặc định `default`. Shell
+   chấp nhận khi `$(ifconfig $2)` (không nháy) in ra gì đó: `""` → liệt kê interface → nhận;
+   `-a` → nhận; hai từ → `ifconfig` cố **cấu hình** → rỗng → từ chối. Giữ kết quả chấp nhận/từ
+   chối, **không** giữ tác dụng phụ (`eth0 down` từng thật sự tắt `eth0`).
+4. `IPPingDiagnostics.DSCP` không kiểm gì và kiểu string; của TraceRoute thì `0..63`, unsignedInt.
+5. Kiểm Host tìm một dotted quad **ở bất cứ đâu** trong chuỗi (`grep -o` không neo): `x1.2.3.4y`
+   được nhận.
+6. Số quá lớn so với `[` của busybox được **nhận**: `[` in `out of range`, trả 2, `if` hiểu là
+   sai, kiểm khoảng không bao giờ chạy.
+7. `RouteHops.` **luôn rỗng**: hàm browse ở `functions/tr181/traceroute_routehops`, mà
+   `cwmpclient/Makefile:104` comment dòng cài `tr181/*`. Chỉ `RouteHopsNumberOfEntries` mang số.
+
+**Khác biệt có chủ ý duy nhất:** shell kiểm và ghi trong cùng một lần gọi; ở đây VALUECHECK kiểm cả
+SPV trước, VALUESET mới ghi. Một SPV có một giá trị sai không còn để lại nửa kia đã ghi vào
+`/var/state` — như mọi phase trước.
+
+### 33.4 Tiến trình nền không còn dùng chung stdio của `icwmpd`
+
+P5 là lần đầu hàng đợi apply-service chở **tiến trình nền sống lâu** (traceroute, TR-143). Rà lại
+hai đường chạy hàng đợi:
+
+| Đường | Trước | Rủi ro | Sửa |
+|---|---|---|---|
+| không-compat `mtk_run_apply_service()` | `mtk_exec()` đọc stdout tới EOF rồi `waitpid` | launcher `... &` kế thừa pipe → **hết phiên phải chờ diagnostic chạy xong**, trong khi launcher đang `ubus call tr069 inform` vào chính agent này | `exec </dev/null >/dev/null 2>&1;` trước mỗi dòng |
+| compat `icwmp_dm.sh apply_service` (đang build) | `/bin/sh $apply_service_tmp_file` với stdio của coprocess | coprocess sống suốt đời icwmpd, stdin là **pipe request**, stdout là **pipe reply**; `dmscript.c` giữ buffer đọc qua các lần gọi và **không xả dữ liệu cũ** (`drain_lines_locked`) | `</dev/null >/dev/null 2>&1` |
+
+Mức rủi ro hôm nay (Verified từ code): thấp. Dòng không phải object JSON bị bỏ qua kèm log, và
+`ubus call` in JSON thụt lề nhiều dòng — `{`, `"status": 1,`, `}` — nên từng dòng đều bị bỏ qua
+(`ubus-2021-06-30-4fc532c8/cli.c:93`: `blobmsg_format_json_indent(msg, true, simple_output ? -1 : 0)`,
+chỉ `-S` mới in một dòng).
+Không launcher nào đọc stdin. Nhưng đó là **may mắn định dạng**, không phải thiết kế: một
+`ubus -S` hay một `read` thêm vào sau này sẽ làm lệch giao thức với coprocess.
+
+### 33.5 Kiểm
+
+| Kiểm | Kết quả |
+|---|---|
+| `check-cc-syntax.py` (gcc thật) | lib **36**/0 lỗi · app **17**/0 lỗi |
+| `check-c-sanity.py` 8 lớp | lib/mtk 36/0 · app 17/0 × 3 SDK |
+| `check-automake-conds.py` | OK |
+| `verify-dm-paths --phase 5` | C **22** param, **3** object, **dôi 0**; thiếu 66 = P5b–P5e |
+| `--phase 2/3/4` | thiếu 0 (không lùi) |
+| `--claims` | **119** claim, **17** module, **0** cặp chồng |
+| bundle | `ed530b239da7`, 402 file `SHA256SUMS` OK, `apply --dry-run` exit 0 trên `1_src` và `2_src` |
+
+Patch: `0056` (dmjson prototype + 3 sửa compile), `0057` (P5a). Data model C: **397/783**.
+
+**Build:** chưa với `0056`/`0057`, nhưng mọi file đã qua cross-gcc của chính SDK đó. **Board:**
+chưa.
+
+### 33.6 Còn lại của P5
+
+| Bước | Nội dung | Param |
+|---|---|---|
+| P5b | `DNSDiagnostics` + `NSLookupDiagnostics` (có `Result.{i}` từ kho `_result` riêng) | 25 |
+| P5c | `DownloadDiagnostics` + `UploadDiagnostics` (TR-143) | 26 |
+| P5d | `Layer3Forwarding` (605 dòng shell, đồng bộ, route) | 12 |
+| P5e | `SelfTestDiagnostics` + `WiFi.NeighboringWiFiDiagnostic` (hằng số ở `root`) | 3 |
+
+## 34. P5b — `NSLookupDiagnostics` + `DNSDiagnostics`, 20 tham số; ma trận có 5 lá "ma"
+
+Nguồn: `functions/tr098/nslookup_diagnostic`, `functions/tr098/dns_diagnostics`,
+`functions/common/{nslookup,dnsDiagnostics}_launch`. Code: `sdk/mtk/dm098/lookupdiag_mtk.c`
+(một module, hai object), khung chung mở rộng ở `diag_mtk.[ch]`. Patch `0058`.
+
+### 34.1 `DNSDiagnostics` trên sản phẩm chỉ có 7 tham số (Verified)
+
+`dns_diagnostics` comment ba dòng đăng ký: `DNSServer` (:15), `ResultNumberOfEntries` (:18) và
+object `Result.` (:21). Hàm `sub_entry_dnsdiag_dnslookupresult` và nửa ghi kết quả của launcher
+vẫn còn, nhưng không đường nào tới được — `Result.{i}` chưa bao giờ xuất hiện với ACS.
+
+Ma trận phủ (`gen-coverage-matrix.py`) đọc văn bản, bỏ dòng `#` nhưng vẫn thu 5 lá trong hàm
+`sub_entry_*`, nên liệt kê `DNSDiagnostics.Result.{i}.*` mà **không** có dòng object chứa
+`DNSDiagnostics.Result.`. Quét toàn bộ 783 dòng theo quy tắc "cây con `X.{i}.` chỉ tồn tại khi
+object chứa `X.` được đăng ký": **đây là trường hợp duy nhất**, cả ở cấp `{i}` lồng nhau.
+
+Xử lý: giữ nguyên ma trận (kiểm kê văn bản, số 783 được trích ở nhiều nơi), `verify-dm-paths.py`
+tách 5 lá đó thành mục **"không tới được trên sản phẩm"** thay vì "thiếu". Số tham số tới được
+trên sản phẩm là **778**; P5 là **83**, không phải 88.
+
+### 34.2 `Result.{i}` của NSLookup — một giả thuyết đã bị bác bỏ
+
+Launcher ghi kết quả bằng `uci -P /var/state/nslookup_result add easycwmp local` rồi
+`uci -P ... commit easycwmp`. Giả thuyết ban đầu: `commit` ghi thẳng vào `/etc/config/easycwmp`
+(flash), mỗi lần chạy nối thêm section vĩnh viễn, và `Result.1` mãi là kết quả lần đầu.
+
+**Bác bỏ** bằng source libuci đúng bản SDK dùng (`uci-2020-10-06-52bbc99f`):
+
+- `cli.c:749-752`: `-P` làm `uci_add_delta_path(savedir)`, `uci_set_savedir(dir)` và **bật
+  `CLI_FLAG_NOCOMMIT`**;
+- `cli.c:330-333`: `CMD_COMMIT` với cờ đó → `ret = 0; goto out` — không làm gì.
+
+Vậy kết quả chỉ nằm ở delta `/var/state/nslookup_result/easycwmp`, bị `rm` đầu mỗi lần chạy
+(`nslookup_process_result`). `Result.<n>` = `easycwmp.@local[<n>]` của kho đó: `@local[0]` là
+section có sẵn trong `/etc/config/easycwmp`, `@local[1..N]` là các section launcher vừa thêm. Đếm
+từ `ResultNumberOfEntries` của **kho tham số** (`/var/state/nslookup`), đọc từ **kho kết quả** — C
+làm y như vậy (`diag_result_get`, `browseNSLookupResultInst`).
+
+### 34.3 Quirk giữ nguyên
+
+| Quirk | Hệ quả |
+|---|---|
+| `Timeout`, `NumberOfRepetitions` đi qua `nslookup_set`/`dnslookup_set` | **không kiểm gì** (kiểu unsignedInt nhưng `abc` vẫn được lưu) và **không dừng** lookup đang chạy — khác mọi lá ghi được khác |
+| `DNSServer` dùng chung kiểm Host với `HostName` | giá trị rỗng ("dùng resolver hệ thống", launcher có hỗ trợ) bị từ chối — đã đặt thì không trả về rỗng được |
+| `Interface` nhận tên thiết bị mạng | cùng quy tắc `$(ifconfig $2)` với TraceRoute, nay dùng chung `diag_ifconfig_prints()` |
+
+**Khác biệt có chủ ý:** `Result.{i}` dừng ở 256 instance. Shell chạy `seq 1 $ResultNumberOfEntries`
+trên bất cứ giá trị nào kho đang giữ; launcher ghi số dòng `Address` của một lần nslookup.
+
+### 34.4 Kiểm
+
+| Kiểm | Kết quả |
+|---|---|
+| `check-cc-syntax.py` | lib **37**/0 lỗi (không cảnh báo mới ở file P5) · app 17/0 |
+| `check-c-sanity.py` | lib/mtk 37/0 · app 17/0 × 3 SDK |
+| `verify-dm-paths --phase 5` | C **42** param, 7 object, **dôi 0**; không tới được 5; thiếu 41 = TR-143 26 + `Layer3Forwarding` 12 + P5e 3 |
+| `--claims` | **121** claim, **18** module, 0 cặp chồng |
+| bundle | `31b9a874d55a`, 404 file, `apply --dry-run` exit 0 trên `1_src` và `2_src` |
+
+Data model C: **417/783** (417/778 tham số tới được). Build SDK: chưa với `0056`–`0058`; mọi file
+đã qua cross-gcc của SDK. Board: chưa.
+
+## 35. P5c — TR-143 `DownloadDiagnostics` + `UploadDiagnostics`, 26 tham số
+
+Nguồn: `functions/tr143/{download,upload}_diagnostic`,
+`functions/common/{Download,Upload}Diagnostics_launch`. Code: `sdk/mtk/dm098/tr143diag_mtk.c`.
+Kho: `-P /var/state/downloadDiag`, `-P /var/state/uploadDiag`. Patch `0059`.
+
+### 35.1 TR-143 dừng theo cách khác hẳn (Verified)
+
+Các diagnostic khác giết launcher ngay trong setter (`pgrep -f | kill -9`). TR-143 thì **không**:
+
+```
+downloadDiag_stop_diagnostic():
+    [ DiagnosticsState == Requested ] && queue "/bin/sh .../DownloadDiagnostics_launch stop"
+```
+
+Launcher `stop` giết mọi tiến trình `DownloadDiagnostics` đang chạy (trừ chính nó) rồi reset state
+và kết quả. Vì vậy **thứ tự hàng đợi apply-service quyết định cái gì chạy sau phiên**. Ví dụ một SPV
+`{DiagnosticsState=Requested, DownloadURL=...}` xếp `run &` rồi `stop` → test vừa yêu cầu bị giết
+ngay khi bắt đầu. Thứ tự ngược lại (`DownloadURL` trước) thì chạy bình thường.
+
+C giữ đúng từng lời gọi ở đúng vị trí shell đặt. Điều kiện để thứ tự trùng: engine áp VALUESET theo
+thứ tự tham số của SPV — **Verified**: `add_set_list_tmp()` dùng `list_add_tail`
+(`dmtr098.c:716`), VALUESET duyệt `set_list_tmp` FIFO (`dmentry.c:347`).
+
+### 35.2 Lỗi vendor: Upload không bao giờ dừng (Verified)
+
+```sh
+uploadDiag_stop_diagnostic() {
+	if [ "`$UCI_SET_VARSTATE_UPLOAD easycwmp.@local[0].DiagnosticsState`" == "Requested" ]; then
+```
+
+Dùng **set** thay cho get. `uci -q -P ... set x.y.z` không có `=value`: `cli.c` gọi `uci_set()`,
+`list.c:702` `UCI_ASSERT(ctx, ptr->value)` → lỗi, không đổi gì, `-q` nuốt thông báo, stdout rỗng.
+`"" == "Requested"` không bao giờ đúng → setter của `UploadDiagnostics` **không bao giờ xếp stop**.
+Đổi `UploadURL` khi đang upload thì upload cũ cứ chạy tiếp. Giữ nguyên.
+
+### 35.3 Quirk khác, giữ nguyên
+
+| Quirk | Chi tiết |
+|---|---|
+| URL | chỉ `http://`, `ftp://` (không `https`); giá trị phải **bằng đúng** output của `grep -E -o` → **`""` được chấp nhận** (grep không in gì, `"" == ""`), launcher sau đó báo `Error_InitConnectionFailed` |
+| `Interface` | tên thiết bị, quy tắc `$(ifconfig $2)`; đọc ra `""` khi chưa đặt (không phải `default` như các diagnostic khác) |
+| `EthernetPriority` | lưu ở option `EthPriority`, 0..7 |
+| `TestFileLength` | chỉ kiểm chữ số, không giới hạn trên |
+| `*Time` | kiểu string (không phải dateTime), `0000-00-00T00:00:00.000000` trước lần chạy đầu |
+
+`mtk_grep_o()` mới trong `dmmtk.c` mô phỏng `$(echo "$s" | grep -E -o RE)`: từng dòng, mọi lần
+khớp không rỗng, nối bằng xuống dòng, cắt newline cuối như command substitution. Regex biên dịch
+bằng `regcomp` của musl — **cùng thư viện với busybox grep trên board**, nên các chỗ tối nghĩa của
+POSIX (`\]` ngoài ngoặc, `\` trong ngoặc) được xử lý giống hệt.
+
+**Chưa chứng minh được bằng chạy thật:** máy workspace không có gcc host lẫn qemu-aarch64. Danh sách
+URL để so trên board (busybox `grep -E -o` với `icwmpd` qua SPV): `http://a.com/x`, `https://a.com`,
+`ftp://1.2.3.4:21/f`, `xhttp://a`, `http://a b`, `http://a]`, `http://a.com/<x>`, `""`,
+`HTTP://a.com`, `ftp://u:p@h/f;type=i`.
+
+### 35.4 Kiểm
+
+| Kiểm | Kết quả |
+|---|---|
+| `check-cc-syntax.py` | lib **38**/0 lỗi, không cảnh báo mới · app 17/0 |
+| `check-c-sanity.py` | lib/mtk 38/0 · app 17/0 × 3 SDK |
+| `verify-dm-paths --phase 5` | C **68** param, 9 object, **dôi 0**; thiếu 15 = `Layer3Forwarding` 12 + P5e 3 |
+| `--claims` | **123** claim, **19** module, 0 cặp chồng |
+| bundle | `d55c46cc0e27`, 406 file, `apply --dry-run` exit 0 trên `1_src` và `2_src` |
+
+Data model C: **443/783** (443/778 tới được).
+
+## 36. P5d + P5e — `Layer3Forwarding` và object ẩn của root; PHASE 5 ĐÓNG
+
+Patch `0060`. **Phase 5: 83/83, thiếu 0, dôi 0** (cộng 5 lá "không tới được", §34.1).
+
+### 36.1 Path của vendor, không phải TR-098 — và engine phải biết lá cấp container
+
+`functions/tr098/layer3_forwarding` đăng ký `Enable`, `ForwardNumberOfEntries`,
+`DefaultConnectionService` ở **`Layer3Forwarding.Forwarding.`** — ngay trên object nhiều
+instance, cạnh `Forwarding.{i}.`. TR-098 đặt hai cái sau ở `Layer3Forwarding.`. ACS đã luôn thấy
+path của vendor → giữ nguyên.
+
+Engine không diễn đạt được (Verified, `dmtr098.c:278` `dm_browse`): object có `browseinstobj` thì
+`continue` sau browse, lá của nó chỉ gắn vào từng instance. Hai cách vá tạm đều hỏng:
+
+| Cách | Vì sao bỏ |
+|---|---|
+| hai mục `Forwarding` cùng tên | registry gộp object cùng tên (`merge_obj`) → chỉ sống sót khi cha được nối nguyên khối; GPN in object hai lần |
+| lá tên có dấu chấm `"Forwarding.Enable"` dưới `Layer3Forwarding` | GPN next-level sai tầng ở cả hai phía (`plugin_leaf_nextlevel_match` xét node chứa lá) |
+
+Sửa: **`DMOBJ.container_leaf`** — thành viên cuối, mọi bộ khởi tạo theo vị trí hiện có để NULL.
+`dm_browse` duyệt nó trên node container **trước** các instance, qua cùng `checkleaf` như lá của
+object đơn; `merge_entry` gộp nó. `verify-dm-paths.py` đọc trường thứ 11.
+
+### 36.2 Hai setter đường dẫn WAN — busybox thật sự kiểm gì (Verified từ source)
+
+```sh
+if [[ ! "$node" =~ ^WAN[A-Za-z0-9_]+$ || ! is_integer "$index" ]]; then return 9007
+if [ "$index" -le 1 ] && [[ "$node" != "WANIPConnection" ] || [ "$node" != "WANPPPConnection" ]]; then return 9007
+```
+
+busybox 1.33.1 của SDK (`CONFIG_ASH_BASH_COMPAT=y`, `[[` là builtin `testcmd`):
+
+- `ash.c:11822-11829`: trong `[[ ]]`, ash **đưa `&&`/`||` vào test như đối số chữ**, không tách
+  thành toán tử shell. (Giả thuyết đầu của tôi — ash tách `||` — **sai**, source bác bỏ.)
+- dòng 1: `test` đọc `is_integer` là một chuỗi không rỗng (không gọi hàm), `$index` thừa ra →
+  `test_main` (`test.c`) báo "unknown operand", exit **2 với mọi giá trị** → `if` sai → **không
+  bao giờ từ chối**. Kiểm regex `^WAN…` là code chết.
+- dòng 2: `[[ … ] || [ … ]]` cũng thừa operand → exit 2 → không bao giờ từ chối.
+
+Cái thật sự quyết định:
+
+1. prefix `InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.`;
+2. `awk -F '.' '{ print $(NF-2) "." $(NF-1) }'` — FS một ký tự là **chữ** (`awk.c:1693`), trường âm
+   là lỗi và không in gì: node = trường NF-2, index = trường NF-1 (NF=2 thì cả hai là trường đầu);
+3. `wan_if = $((index - 1))` — số học ash: `0x` hex, `0` đầu là bát phân, `08` lỗi;
+4. entry có `id == wan_if` và `conn_type` = 0 (WANIPConnection) / 2 (WANPPPConnection) / chính
+   `node` nếu node khác.
+
+**Not established, xấp xỉ:** ash đọc `index` không phải số như **tên biến** (đệ quy); C đọc là 0
+(biến chưa đặt).
+
+### 36.3 `hniwan` không tồn tại
+
+`Forwarding.{i}.Interface` đọc/ghi route WAN qua UCI package **`hniwan`** (`@wan[]`). Quét toàn SDK
+(`grep -rIl hniwan`, trừ build/staging/dl): chỉ có chính file shell và **một comment** trong
+`hal_unify/src/hal_network.c`. Trên sản phẩm: getter đọc `""` cho route WAN, setter chỉ nhận
+`InternetGatewayDevice.LANDevice.`. Port nguyên văn.
+
+### 36.4 Object ẩn của root — P5e
+
+`entry_execute_method_root` là một `case` theo **đường dẫn được hỏi**: toàn cây (`""`,
+`InternetGatewayDevice.`) chỉ vào nhánh đầu. `SelfTestDiagnostics.`, `WiFi.`, `FaultMgmt.`,
+`BulkData.`, `CaptivePortal.`, `FAP.GPS.`, `User.`… chỉ trả lời khi được hỏi đúng tên — không có
+trong GPN/GPV toàn cây, inform, notification.
+
+**`DMOBJ.addressed_only`**: `dm_browse` bỏ qua object trừ khi `in_param` nằm dưới nó. Dùng lại
+được cho các object ẩn của P6/P7 (`sdk/mtk/dm098/root_hidden_mtk.c`).
+
+`SelfTestDiagnostics.DiagnosticsState` ghi được nhưng shell không có setter →
+`common_set_value_check_param` trả **9008**; engine làm y vậy với lá `DMWRITE` + setter NULL.
+
+## 37. Hợp đồng input của shell — lỗ hổng xuyên suốt P1–P5
+
+Patch `0061`. **Phát hiện khi làm P5e, ảnh hưởng mọi tham số ghi được đã port sang C.**
+
+### 37.1 Shell kiểm gì trước MỌI setter (Verified, `functions/common/common`)
+
+`common_set_value_check_param()`:
+
+1. `is_safe_input "$val"` → 9007 nếu: không dòng nào là ASCII in được; **bất kỳ dòng nào rỗng/toàn
+   dấu cách** (nên `""` luôn bị từ chối); bất kỳ dòng nào chứa `# ; & | < > \` $ \ ' "`;
+2. tên / quyền: ghi được mà setter rỗng → 9008;
+3. theo **kiểu shell**, phân biệt hoa thường: `xsd:unsignedInt` (`-gt -1 && -lt 4294967296`),
+   `xsd:int`, `xsd:boolean` (`true/1/false/0`), `xsd:dateTime` (`date -d`),
+   `xsd:IPv4Address` (một dotted quad ở đâu đó, `grep -o`), `xsd:IPv6Address` (`is_valid_ipv6`).
+   `xsd:Int`, `xsd:unsignedint`, `""` rơi vào `*)` — **không kiểm**.
+
+`is_safe_input` là **bộ lọc chống chèn lệnh** của sản phẩm: giá trị vào UCI rồi vào các script shell
+(`hni_wan_reload.sh`, firewall, launcher diagnostic).
+
+### 37.2 C không có lớp này (Verified)
+
+`mparam_set_value` (`dmtr098.c:1556`) gọi thẳng setter; hook MTK `dm_platform_param_method` trả 0
+ngay với path native (`dmplatform_mtk.c:609`). → **mọi tham số ghi được port sang C ở P1–P5 nhận giá
+trị sản phẩm cũ từ chối**, kể cả `;`, `` ` ``, `$`.
+
+### 37.3 Sửa — một chỗ, cho mọi path native
+
+| Thành phần | Nội dung |
+|---|---|
+| `sdk/mtk/input_contract_mtk.c` | `mtk_shell_safe_input()` (từng dòng như grep thấy `echo "$v"`), kiểm theo kiểu: số đọc như `[` của busybox (`FEATURE_TEST_64=y`), `is_valid_ipv4`/`is_valid_ipv6` port nguyên văn |
+| `sdk/mtk/shelltypes_mtk.h` | **SINH** từ ma trận bằng `gen-shell-types.py`: 186 tham số ghi được có kiểu shell được kiểm (94 boolean, 68 unsignedInt, 9 IPv6, 8 IPv4, 6 int, 1 dateTime) |
+| `dm_platform_param_method` | áp ở VALUECHECK; bản compat: chỉ path native (path còn qua shell có bản kiểm của shell); bản all-C: mọi path |
+
+Kiểu C trong `DMLEAF` **không thay được** bảng sinh: shell chỉ kiểm sáu chuỗi chính xác, và kiểm
+IPv4/IPv6 mà C ghi là string.
+
+**Not emulated:** `xsd:dateTime` (`busybox date -d`). Tham số ghi được duy nhất,
+`ManagementServer.PeriodicInformTime`, là của engine (`tr098/managementserver.c`) và tự kiểm.
+
+Áp cả cho tham số icwmp tự thêm mà sản phẩm cũ không có (phần dôi của P1) — cùng bộ lọc, cùng lý do.
+
+### 37.4 Đính chính §34.3 và §35.3
+
+| Đã viết | Đúng trên sản phẩm (và nay trong C) |
+|---|---|
+| §34.3: `Timeout`/`NumberOfRepetitions` "không kiểm gì, `abc` vẫn được lưu" | setter không kiểm, nhưng hợp đồng `xsd:unsignedInt` từ chối `abc`; phần "không dừng lookup" vẫn đúng |
+| §35.3: URL `""` được chấp nhận | `is_safe_input` từ chối `""` trước; URL có query `?a=1&b=2` hay `#frag` cũng **chưa bao giờ** được nhận |
+| §36 (bản code đầu): `Forwarding.Enable` nhận `yes/on/True` | hợp đồng `xsd:boolean` chỉ cho `true/1/false/0` tới setter |
+| — | Dest/Mask/Gateway phải có dotted quad (`xsd:IPv4Address`), không phải "chuỗi không rỗng bất kỳ" |
+
+### 37.5 Kiểm
+
+| Kiểm | Kết quả |
+|---|---|
+| `check-cc-syntax.py` | lib **41**/0 lỗi · app 17/0; thêm compile `dmplatform_mtk.c` + `input_contract_mtk.c` bản **all-C** (không `DM_MTK_SCRIPT_COMPAT`): sạch |
+| `check-c-sanity.py` | lib/mtk 41/0 · app 17/0 × 3 SDK |
+| `verify-dm-paths` | phase 1–5 thiếu 0; **phase 5 83/83 dôi 0**; 126 claim, 21 module, 0 chồng |
+| bundle | `33477b15bf88`, 412 file, `apply --dry-run` exit 0 trên `1_src` và `2_src` |
+
+Data model C: **458/783** (458/778 tới được). Build SDK: chưa với `0056`–`0061`. Board: chưa.
+**Chưa chạy thử được** `mtk_shell_safe_input`/`shell_ipv6` (không gcc host, không qemu) — test trên
+board: SPV với `a;b`, `""`, `true`/`yes` vào một boolean, `1.2.3.4` vào IPv4.
+
+## 38. Board: `/etc/init.d/icwmpd` treo — `value_monitoring` giữ flock fd 1000
+
+Board HP2236B, 2026-09-26. Hiện tượng: `/etc/init.d/icwmpd restart` không thoát, không có
+`icwmp_tr098d`. `S99icwmpd boot` và `icwmpd running` đều đứng ở tiến trình con `flock 1000`.
+
+- **Verified (source):** `procd_lock()` (`package/system/procd/files/procd.sh:48-58`, snapshot
+  `src/2025q3`) mở `/var/lock/procd_<service>.lock` trên fd 1000 và `flock` chờ vô hạn.
+- **Verified (board):** `/proc/5171/fd/1000 -> /tmp/lock/procd_icwmpd.lock`, pid 5171 là
+  `/usr/sbin/value_monitoring 30`, được `start_service` chạy nền bằng `&` và thừa kế fd 1000.
+- **Fix:** overlay `9692cf8`, `sdk/mtk/files/icwmpd.init` — chạy `value_monitoring` với
+  `</dev/null >/dev/null 2>&1 1000>&-`. Board sửa tay cùng dòng: start chạy hết, `icwmp_tr098d`
+  lên (pid 20474), `restart` thoát bình thường. **Chưa vào bundle `33477b15bf88`.**
+- Bài học: mọi tiến trình nền do init script procd sinh ra phải đóng fd 1000; tiến trình sống lâu
+  nên để procd quản (`procd_open_instance`) thay vì `&`.
+
+## 39. Board: `icwmp_tr098d` chết trước `STARTING ICWMP` — thêm trace khởi động (`0063`, debug)
+
+Sau §38, daemon được procd chạy nhưng không còn sống: `pidof` rỗng, `ubus list` không có
+`tr069`, log chỉ có một dòng `sync … log_severity=DEBUG` (dòng này chỉ in khi config đổi, nên các
+lần respawn sau không để lại gì). Trước dòng `STARTING ICWMP`, upstream có 4 đường chết **không
+log**: khóa `/var/run/icwmpd.pid` bận (`exit 0`), `global_env_init`/`global_conf_init` trả lỗi,
+`cwmp_init_backup_session`/`cwmp_root_cause_events` trả lỗi, và crash. `ubus_connect` lỗi trong
+thread ubus cũng im lặng.
+
+Overlay `01a1884` (`0063-icwmp-startup-trace-crash-report-debug.patch`):
+
+- `icwmp_boot_trace()`: mỗi bước khởi động ghi ra stderr (procd `stderr 1` → `logread`) và
+  **`/tmp/icwmpd_boot.log`** (append, cắt ở 64 KiB), không phụ thuộc `cwmp.cpe.log_*`.
+- Handler SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGABRT: `sig`, `addr`, `pc/lr/sp`, `tid`, rồi chép
+  `/proc/self/maps` vào file và raise lại (core dump vẫn được). BDK vẫn dùng handler riêng
+  (`sdk/bdk/icwmp_bdk.c`), đăng ký sau nên thay handler này.
+- Init MTK thêm `procd_set_param stdout 1`.
+
+Cổng: cross-gcc SDK app 17/0 lỗi, `check-c-sanity` app mtk/bdk/uci 0, automake 0. Bundle
+`65a09f005ee7` (414 file, gồm `0062` = §38 và `0063`), dry-run exit 0 trên `1_src`, `2_src`.
+**Chưa build, chưa chạy trên board.** Đọc kết quả: `debug-commands.md` mục trace khởi động.
+
+## 40. Crash khởi động = `browseAssocInst` duyệt mảng `infor` như object (`0065`)
+
+Trace `0063` trên board: mọi lần respawn chết ở `dm_entry_load_enabled_notify` — lần đầu duyệt
+**toàn cây** — với `SIGSEGV addr=0x8`, `pc = lr = libtr098.so + 0x4b810` (giống nhau ở 3 lần).
+
+- **Verified (addr2line trên bản build `1_src`, 2026-09-26 15:51):** `0x4b810` thuộc
+  `browseAssocInst` (`sdk/mtk/dm098/wlanassoc_mtk.c`). `objdump`: `bl json_object_get_object`
+  rồi `ldr x0, [x0, #8]` — tức `json_object_get_object(infor)->head` của macro
+  `json_object_object_foreach`, với kết quả NULL.
+- **Verified (source ubusmon):** `get_wlan_device_list` (`tclinux_phoenix/apps/hni/ubusmon/ubus.c`)
+  tạo `infor` bằng `blobmsg_open_array` — **mảng** các table, kèm `number_client`. Shell
+  (`functions/tr098/lan_device`, `assoc_build_cache`) duyệt bằng `json_get_keys` theo chỉ số và bỏ
+  qua khi `number_client` không phải số. Bản port P3 viết như `infor` là object — sai kiểu dữ liệu,
+  chưa từng chạy trên board trước hôm nay.
+- **Fix (overlay `b068392`):** duyệt mảng theo chỉ số, bỏ phần tử không phải table, kiểm
+  `number_client` như shell; `dmjson_get_var()` chặn cùng kiểu lỗi với dòng lạc của shell compat.
+- **Lớp kiểm mới** `check-c-sanity.py` → `check_json_foreach`: trong `sdk/`, mọi
+  `json_object_object_foreach(X…)` phải kiểm `X` là `json_type_object` trong 40 dòng trước. Chạy
+  ngược trên bản lỗi: bắt đúng 2 dòng (81, 142); bản sửa: 0.
+
+Cổng: cross-gcc lib 41/0 lỗi, sanity lib/mtk 0. Bundle `c776a013dcfa` (416 file), dry-run exit 0 trên
+`1_src`, `2_src`. **Chưa build, chưa chạy board.** Sau crash này, cây data model mới được duyệt
+toàn phần lần đầu — crash tiếp theo (nếu có) sẽ lại hiện trong `/tmp/icwmpd_boot.log`.
+
+**Kết quả board (2026-09-26 16:43, bundle `c776a013dcfa`):** `dm_entry_load_enabled_notify done`,
+`ubus object tr069 registered`; `ubus call tr069 status` → `cwmp up`, phiên đầu tới
+`http://172.16.0.15:7547` **success** (1 success / 0 failure), phiên định kỳ kế tiếp 19:00:01 +07
+(interval 43200 s căn theo `0001-01-01T00:00:00Z` = 12:00 UTC). **Gate board 1 (khởi động + Inform)
+ĐẠT.** Chưa kiểm: GPV/SPV từ ACS, Connection Request, hợp đồng input (§37.5).
+
+## 41. `ubus call tr069 dm get` treo 300 s — deadlock `mutex_session_send` ở đường notify (`0066`)
+
+Board 2026-09-27: `ubus -t 300 call tr069 dm '{"cmd":"get","path":"InternetGatewayDevice.",…}'`
+→ `Request timed out`. Chụp lúc treo: daemon sống, `icwmp_dm.sh` **không có lệnh con**, 11 thread đều
+`futex_wait_queue_me` (1 thread `inet_csk_accept`). Log dừng ở `ubus dm get InternetGatewayDevice.`
+→ không phải getter treo mà là thread uloop chờ mutex.
+
+- **Verified (source):** `cwmp_add_notification()` (`event.c`, thread handle_notify, được đánh thức
+  bởi `ubus call tr069 notify` của `value_monitoring` mỗi 30 s) lock `mutex_session_send` rồi
+  `fopen(DM_ENABLED_NOTIFY)`; `NULL` → `return` **không unlock**. Bug upstream icwmp.
+- **Verified (source):** `DM_ENABLED_NOTIFY = /etc/tr098/.dm_enabled_notify` (`dmtr098.h:39`);
+  không script/Makefile/C nào của MTK tạo `/etc/tr098` → file không bao giờ có → notify đầu tiên
+  (~30 s sau start) giữ mutex vĩnh viễn. Hệ quả: `ubus dm` treo, **thread session cũng kẹt** (không
+  còn phiên nào sau Inform đầu — phiên 19:00 sẽ không chạy), value change notification chưa từng
+  hoạt động trên MTK.
+- **Conditional:** trên board, chuỗi trên khớp với mọi quan sát nhưng chưa đọc trực tiếp owner của
+  mutex; xác nhận bằng: `ls /etc/tr098` (không có) và hết treo sau fix.
+- Phát hiện kèm: `dmplatform_mtk.c` `rename(/tmp/… , /etc/tr098/…)` khác filesystem → `EXDEV`,
+  file bị xóa mà không thay.
+- **Fix (overlay `b01ec72`):** `event.c` unlock + clean ctx trên đường lỗi (và clean ctx ở
+  `cwmp_add_notification_min`); MTK platform init tạo thư mục của `DM_ENABLED_NOTIFY`;
+  `dmplatform_mtk.c` copy thay rename.
+- **Workaround không cần build:** `mkdir -p /etc/tr098 && /etc/init.d/icwmpd restart`.
+
+Cổng: cross-gcc lib 41/0, app 17/0; sanity lib/mtk, app mtk/bdk/uci 0. Bundle `d6e8e4aedd99`
+(417 file), dry-run exit 0 trên `1_src`, `2_src`. **Chưa build, chưa chạy board.**
+
+## 42. Agent sau controller (NAT): icwmpd dùng được không — STUN, `cr_host`, gap của bản port
+
+Câu hỏi 2026-09-27. Snapshot `src_bk/2025q3` + overlay `b01ec72`.
+
+- **Hướng đi ra (Inform, phiên do CPE mở):** HTTP ra ACS qua NAT của controller — không cần gì thêm
+  ngoài route/DNS. **Conditional:** init chỉ chạy khi có IP trên `easycwmp.@local[0].network`
+  (mặc định `if0`, WAN PPPoE); agent không có `if0` → kẹt "no WAN IP yet". Phải đặt `network` về
+  interface có IP trên agent (thường `lan`). Init và `stuncd.init` đều **không chạy khi
+  `clay.opermode.mode=auto`** — giá trị opmode trên agent: **Not established**, cần đọc trên board.
+- **Hướng đi vào (Connection Request):** ACS không tới được `http://<IP LAN agent>:7547`. Ba đường:
+  1. **STUN (TR-069 Annex G)** bằng `stuncd` (`/usr/sbin/stun-client`, config `stun.@stun[0]`) có sẵn
+     của sản phẩm. **Verified:** khi nhận UDP CR nó chạy
+     `ubus call tr069 inform '{"event":"6 connection request"}'` (`stunclient/src/stun.cxx:306`) —
+     icwmpd có method `inform`, `'6'` → `EVENT_IDX_6CONNECTION_REQUEST` (`ubus.c`
+     `cwmp_handle_inform`). Khi địa chỉ NAT đổi, nó ghi `stun.@stun[0].udpcontnreqaddr` và gửi
+     `inform "4 value change"`.
+  2. **Port-forward trên controller + `cwmp.cpe.cr_host`/`cr_port`**: bản MTK đã dùng hai option
+     này để dựng `ConnectionRequestURL` (`dmplatform_mtk.c`).
+  3. XMPP (Annex K): có source trong icwmp, **không build** (`--enable-icwmp_xmpp`), cần ACS hỗ trợ.
+- **Gap của bản port (Verified):** shell gốc (`functions/common/management_server:39-47`) map
+  `UDPConnectionRequestAddress`, `STUNEnable/ServerAddress/ServerPort/Username/Password/
+  Min/MaximumKeepAlivePeriod`, `NATDetected` vào `stun.@stun[0].*` và đặt cờ
+  `/tmp/stunclient_reload_needed`. Bản C (P1) phục vụ `ManagementServer.` bằng module dùng chung
+  `tr098/managementserver.c`, đọc `cwmp_stun.stun.*` và bật/tắt `/etc/init.d/icwmp_stund` — config
+  và dịch vụ **không có** trên sản phẩm. Hệ quả: ACS đọc `UDPConnectionRequestAddress` rỗng, bật STUN
+  từ ACS không có tác dụng. `stuncd` tự chạy theo `stun.@stun[0].stun_enable` thì vẫn nhận CR và
+  đánh thức icwmpd được, nhưng ACS không biết địa chỉ UDP để gửi. Cần một module MTK override các
+  leaf STUN (chưa làm). Comment đầu `dmplatform_mtk.c` ("ManagementServer.* is served by the
+  script") đã cũ.
