@@ -25,8 +25,13 @@
  *	                                         path also covers a native object
  *	                                         (root, ...), lists merged by
  *	                                         add_list_paramameter (sorted,
- *	                                         duplicates dropped)
- *	  SPV VALUECHECK                      -> script "set_check" (validate +
+ *	                                         duplicates dropped).  GPV of such
+ *	                                         a path asks the script only for
+ *	                                         the children it still owns
+ *	                                         (mtk_script_values), Inform only
+ *	                                         for the forced-inform names it
+ *	                                         kept the first time (mtk_inform)
+ *	  SPV VALUECHECK                     -> script "set_check" (validate +
  *	                                         queue in the shell), remember in
  *	                                         ctx->set_list_tmp
  *	  SPV VALUESET                        -> nothing (queued already)
@@ -56,6 +61,7 @@
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
+#include <pthread.h>
 
 #include "dmtr098.h"
 #include "dmmem.h"
@@ -304,6 +310,111 @@ static int mtk_transport_fault(const char *what, const char *path)
 }
 
 /* ------------------------------------------------------------------------ */
+/* values of a subtree, minus what the C tree owns                           */
+/* ------------------------------------------------------------------------ */
+
+/* The script does not know which paths a C module owns.  Asked get_value for
+ * an object above a native one ("InternetGatewayDevice.", "...WANDevice.")
+ * it ran the getter of every parameter below, the native ones included, and
+ * mtk_line_cb() dropped those lines: a GetParameterValues of the root cost
+ * the whole easycwmp walk plus the C walk.
+ *
+ * For such an object the script is now asked for its children (get_name,
+ * next_level 1: names only, no getter runs).  A native child is skipped, a
+ * child above a native object is descended into, every other child gets one
+ * get_value.  The script still answers every path it owns; only the getters
+ * whose line was going to be dropped no longer run. */
+
+#define MTK_PRUNE_DEPTH 12      /* deeper than the tree; past it, the whole subtree */
+
+/* non-native parameter names of a reply, strictly below parent */
+struct mtk_children {
+	const char *parent;
+	size_t plen;
+	char **names;
+	int n, cap;
+	int fault;              /* first fault_code of the reply, 0 = none */
+	int oom;
+};
+
+static int mtk_child_cb(json_object *line, void *priv)
+{
+	struct mtk_children *c = priv;
+	const char *param = jstr(line, "parameter");
+	const char *fault = jstr(line, "fault_code");
+
+	if (fault && fault[0]) {
+		int code = atoi(fault);
+
+		if (!c->fault)
+			c->fault = code < 9000 ? FAULT_9002 : code;
+		return 0;
+	}
+	if (!param || strncmp(param, c->parent, c->plen) != 0 || !param[c->plen])
+		return 0;
+	if (mtk_is_native(param))
+		return 0;
+	if (c->n == c->cap) {
+		int cap = c->cap ? c->cap * 2 : 16;
+		char **nn = realloc(c->names, cap * sizeof(*nn));
+
+		if (!nn) {
+			c->oom = 1;
+			return 0;
+		}
+		c->names = nn;
+		c->cap = cap;
+	}
+	if ((c->names[c->n] = strdup(param)) == NULL) {
+		c->oom = 1;
+		return 0;
+	}
+	c->n++;
+	return 0;
+}
+
+static void mtk_children_free(struct mtk_children *c)
+{
+	int i;
+
+	for (i = 0; i < c->n; i++)
+		free(c->names[i]);
+	free(c->names);
+	c->names = NULL;
+	c->n = c->cap = 0;
+}
+
+/* get_value of path into r (any kind that takes value lines: list, fp or
+ * single_value).  Same return as dmscript_request(); an unknown path leaves
+ * its fault in r->fault like a plain get_value does. */
+static int mtk_script_values(struct mtk_reply *r, const char *path, int depth)
+{
+	struct mtk_children c;
+	int i, rc = 0;
+
+	if (!mtk_is_object(path) || !mtk_covers_native(path) || depth >= MTK_PRUNE_DEPTH)
+		return dmscript_request(mtk_line_cb, r, "get_value", "param", path, NULL);
+
+	memset(&c, 0, sizeof(c));
+	c.parent = path;
+	c.plen = strlen(path);
+	if (dmscript_request(mtk_child_cb, &c, "get_name", "param", path, "next_level", "1", NULL) != 0) {
+		mtk_children_free(&c);
+		return -1;
+	}
+	if (c.oom) {
+		mtk_children_free(&c);
+		return dmscript_request(mtk_line_cb, r, "get_value", "param", path, NULL);
+	}
+	if (c.fault && !c.n && !r->fault)
+		r->fault = c.fault;
+	for (i = 0; i < c.n && rc == 0; i++)
+		rc = mtk_script_values(r, c.names[i], depth + 1);
+	mtk_children_free(&c);
+	return rc;
+}
+
+/* ------------------------------------------------------------------------ */
 /* commands                                                                  */
 /* ------------------------------------------------------------------------ */
 
@@ -312,7 +423,7 @@ static int mtk_get_value(struct dmctx *ctx, const char *path)
 	struct mtk_reply r;
 
 	mtk_reply_init(&r, ctx, MTK_KIND_VALUE);
-	if (dmscript_request(mtk_line_cb, &r, "get_value", "param", mtk_script_path(path), NULL) != 0)
+	if (mtk_script_values(&r, mtk_script_path(path), 0) != 0)
 		return mtk_transport_fault("get_value", path);
 	if (r.fault && !r.count)
 		return r.fault;
@@ -440,12 +551,114 @@ static int mtk_del_object(struct dmctx *ctx, const char *inparam, const char *ke
 	return 0;
 }
 
+/* The script's "inform" runs the getter of every forced-inform parameter of
+ * the library, and all of them but DeviceSummary are native by now, so their
+ * lines were dropped on every Inform.  The first Inform of this process runs
+ * the full "inform" and remembers the names the script kept; later ones ask
+ * get_value for just those, and nothing at all once the last one is ported.
+ * Nothing is remembered when a kept name carries an instance number (the set
+ * would follow the instances) or the reply had a fault.  A remembered name
+ * the script no longer answers sends that Inform back to the full walk. */
+static pthread_mutex_t mtk_inform_lock = PTHREAD_MUTEX_INITIALIZER;
+static int mtk_inform_known;            /* mtk_inform_names is the script's whole set */
+static char **mtk_inform_names;
+static int mtk_inform_n;
+
+struct mtk_inform_learn {
+	struct mtk_reply *r;
+	struct mtk_children c;
+};
+
+static int mtk_inform_learn_cb(json_object *line, void *priv)
+{
+	struct mtk_inform_learn *l = priv;
+
+	mtk_line_cb(line, l->r);
+	return mtk_child_cb(line, &l->c);
+}
+
+/* a path segment made of digits only */
+static int mtk_has_instance(const char *path)
+{
+	const char *p = path;
+
+	while (*p) {
+		size_t n = strcspn(p, ".");
+
+		if (n && strspn(p, "0123456789") >= n)
+			return 1;
+		p += n;
+		if (*p)
+			p++;
+	}
+	return 0;
+}
+
+static void mtk_inform_forget(void)
+{
+	int i;
+
+	for (i = 0; i < mtk_inform_n; i++)
+		free(mtk_inform_names[i]);
+	free(mtk_inform_names);
+	mtk_inform_names = NULL;
+	mtk_inform_n = 0;
+	mtk_inform_known = 0;
+}
+
+/* mtk_inform_lock held */
+static int mtk_inform_full(struct mtk_reply *r)
+{
+	struct mtk_inform_learn l;
+	int i, keep;
+
+	memset(&l, 0, sizeof(l));
+	l.r = r;
+	l.c.parent = "";
+	if (dmscript_request(mtk_inform_learn_cb, &l, "inform", NULL) != 0) {
+		mtk_children_free(&l.c);
+		return -1;
+	}
+	keep = !l.c.fault && !l.c.oom;
+	for (i = 0; keep && i < l.c.n; i++)
+		if (mtk_has_instance(l.c.names[i]))
+			keep = 0;
+	mtk_inform_forget();
+	if (keep) {
+		mtk_inform_names = l.c.names;
+		mtk_inform_n = l.c.n;
+		mtk_inform_known = 1;
+	} else {
+		mtk_children_free(&l.c);
+	}
+	return 0;
+}
+
 static int mtk_inform(struct dmctx *ctx)
 {
 	struct mtk_reply r;
+	int i, rc = 0;
 
 	mtk_reply_init(&r, ctx, MTK_KIND_VALUE);
-	if (dmscript_request(mtk_line_cb, &r, "inform", NULL) != 0)
+	pthread_mutex_lock(&mtk_inform_lock);
+	if (!mtk_inform_known) {
+		rc = mtk_inform_full(&r);
+	} else {
+		for (i = 0; i < mtk_inform_n; i++) {
+			int before = r.count;
+
+			if (dmscript_request(mtk_line_cb, &r, "get_value", "param", mtk_inform_names[i], NULL) != 0) {
+				rc = -1;
+				break;
+			}
+			if (r.count == before) {
+				rc = mtk_inform_full(&r);
+				break;
+			}
+		}
+	}
+	pthread_mutex_unlock(&mtk_inform_lock);
+	if (rc)
 		return mtk_transport_fault("inform", NULL);
 	return 0;
 }
@@ -714,7 +927,7 @@ int dm_platform_enabled_notify(struct dmctx *ctx)
 			mtk_reply_init(&r, ctx, MTK_KIND_VALUE);
 			r.fp = fp;
 			r.notif = lists[i].notif;
-			if (dmscript_request(mtk_line_cb, &r, "get_value", "param", path, NULL) != 0)
+			if (mtk_script_values(&r, path, 0) != 0)
 				break;
 			n += r.count;
 		}
