@@ -9,7 +9,9 @@
  *	functions/tr098/lan_device.
  *
  *	One source: ubus call hni getWlanDeviceList {"interface":"<ra*>"}, whose
- *	"infor" object carries one member per station.  The shell had to spool
+ *	"infor" is an ARRAY with one table per station (ubusmon ubus.c,
+ *	get_wlan_device_list: blobmsg_open_array); jshn's json_get_keys walks it
+ *	by index, and the shell gives up unless number_client is a number.  The shell had to spool
  *	that into /tmp cache files because a shell function cannot hold state
  *	between the getter calls of one RPC -- here the browse callback reads it
  *	once and hands each station's fields to its own instance, so the cache
@@ -58,7 +60,8 @@ static char *field_or(json_object *o, char *name, char *fallback)
 /* The station list of one interface, or NULL when the radio is down. */
 static json_object *assoc_list(const struct wlan_iface *w)
 {
-	json_object *res = NULL;
+	json_object *res = NULL, *nc, *infor;
+	const char *cnt;
 
 	if (!w || !w->name)
 		return NULL;
@@ -66,22 +69,45 @@ static json_object *assoc_list(const struct wlan_iface *w)
 		return NULL;
 	dmubus_call("hni", "getWlanDeviceList",
 		    UBUS_ARGS{{"interface", (char *)w->name, String}}, 1, &res);
-	if (!res)
+	if (!res || !json_object_is_type(res, json_type_object))
 		return NULL;
-	return json_object_object_get(res, "infor");
+	/* case "$client_count" in ''|*[!0-9]*) return 0 */
+	nc = json_object_object_get(res, "number_client");
+	cnt = nc ? json_object_get_string(nc) : NULL;
+	if (!cnt || !*cnt || strspn(cnt, "0123456789") != strlen(cnt))
+		return NULL;
+	/* json_select infor || return 0.  Never json_object_object_foreach()
+	 * it: on an array json_object_get_object() is NULL and the macro
+	 * dereferences it -- the SIGSEGV of the board, 2026-09-26 */
+	infor = json_object_object_get(res, "infor");
+	if (!infor || !json_object_is_type(infor, json_type_array))
+		return NULL;
+	return infor;
+}
+
+/* station i of the list, NULL when it is not a table (json_select fails,
+ * the shell skips it) */
+static json_object *assoc_nth(json_object *infor, int i)
+{
+	json_object *val = json_object_array_get_idx(infor, i);
+
+	return (val && json_object_is_type(val, json_type_object)) ? val : NULL;
 }
 
 int wlan_assoc_count(const struct wlan_iface *w)
 {
 	json_object *infor = assoc_list(w);
-	int n = 0;
+	int n = 0, i, len;
 
 	if (!infor)
 		return 0;
-	json_object_object_foreach(infor, key, val) {
+	len = (int)json_object_array_length(infor);
+	for (i = 0; i < len; i++) {
+		json_object *val = assoc_nth(infor, i);
 		char *mac;
 
-		(void)key;
+		if (!val)
+			continue;
 		mac = dmjson_get_value(val, 1, "MAC");
 		if (mac && *mac)
 			n++;
@@ -135,14 +161,17 @@ static int browseAssocInst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_
 	const struct wlan_iface *w = wlan_iface_of(prev_data);
 	json_object *infor = assoc_list(w);
 	char *idx, *idx_last = NULL;
-	int id = 0;
+	int id = 0, i, len;
 
 	if (!infor)
 		return 0;
-	json_object_object_foreach(infor, key, val) {
+	len = (int)json_object_array_length(infor);
+	for (i = 0; i < len; i++) {
+		json_object *val = assoc_nth(infor, i);
 		struct assoc_entry a = {0};
 
-		(void)key;
+		if (!val)
+			continue;
 		a.mac = dmjson_get_value(val, 1, "MAC");
 		if (!a.mac || !*a.mac)
 			continue;

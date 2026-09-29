@@ -273,7 +273,10 @@ void dmjson_get_var(char *jkey, char **jval)
 {
 	*jval = "";
 
-	if (dmjson_jobj == NULL)
+	/* a stray non-JSON-object line of the shell ("0", "[...]") parses to
+	 * another type: json_object_object_foreach() would dereference the
+	 * NULL json_object_get_object() of it */
+	if (dmjson_jobj == NULL || !json_object_is_type(dmjson_jobj, json_type_object))
 		return;
 
 	json_object_object_foreach(dmjson_jobj, key, val) {
