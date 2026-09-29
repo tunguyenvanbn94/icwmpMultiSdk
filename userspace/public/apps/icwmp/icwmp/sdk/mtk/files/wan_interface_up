@@ -1,0 +1,26 @@
+#!/bin/sh
+# Wait for a WAN address on easycwmp.@local[0].network, then restart icwmpd
+# (and stuncd, like the easycwmp watcher did).  Started by /etc/init.d/icwmpd
+# when there is no WAN IP yet.
+. /usr/share/libubox/jshn.sh
+wan_type=`uci -q get easycwmp.@local[0].wan_type`
+network=`uci -q get easycwmp.@local[0].network`
+[ -n "$network" ] || network=if0
+wan6_ip=""
+wan4_ip=""
+while [ -z "$wan6_ip" ] && [ -z "$wan4_ip" ]; do
+	if [ "$wan_type" = "ipv6" ]; then
+		json_load "$(ubus -S call network.interface.${network}_6 status 2>/dev/null)" 2>/dev/null
+		json_select "ipv6-address" 2>/dev/null && json_select "1" 2>/dev/null && json_get_var wan6_ip address
+	fi
+	if [ "$wan_type" != "ipv6" ] || [ -z "$wan6_ip" ]; then
+		json_load "$(ubus -S call network.interface.$network status 2>/dev/null)" 2>/dev/null
+		json_select "ipv4-address" 2>/dev/null && json_select "1" 2>/dev/null && json_get_var wan4_ip address
+	fi
+	if [ -n "$wan6_ip" ] || [ -n "$wan4_ip" ]; then
+		/etc/init.d/icwmpd restart
+		[ -x /etc/init.d/stuncd ] && /etc/init.d/stuncd restart
+		break
+	fi
+	sleep 15
+done

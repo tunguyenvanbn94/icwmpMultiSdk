@@ -1,0 +1,873 @@
+From 5c5da79599eafb85bd57126ddd0da45c335c813f Mon Sep 17 00:00:00 2001
+From: TuNV <tunguyenvanbn94@gmail.com>
+Date: Fri, 25 Sep 2026 14:25:05 +0700
+Subject: [PATCH] [icwmp tr098] P5a: IPPingDiagnostics and
+ TraceRouteDiagnostics, 22 parameters
+
+Ported from functions/tr098/ipping_diagnostic and traceroute_diagnostic.
+The measuring stays in the shell launchers (ipping_launch,
+traceroute_launch), queued by DiagnosticsState=Requested exactly as before;
+they report with "ubus call tr069 inform" 8 DIAGNOSTICS COMPLETE, which
+icwmpd serves.
+
+dm098/diag_mtk.[ch]: what every shell diagnostic shares -- a private
+"uci -P <dir>" store per diagnostic, the stop/reset/store tail of every
+setter, the Requested launcher, the host check.
+
+dmmtk: mtk_state()/mtk_state_set() (uci -P <dir>, a fresh context per
+call so /var/state deltas never leak into /var/state/traceroute),
+mtk_kill_cmdline() (pgrep -f | kill -9), mtk_netdev_exists(),
+mtk_ere_match().
+
+Queued background commands no longer share icwmpd's stdio:
+  - mtk_run_apply_service() read the queue's output to EOF, so a queued
+    "launcher run &" held the end of the session until the test finished;
+  - the compat script ran the queue with its own stdin/stdout, which are
+    icwmpd's request/reply pipe for the coprocess's whole life.
+
+Vendor quirks kept and documented in the files: IPPing Interface stops
+the NSLOOKUP diagnostic (copy-paste slip), maps WANIPConnection to a
+hard-coded eth0.1; TraceRoute Interface takes a device name; RouteHops.
+is always empty (its browse lived in functions/tr181/, never installed).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../src/sdk/mtk/compat/icwmp_dm.sh            |   7 +-
+ .../libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c  | 111 ++++++++++
+ .../libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h  |  81 ++++++++
+ .../src/sdk/mtk/dm098/ipping_mtk.c            | 194 ++++++++++++++++++
+ .../src/sdk/mtk/dm098/traceroute_mtk.c        | 176 ++++++++++++++++
+ public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c   | 140 ++++++++++++-
+ public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h   |  21 ++
+ public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk    |   5 +-
+ 8 files changed, 731 insertions(+), 4 deletions(-)
+ create mode 100644 public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c
+ create mode 100644 public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h
+ create mode 100644 public/libs/libicwmp_dm/src/sdk/mtk/dm098/ipping_mtk.c
+ create mode 100644 public/libs/libicwmp_dm/src/sdk/mtk/dm098/traceroute_mtk.c
+
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/compat/icwmp_dm.sh b/public/libs/libicwmp_dm/src/sdk/mtk/compat/icwmp_dm.sh
+index 388d074..02165a9 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/compat/icwmp_dm.sh
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/compat/icwmp_dm.sh
+@@ -256,7 +256,12 @@ dm_apply_service() {
+ 	common_restart_services
+ 	if [ -f "$apply_service_tmp_file" ]; then
+ 		chmod +x "$apply_service_tmp_file"
+-		/bin/sh "$apply_service_tmp_file"
++		# Detached stdio.  This script is icwmpd's coprocess for its whole
++		# life: our stdin carries its requests, our stdout its replies.  A
++		# queued "... &" (diagnostics launchers, "easycwmpd restart &")
++		# would inherit both, and write into -- or read from -- the next
++		# request long after this one returned.
++		/bin/sh "$apply_service_tmp_file" </dev/null >/dev/null 2>&1
+ 		rm -f "$apply_service_tmp_file"
+ 	fi
+ 	uci_change_packages=""
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c
+new file mode 100644
+index 0000000..644266b
+--- /dev/null
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c
+@@ -0,0 +1,111 @@
++/*
++ *	This program is free software: you can redistribute it and/or modify
++ *	it under the terms of the GNU General Public License as published by
++ *	the Free Software Foundation, either version 2 of the License, or
++ *	(at your option) any later version.
++ *
++ *	Shared diagnostics machinery.  See diag_mtk.h.
++ *
++ *	NOT BUILD-TESTED YET.
++ */
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <errno.h>
++
++#include "dmmem.h"
++#include "dmmtk.h"
++#include "diag_mtk.h"
++
++#define DIAG_PKG	"easycwmp"
++#define DIAG_SEC	"@local[0]"
++
++const struct diag_store diag_ipping     = { "/var/state",            "ipping_launch" };
++const struct diag_store diag_traceroute = { "/var/state/traceroute", "traceroute_launch" };
++const struct diag_store diag_nslookup   = { "/var/state/nslookup",   "nslookup_launch" };
++
++char *diag_get(const struct diag_store *d, const char *option, const char *def)
++{
++	char *v = mtk_state(d->dir, DIAG_PKG, DIAG_SEC, option);
++
++	if (!*v && def)
++		return (char *)def;
++	return v;
++}
++
++int diag_set(const struct diag_store *d, const char *option, const char *value)
++{
++	return mtk_state_set(d->dir, DIAG_PKG, DIAG_SEC, option, value);
++}
++
++void diag_stop(const struct diag_store *d)
++{
++	if (mtk_kill_cmdline(d->launcher) > 0)
++		diag_set(d, "DiagnosticsState", "None");
++}
++
++void diag_store_value(const struct diag_store *d, const char *option, const char *value)
++{
++	diag_stop(d);
++	if (strcmp(diag_get(d, "DiagnosticsState", NULL), "Requested") != 0)
++		diag_set(d, "DiagnosticsState", "None");
++	diag_set(d, option, value);
++}
++
++void diag_request(const struct diag_store *d)
++{
++	char cmd[256];
++
++	diag_stop(d);
++	diag_set(d, "DiagnosticsState", "Requested");
++	snprintf(cmd, sizeof(cmd), "/bin/sh %s/%s run &", DIAG_FUNCTION_PATH, d->launcher);
++	mtk_apply_service(cmd);
++}
++
++int diag_check_uint(const char *v, long long min, long long max)
++{
++	const char *p;
++	long long n;
++
++	if (!v || !*v)
++		return -1;
++	for (p = v; *p; p++)
++		if (*p < '0' || *p > '9')
++			return -1;
++	errno = 0;
++	n = strtoll(v, NULL, 10);
++	if (errno == ERANGE)
++		return 0;	/* busybox "[": out of range -> test false -> stored */
++	if (n < min)
++		return -1;
++	if (max >= 0 && n > max)
++		return -1;
++	return 0;
++}
++
++/* the three patterns of the shell, with "\/" written as "/" */
++#define RE_IPV4_ANYWHERE \
++	"(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." \
++	"(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"
++#define RE_HOSTNAME \
++	"^(http(s)?://)?[a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})+(:[0-9]{1,5})?$"
++#define RE_IPV6 \
++	"^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}$"
++
++int diag_host_valid(const struct diag_store *d, const char *host)
++{
++	const char *version = diag_get(d, "ProtocolVersion", "IPv4");
++
++	if (strcmp(version, "IPv4") == 0) {
++		if (!mtk_ere_match(RE_IPV4_ANYWHERE, host) &&
++		    !mtk_ere_match(RE_HOSTNAME, host))
++			return 0;
++	}
++	if (strcmp(version, "IPv6") == 0) {
++		if (!mtk_ere_match(RE_IPV6, host) || strstr(host, ":::")) {
++			if (!mtk_ere_match(RE_HOSTNAME, host))
++				return 0;
++		}
++	}
++	return 1;
++}
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h
+new file mode 100644
+index 0000000..7a420b5
+--- /dev/null
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h
+@@ -0,0 +1,81 @@
++/*
++ *	This program is free software: you can redistribute it and/or modify
++ *	it under the terms of the GNU General Public License as published by
++ *	the Free Software Foundation, either version 2 of the License, or
++ *	(at your option) any later version.
++ *
++ *	What every diagnostics object of the easycwmp shell shares
++ *	(functions/tr098/<x>_diagnostic, functions/tr143/<x>_diagnostic).
++ *
++ *	A shell diagnostic is a thin front for a launcher script:
++ *
++ *	  - every parameter lives in easycwmp.@local[0] of a PRIVATE uci
++ *	    savedir, "uci -P <dir>", never committed, gone at reboot;
++ *	  - every writable setter ends the same way: kill the launcher if it
++ *	    runs, drop DiagnosticsState back to None unless a test is pending,
++ *	    store the value;
++ *	  - DiagnosticsState=Requested queues "/bin/sh <functions>/<launcher>
++ *	    run &" on the apply-service list, so the test starts after the
++ *	    session closes;
++ *	  - the launcher does the measuring, writes the results into the same
++ *	    savedir and reports with
++ *	      ubus call tr069 inform '{"event":"8 DIAGNOSTICS COMPLETE"}'
++ *	    which icwmpd serves (ubus.c cwmp_handle_inform ->
++ *	    cwmp_get_int_event_code: first char '8' ->
++ *	    EVENT_IDX_8DIAGNOSTICS_COMPLETE).
++ *
++ *	The launchers stay shell scripts, installed where they always were.
++ *	They are the measuring engine, not the data model, and the ACS-facing
++ *	contract (states, error strings, result fields) is theirs.
++ */
++#ifndef __DIAG_MTK_H
++#define __DIAG_MTK_H
++
++/* $FUNCTION_PATH of easycwmp.sh, where the launchers are installed */
++#define DIAG_FUNCTION_PATH	"/usr/share/easycwmp/functions"
++
++struct diag_store {
++	const char *dir;	/* uci -P <dir> */
++	const char *launcher;	/* <DIAG_FUNCTION_PATH>/<launcher>, also the
++				 * pattern its stop function greps for */
++};
++
++/* one per shell file; the directory is the file's own UCI_*_VARSTATE* */
++extern const struct diag_store diag_ipping;		/* -P /var/state */
++extern const struct diag_store diag_traceroute;	/* -P /var/state/traceroute */
++extern const struct diag_store diag_nslookup;		/* -P /var/state/nslookup */
++
++/* <x>_get: "${val:-def}" of easycwmp.@local[0].<option> */
++char *diag_get(const struct diag_store *d, const char *option, const char *def);
++/* plain $UCI_SET_VARSTATE* of easycwmp.@local[0].<option> */
++int diag_set(const struct diag_store *d, const char *option, const char *value);
++
++/* <x>_stop_diagnostic: kill -9 the running launcher; when one was found,
++ * DiagnosticsState=None */
++void diag_stop(const struct diag_store *d);
++/* the tail every <x>_set_* shares:
++ *	<x>_stop_diagnostic
++ *	[ DiagnosticsState != Requested ] && DiagnosticsState=None
++ *	<option>=<value> */
++void diag_store_value(const struct diag_store *d, const char *option, const char *value);
++/* <x>_set_diagnostic_state Requested: stop, Requested, queue the launcher */
++void diag_request(const struct diag_store *d);
++
++/* "case $v in (*[^0-9]*|'') fault", then the "[ $v -lt MIN -o $v -gt MAX ]"
++ * range test.  Returns 0 when the value is accepted.
++ *
++ * A number too large for busybox test is accepted: "[" prints "out of range"
++ * and returns 2, which "if" reads as false, so the range check never fires
++ * and the setter goes on to store the value.  Kept, so an ACS sees the same
++ * answer as before.  max < 0 means no upper bound. */
++int diag_check_uint(const char *v, long long min, long long max);
++
++/* <x>_set_host: the host check of ipping_diagnostic and
++ * traceroute_diagnostic, verbatim.  Depends on the ProtocolVersion stored
++ * in the same savedir (default IPv4):
++ *	IPv4: a dotted quad ANYWHERE in the value, or a host name
++ *	IPv6: an IPv6 literal without ":::", or a host name
++ *	anything else: not checked */
++int diag_host_valid(const struct diag_store *d, const char *host);
++
++#endif
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/ipping_mtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/ipping_mtk.c
+new file mode 100644
+index 0000000..bee6ce3
+--- /dev/null
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/ipping_mtk.c
+@@ -0,0 +1,194 @@
++/*
++ *	This program is free software: you can redistribute it and/or modify
++ *	it under the terms of the GNU General Public License as published by
++ *	the Free Software Foundation, either version 2 of the License, or
++ *	(at your option) any later version.
++ *
++ *	InternetGatewayDevice.IPPingDiagnostics., 12 parameters.
++ *
++ *	Ported from functions/tr098/ipping_diagnostic.  The ping itself stays
++ *	in functions/common/ipping_launch (installed as
++ *	/usr/share/easycwmp/functions/ipping_launch), queued by
++ *	DiagnosticsState=Requested; see diag_mtk.h for the contract.
++ *
++ *	State lives in easycwmp.@local[0] of "uci -P /var/state" -- the plain
++ *	/var/state savedir, unlike every other diagnostic which has its own.
++ *
++ *	VENDOR QUIRKS KEPT, so an ACS sees exactly what it saw before:
++ *
++ *	  - Interface takes a TR-098 path and maps it with a fixed table
++ *	    (resolve_trpath_to_ifname): LAN IPInterface -> network.lan.ifname,
++ *	    any WANPPPConnection -> network.if0.ifname, any WANIPConnection ->
++ *	    "eth0.1" hard coded.  The getter returns the path as written.
++ *
++ *	  - The Interface setter stops the NSLOOKUP diagnostic, not the ping:
++ *	    ipping_set_interface() calls nslookup_stop_diagnostic (a copy and
++ *	    paste slip of the vendor).  Writing Interface therefore kills a
++ *	    running NSLookupDiagnostics and resets ITS state to None, while a
++ *	    running ping is left alone.
++ *
++ *	  - DSCP is not checked at all and is typed string (the shell gave it no
++ *	    type); the launcher reads it with a default of 0.
++ *
++ *	  - The Host check finds a dotted quad ANYWHERE in the value
++ *	    (unanchored grep -o), so "x1.2.3.4y" is accepted.
++ *
++ *	NOT BUILD-TESTED YET.
++ */
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <fnmatch.h>
++
++#include "dmuci.h"
++#include "dmcommon.h"
++#include "dm_registry.h"
++#include "dmmtk.h"
++#include "diag_mtk.h"
++
++#define IPP	(&diag_ipping)
++
++/* ------------------------------------------------------------------ */
++/* getters                                                             */
++/* ------------------------------------------------------------------ */
++
++#define IPPING_GET(fn, option, def)						\
++static int fn(char *refparam, struct dmctx *ctx, void *data,			\
++	      char *instance, char **value)					\
++{										\
++	*value = diag_get(IPP, option, def);					\
++	return 0;								\
++}
++
++IPPING_GET(get_ipp_state,        "DiagnosticsState",    "None")
++IPPING_GET(get_ipp_host,         "Host",                NULL)
++IPPING_GET(get_ipp_dscp,         "DSCP",                NULL)
++IPPING_GET(get_ipp_interface,    "InterfacePath",       NULL)
++IPPING_GET(get_ipp_repetitions,  "NumberOfRepetitions", "3")
++IPPING_GET(get_ipp_timeout,      "Timeout",             "1000")
++IPPING_GET(get_ipp_blocksize,    "DataBlockSize",       "64")
++IPPING_GET(get_ipp_success,      "SuccessCount",        "0")
++IPPING_GET(get_ipp_failure,      "FailureCount",        "0")
++IPPING_GET(get_ipp_avg,          "AverageResponseTime", "0")
++IPPING_GET(get_ipp_min,          "MinimumResponseTime", "0")
++IPPING_GET(get_ipp_max,          "MaximumResponseTime", "0")
++
++/* ------------------------------------------------------------------ */
++/* setters                                                             */
++/* ------------------------------------------------------------------ */
++
++static int set_ipp_state(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	if (strcmp(value, "Requested") != 0)
++		return FAULT_9007;
++	if (action == VALUESET)
++		diag_request(IPP);
++	return 0;
++}
++
++static int set_ipp_host(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	if (!diag_host_valid(IPP, value))
++		return FAULT_9007;
++	if (action == VALUESET)
++		diag_store_value(IPP, "Host", value);
++	return 0;
++}
++
++/* ipping_set: no check */
++static int set_ipp_dscp(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	if (action == VALUESET)
++		diag_store_value(IPP, "DSCP", value);
++	return 0;
++}
++
++/* ipping_set_number: digits, >= 1 */
++#define IPPING_SET_NUMBER(fn, option)						\
++static int fn(char *refparam, struct dmctx *ctx, void *data,			\
++	      char *instance, char *value, int action)				\
++{										\
++	if (diag_check_uint(value, 1, -1) != 0)					\
++		return FAULT_9007;						\
++	if (action == VALUESET)							\
++		diag_store_value(IPP, option, value);				\
++	return 0;								\
++}
++
++IPPING_SET_NUMBER(set_ipp_repetitions, "NumberOfRepetitions")
++IPPING_SET_NUMBER(set_ipp_timeout,     "Timeout")
++IPPING_SET_NUMBER(set_ipp_blocksize,   "DataBlockSize")
++
++/* resolve_trpath_to_ifname(): shell "case" patterns, "*" matching dots too */
++static const char *ipping_ifname_of(const char *path)
++{
++	if (fnmatch("InternetGatewayDevice.LANDevice.*.LANHostConfigManagement.IPInterface.*", path, 0) == 0)
++		return mtk_state("/var/state", "network", "lan", "ifname");
++	if (fnmatch("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*", path, 0) == 0)
++		return mtk_state("/var/state", "network", "if0", "ifname");
++	if (fnmatch("InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*", path, 0) == 0)
++		return "eth0.1";
++	return NULL;
++}
++
++static int set_ipp_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	const char *ifname;
++
++	if (strncmp(value, "InternetGatewayDevice.", strlen("InternetGatewayDevice.")) != 0)
++		return FAULT_9007;
++	ifname = ipping_ifname_of(value);
++	if (!ifname || !*ifname || !mtk_netdev_exists(ifname))
++		return FAULT_9007;
++	if (action != VALUESET)
++		return 0;
++
++	/* nslookup_stop_diagnostic, as the shell calls it -- see the header */
++	diag_stop(&diag_nslookup);
++	if (strcmp(diag_get(IPP, "DiagnosticsState", NULL), "Requested") != 0)
++		diag_set(IPP, "DiagnosticsState", "None");
++	diag_set(IPP, "Interface", ifname);
++	diag_set(IPP, "InterfacePath", value);
++	return 0;
++}
++
++/* ------------------------------------------------------------------ */
++/* tables                                                              */
++/* ------------------------------------------------------------------ */
++
++static DMLEAF tIPPingMtkParams[] = {
++/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
++{"DiagnosticsState", &DMWRITE, DMT_STRING, get_ipp_state, set_ipp_state, NULL, NULL},
++{"Host", &DMWRITE, DMT_STRING, get_ipp_host, set_ipp_host, NULL, NULL},
++{"DSCP", &DMWRITE, DMT_STRING, get_ipp_dscp, set_ipp_dscp, NULL, NULL},
++{"Interface", &DMWRITE, DMT_STRING, get_ipp_interface, set_ipp_interface, NULL, NULL},
++{"NumberOfRepetitions", &DMWRITE, DMT_UNINT, get_ipp_repetitions, set_ipp_repetitions, NULL, NULL},
++{"Timeout", &DMWRITE, DMT_UNINT, get_ipp_timeout, set_ipp_timeout, NULL, NULL},
++{"DataBlockSize", &DMWRITE, DMT_UNINT, get_ipp_blocksize, set_ipp_blocksize, NULL, NULL},
++{"SuccessCount", &DMREAD, DMT_UNINT, get_ipp_success, NULL, NULL, NULL},
++{"FailureCount", &DMREAD, DMT_UNINT, get_ipp_failure, NULL, NULL, NULL},
++{"AverageResponseTime", &DMREAD, DMT_UNINT, get_ipp_avg, NULL, NULL, NULL},
++{"MinimumResponseTime", &DMREAD, DMT_UNINT, get_ipp_min, NULL, NULL, NULL},
++{"MaximumResponseTime", &DMREAD, DMT_UNINT, get_ipp_max, NULL, NULL, NULL},
++{0}
++};
++
++static DMOBJ tIPPingMtkObj[] = {
++/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
++{"IPPingDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tIPPingMtkParams, NULL},
++{0}
++};
++
++static const char *const ipping_mtk_paths[] = {
++	"InternetGatewayDevice.IPPingDiagnostics.",
++	NULL
++};
++
++static const struct dm_module ipping_mtk_module = {
++	.name  = "mtk-ipping",
++	.model = DM_MODEL_TR098,
++	.order = DM_ORDER_SDK,
++	.objs  = tIPPingMtkObj,
++	.paths = ipping_mtk_paths,
++};
++DM_MODULE_REGISTER(ipping_mtk_module);
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/traceroute_mtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/traceroute_mtk.c
+new file mode 100644
+index 0000000..e82d92b
+--- /dev/null
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/traceroute_mtk.c
+@@ -0,0 +1,176 @@
++/*
++ *	This program is free software: you can redistribute it and/or modify
++ *	it under the terms of the GNU General Public License as published by
++ *	the Free Software Foundation, either version 2 of the License, or
++ *	(at your option) any later version.
++ *
++ *	InternetGatewayDevice.TraceRouteDiagnostics., 10 parameters and the
++ *	RouteHops. object.
++ *
++ *	Ported from functions/tr098/traceroute_diagnostic.  The trace itself
++ *	stays in functions/common/traceroute_launch, queued by
++ *	DiagnosticsState=Requested; see diag_mtk.h.
++ *
++ *	State lives in easycwmp.@local[0] of "uci -P /var/state/traceroute",
++ *	its own savedir: DiagnosticsState here is not the one of
++ *	IPPingDiagnostics even though the option has the same name.
++ *
++ *	VENDOR QUIRKS KEPT:
++ *
++ *	  - Interface takes a network DEVICE name, not a TR-098 path (unlike
++ *	    IPPingDiagnostics.Interface), and reads "default" when unset.  The
++ *	    shell accepted it when "$(ifconfig $2)" printed something, unquoted:
++ *	      ""     ifconfig with no argument lists the up interfaces -> accepted
++ *	      "-a"   lists all of them                                 -> accepted
++ *	      "a b"  two words, ifconfig tries to CONFIGURE a         -> rejected
++ *	    The third case also ran that configuration ("eth0 down" took eth0
++ *	    down) -- the rejection is kept, the side effect is not.
++ *
++ *	  - RouteHops. has no instance.  Its browse function
++ *	    (traceroute_routehops_browse_instances) lives in functions/tr181/,
++ *	    which the cwmpclient package never installed (cwmpclient/Makefile:
++ *	    the tr181 copy line is commented out), so on the product the object
++ *	    was always empty and only RouteHopsNumberOfEntries carried a count.
++ *
++ *	NOT BUILD-TESTED YET.
++ */
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++#include "dmuci.h"
++#include "dmcommon.h"
++#include "dm_registry.h"
++#include "dmmtk.h"
++#include "diag_mtk.h"
++
++#define TRC	(&diag_traceroute)
++
++/* ------------------------------------------------------------------ */
++/* getters                                                             */
++/* ------------------------------------------------------------------ */
++
++#define TRACEROUTE_GET(fn, option, def)						\
++static int fn(char *refparam, struct dmctx *ctx, void *data,			\
++	      char *instance, char **value)					\
++{										\
++	*value = diag_get(TRC, option, def);					\
++	return 0;								\
++}
++
++TRACEROUTE_GET(get_trc_state,     "DiagnosticsState",         "None")
++TRACEROUTE_GET(get_trc_host,      "Host",                     NULL)
++TRACEROUTE_GET(get_trc_blocksize, "DataBlockSize",            "38")
++TRACEROUTE_GET(get_trc_maxhops,   "MaxHopCount",              "30")
++TRACEROUTE_GET(get_trc_interface, "Interface",                "default")
++TRACEROUTE_GET(get_trc_tries,     "NumberOfTries",            "3")
++TRACEROUTE_GET(get_trc_timeout,   "Timeout",                  "5000")
++TRACEROUTE_GET(get_trc_dscp,      "DSCP",                     "0")
++TRACEROUTE_GET(get_trc_resptime,  "ResponseTime",             "0")
++TRACEROUTE_GET(get_trc_hops,      "RouteHopsNumberOfEntries", "0")
++
++/* ------------------------------------------------------------------ */
++/* setters                                                             */
++/* ------------------------------------------------------------------ */
++
++static int set_trc_state(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	if (strcmp(value, "Requested") != 0)
++		return FAULT_9007;
++	if (action == VALUESET)
++		diag_request(TRC);
++	return 0;
++}
++
++static int set_trc_host(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	if (!diag_host_valid(TRC, value))
++		return FAULT_9007;
++	if (action == VALUESET)
++		diag_store_value(TRC, "Host", value);
++	return 0;
++}
++
++/* traceroute_set_tries / _timout / _mhops / _dsize / _dscp: digits, then a
++ * range; bounds as the shell has them */
++#define TRACEROUTE_SET_RANGE(fn, option, lo, hi)				\
++static int fn(char *refparam, struct dmctx *ctx, void *data,			\
++	      char *instance, char *value, int action)				\
++{										\
++	if (diag_check_uint(value, lo, hi) != 0)				\
++		return FAULT_9007;						\
++	if (action == VALUESET)							\
++		diag_store_value(TRC, option, value);				\
++	return 0;								\
++}
++
++TRACEROUTE_SET_RANGE(set_trc_tries,     "NumberOfTries", 1,  3)
++TRACEROUTE_SET_RANGE(set_trc_timeout,   "Timeout",       1,  86400000)
++TRACEROUTE_SET_RANGE(set_trc_maxhops,   "MaxHopCount",   1,  64)
++TRACEROUTE_SET_RANGE(set_trc_blocksize, "DataBlockSize", 38, 32768)
++TRACEROUTE_SET_RANGE(set_trc_dscp,      "DSCP",          0,  63)
++
++/* "$(ifconfig $2)" is not empty -- see the header for the three cases */
++static int trc_ifconfig_prints(const char *v)
++{
++	if (!*v || strcmp(v, "-a") == 0)
++		return 1;
++	if (strpbrk(v, " \t\n"))
++		return 0;
++	return mtk_netdev_exists(v);
++}
++
++static int set_trc_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	if (!trc_ifconfig_prints(value))
++		return FAULT_9007;
++	if (action == VALUESET)
++		diag_store_value(TRC, "Interface", value);
++	return 0;
++}
++
++/* ------------------------------------------------------------------ */
++/* tables                                                              */
++/* ------------------------------------------------------------------ */
++
++static DMLEAF tTraceRouteMtkParams[] = {
++/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
++{"DiagnosticsState", &DMWRITE, DMT_STRING, get_trc_state, set_trc_state, NULL, NULL},
++{"Host", &DMWRITE, DMT_STRING, get_trc_host, set_trc_host, NULL, NULL},
++{"DataBlockSize", &DMWRITE, DMT_UNINT, get_trc_blocksize, set_trc_blocksize, NULL, NULL},
++{"MaxHopCount", &DMWRITE, DMT_UNINT, get_trc_maxhops, set_trc_maxhops, NULL, NULL},
++{"Interface", &DMWRITE, DMT_STRING, get_trc_interface, set_trc_interface, NULL, NULL},
++{"NumberOfTries", &DMWRITE, DMT_UNINT, get_trc_tries, set_trc_tries, NULL, NULL},
++{"Timeout", &DMWRITE, DMT_UNINT, get_trc_timeout, set_trc_timeout, NULL, NULL},
++{"DSCP", &DMWRITE, DMT_UNINT, get_trc_dscp, set_trc_dscp, NULL, NULL},
++{"ResponseTime", &DMREAD, DMT_UNINT, get_trc_resptime, NULL, NULL, NULL},
++{"RouteHopsNumberOfEntries", &DMREAD, DMT_UNINT, get_trc_hops, NULL, NULL, NULL},
++{0}
++};
++
++/* always empty on the product -- see the header */
++static DMOBJ tTraceRouteMtkChildObj[] = {
++/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
++{"RouteHops", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
++{0}
++};
++
++static DMOBJ tTraceRouteMtkObj[] = {
++{"TraceRouteDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
++ tTraceRouteMtkChildObj, tTraceRouteMtkParams, NULL},
++{0}
++};
++
++static const char *const traceroute_mtk_paths[] = {
++	"InternetGatewayDevice.TraceRouteDiagnostics.",
++	NULL
++};
++
++static const struct dm_module traceroute_mtk_module = {
++	.name  = "mtk-traceroute",
++	.model = DM_MODEL_TR098,
++	.order = DM_ORDER_SDK,
++	.objs  = tTraceRouteMtkObj,
++	.paths = traceroute_mtk_paths,
++};
++DM_MODULE_REGISTER(traceroute_mtk_module);
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c
+index 09871c3..c74be81 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c
+@@ -16,6 +16,10 @@
+ #include <sys/types.h>
+ #include <sys/wait.h>
+ #include <fcntl.h>
++#include <dirent.h>
++#include <signal.h>
++#include <regex.h>
++#include <net/if.h>
+ 
+ #include <uci.h>
+ 
+@@ -89,6 +93,129 @@ char *mtk_uci_default(const char *package, const char *section, const char *opti
+ 	return dmstrdup(ptr.o->v.string);
+ }
+ 
++static struct uci_context *state_ctx(const char *dir)
++{
++	struct uci_context *c = uci_alloc_context();
++
++	if (!c)
++		return NULL;
++	/* what "uci -P <dir>" does: the default savedir becomes a delta
++	 * path, <dir> becomes the savedir */
++	uci_add_delta_path(c, c->savedir);
++	uci_set_savedir(c, dir);
++	return c;
++}
++
++char *mtk_state(const char *dir, const char *package, const char *section,
++		const char *option)
++{
++	struct uci_context *c;
++	struct uci_ptr ptr = {0};
++	char buf[256];
++	char *v = "";
++
++	if (!dir || !package || !section || !option)
++		return "";
++	if (snprintf(buf, sizeof(buf), "%s.%s.%s", package, section, option) >= (int)sizeof(buf))
++		return "";
++	c = state_ctx(dir);
++	if (!c)
++		return "";
++	if (uci_lookup_ptr(c, &ptr, buf, true) == UCI_OK &&
++	    (ptr.flags & UCI_LOOKUP_COMPLETE) && ptr.o &&
++	    ptr.o->type == UCI_TYPE_STRING && ptr.o->v.string)
++		v = dmstrdup(ptr.o->v.string);
++	uci_free_context(c);
++	return v;
++}
++
++int mtk_state_set(const char *dir, const char *package, const char *section,
++		  const char *option, const char *value)
++{
++	struct uci_context *c;
++	struct uci_ptr ptr = {0};
++	char buf[1024];
++	int rc = -1;
++
++	if (!dir || !package || !section || !option || !value)
++		return -1;
++	if (snprintf(buf, sizeof(buf), "%s.%s.%s=%s", package, section, option, value) >= (int)sizeof(buf))
++		return -1;
++	c = state_ctx(dir);
++	if (!c)
++		return -1;
++	if (uci_lookup_ptr(c, &ptr, buf, true) == UCI_OK &&
++	    uci_set(c, &ptr) == UCI_OK && ptr.p &&
++	    uci_save(c, ptr.p) == UCI_OK)
++		rc = 0;
++	uci_free_context(c);
++	return rc;
++}
++
++int mtk_kill_cmdline(const char *pattern)
++{
++	DIR *d;
++	struct dirent *de;
++	pid_t self = getpid();
++	int n = 0;
++
++	if (!pattern || !*pattern)
++		return 0;
++	d = opendir("/proc");
++	if (!d)
++		return 0;
++	while ((de = readdir(d)) != NULL) {
++		char path[64], buf[1024];
++		ssize_t len, i;
++		pid_t pid;
++		int fd;
++
++		if (!isdigit((unsigned char)de->d_name[0]))
++			continue;
++		pid = (pid_t)atoi(de->d_name);
++		if (pid <= 1 || pid == self)
++			continue;
++		snprintf(path, sizeof(path), "/proc/%s/cmdline", de->d_name);
++		fd = open(path, O_RDONLY);
++		if (fd < 0)
++			continue;
++		len = read(fd, buf, sizeof(buf) - 1);
++		close(fd);
++		if (len <= 0)
++			continue;	/* kernel thread, or already gone */
++		/* argv is NUL separated: join it with spaces, as pgrep -f sees it */
++		for (i = 0; i < len; i++)
++			if (buf[i] == '\0')
++				buf[i] = ' ';
++		buf[len] = '\0';
++		if (strstr(buf, pattern) && kill(pid, SIGKILL) == 0)
++			n++;
++	}
++	closedir(d);
++	return n;
++}
++
++int mtk_netdev_exists(const char *name)
++{
++	if (!name || !*name || strlen(name) >= IFNAMSIZ)
++		return 0;
++	return if_nametoindex(name) != 0;
++}
++
++int mtk_ere_match(const char *re, const char *s)
++{
++	regex_t rx;
++	int hit;
++
++	if (!re || !s)
++		return 0;
++	if (regcomp(&rx, re, REG_EXTENDED | REG_NEWLINE | REG_NOSUB) != 0)
++		return 0;
++	hit = regexec(&rx, s, 0, NULL, 0) == 0;
++	regfree(&rx);
++	return hit;
++}
++
+ int mtk_ipv4_parse(const char *s, unsigned int *out)
+ {
+ 	unsigned int v = 0;
+@@ -300,13 +427,22 @@ void mtk_run_apply_service(void)
+ 	if (!f)
+ 		return;
+ 	while (fgets(line, sizeof(line), f)) {
+-		char *argv[] = { "/bin/sh", "-c", line, NULL };
++		char cmd[sizeof(line) + 48];
++		char *argv[] = { "/bin/sh", "-c", cmd, NULL };
+ 
+ 		line[strcspn(line, "\r\n")] = '\0';
+ 		if (!line[0])
+ 			continue;
+ 		/* output discarded on purpose: these are init scripts, their
+-		 * logs belong in syslog, not in a CWMP reply */
++		 * logs belong in syslog, not in a CWMP reply.
++		 *
++		 * The shell detaches its own stdio BEFORE running the line.  Lines
++		 * end in "&" (the diagnostics launchers, "easycwmpd restart &"):
++		 * a background child would otherwise inherit the pipe mtk_exec()
++		 * reads to EOF, and the end of the session would wait for a
++		 * traceroute or a TR-143 download to finish -- while the launcher
++		 * retries "ubus call tr069 inform" against this very agent. */
++		snprintf(cmd, sizeof(cmd), "exec </dev/null >/dev/null 2>&1; %s", line);
+ 		(void)mtk_exec(argv);
+ 	}
+ 	fclose(f);
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h b/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h
+index efcdd85..74284f9 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h
+@@ -60,6 +60,27 @@ void mtk_run_apply_service(void);
+  * ("uci -q -c /rom/etc/config get").  Never NULL. */
+ char *mtk_uci_default(const char *package, const char *section, const char *option);
+ 
++/* "uci -P <dir> get/set": runtime state kept in a savedir of its own
++ * (/var/state/traceroute, /var/state/nslookup, ...).  Each diagnostic of the
++ * shell has its own <dir>, so DiagnosticsState of one never reads as the
++ * DiagnosticsState of another.  A fresh uci context per call: the engine's
++ * varstate context already carries /var/state as a delta path and would leak
++ * those deltas in.  Getter never NULL, "" when unset. */
++char *mtk_state(const char *dir, const char *package, const char *section,
++		const char *option);
++int mtk_state_set(const char *dir, const char *package, const char *section,
++		  const char *option, const char *value);
++
++/* Processes ---------------------------------------------------------- */
++/* "pgrep -f <pattern> | xargs kill -9": every process whose command line
++ * contains pattern, this one excepted.  Returns how many were signalled. */
++int mtk_kill_cmdline(const char *pattern);
++/* "ifconfig <name>" succeeds: the network device exists, up or down. */
++int mtk_netdev_exists(const char *name);
++/* "echo <s> | grep -E -q <re>": POSIX ERE, ^ and $ bound to each line like
++ * grep does.  1 on a match, 0 otherwise (a bad pattern never matches). */
++int mtk_ere_match(const char *re, const char *s);
++
+ /* IPv4 --------------------------------------------------------------- */
+ /* Dotted quad -> host order integer, mirroring is_valid_ipv4 + ipstr2int
+  * of functions/common: every octet decimal and <= 255, exactly four of them.
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk b/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk
+index 9c83f99..3a8e615 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk
+@@ -20,7 +20,10 @@ libtr098_la_SOURCES +=	\
+ 	../sdk/mtk/dm098/wanip_mtk.c	\
+ 	../sdk/mtk/dm098/wanipv6_mtk.c	\
+ 	../sdk/mtk/dm098/portmapping_mtk.c	\
+-	../sdk/mtk/dm098/servicelist_mtk.c
++	../sdk/mtk/dm098/servicelist_mtk.c	\
++	../sdk/mtk/dm098/diag_mtk.c	\
++	../sdk/mtk/dm098/ipping_mtk.c	\
++	../sdk/mtk/dm098/traceroute_mtk.c
+ 
+ if DM_MTK_SCRIPT_COMPAT
+ libtr098_la_SOURCES +=	\
+-- 
+2.34.1
+

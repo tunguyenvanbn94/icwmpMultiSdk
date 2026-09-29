@@ -1,0 +1,2 @@
+condition: ifneq ($(strip $(BUILD_LIBTR098)),)
+dependson: public/libs/uci public/libs/ubus public/libs/libubox public/libs/jsonc private/libs/cms_qdm_sentinel private/libs/mdm_cbk_tr69

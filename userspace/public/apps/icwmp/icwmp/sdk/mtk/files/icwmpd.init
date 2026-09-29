@@ -1,0 +1,239 @@
+#!/bin/sh /etc/rc.common
+# icwmpd (icwmp_tr098d) on the MediaTek/Airoha OpenWrt product tree (HNI).
+# Same start conditions and helpers as the easycwmpd init script it replaces
+# (cwmpclient/ext/openwrt/init.d/easycwmpd): easycwmp UCI config of record,
+# device identity refresh, DHCP option 43 (TR-069) values, WAN IP wait,
+# firewall rule for the connection request port, value_monitoring loop.
+# /etc/init.d/easycwmpd is a wrapper around this script so the callers of
+# the old name (hal_unify hal_gateway.c, ubusmon, wan_interface_up) keep
+# working.
+# Copyright (C) 2012-2014 OpenWrt.org
+
+START=99
+STOP=10
+
+USE_PROCD=1
+PROG="/usr/sbin/icwmp_tr098d"
+BOOT_UP_FILE="/tmp/easycwmp_reboot_flag"
+STATE_DIR="/etc/icwmpd"
+
+. /usr/share/libubox/jshn.sh
+
+UCI_SET="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} set"
+UCI_GET="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} get"
+UCI_COMMIT="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} commit"
+
+# --- lifted from easycwmpd: TR-069 values from DHCP option 43 ----------------
+dhcp_option_parse() {
+	local prov_code acsurl acsuname acspwd minwaitint intmult crurl cruname crpwd perinfenable perinfinterval
+	local acsunamev6 acspwdv6 crurlv6 crunamev6 crpwdv6 perinfenablev6 perinfintervalv6
+	if [ -f /tmp/client_vendor_options ];then
+		acsurl=`grep 'acsurl' /tmp/client_vendor_options | cut -d '=' -f 2`
+		prov_code=`grep 'provcode' /tmp/client_vendor_options | cut -d '=' -f 2`
+		acsuname=`grep -w 'acsuname' /tmp/client_vendor_options | cut -d '=' -f 2`
+		acspwd=`grep -w 'acspwd' /tmp/client_vendor_options | cut -d '=' -f 2`
+		minwaitint=`grep 'minwaitint' /tmp/client_vendor_options | cut -d '=' -f 2`
+		intmult=`grep 'intmult' /tmp/client_vendor_options | cut -d '=' -f 2`
+		crurl=`grep -w 'crurl' /tmp/client_vendor_options | cut -d '=' -f 2`
+		cruname=`grep -w 'cruname' /tmp/client_vendor_options | cut -d '=' -f 2`
+		crpwd=`grep -w 'crpwd' /tmp/client_vendor_options | cut -d '=' -f 2`
+		perinfenable=`grep -w 'perinfenable' /tmp/client_vendor_options | cut -d '=' -f 2`
+		perinfinterval=`grep -w 'perinfinterval' /tmp/client_vendor_options | cut -d '=' -f 2`
+		acsunamev6=`grep -w 'acsunamev6' /tmp/client_vendor_options | cut -d '=' -f 2`
+		acspwdv6=`grep -w 'acspwdv6' /tmp/client_vendor_options | cut -d '=' -f 2`
+		crurlv6=`grep -w 'crurlv6' /tmp/client_vendor_options | cut -d '=' -f 2`
+		crunamev6=`grep -w 'crurlv6' /tmp/client_vendor_options | cut -d '=' -f 2`
+		crpwdv6=`grep -w 'crpwdv6' /tmp/client_vendor_options | cut -d '=' -f 2`
+		perinfenablev6=`grep -w 'perinfenablev6' /tmp/client_vendor_options | cut -d '=' -f 2`
+		perinfintervalv6=`grep -w 'perinfintervalv6' /tmp/client_vendor_options | cut -d '=' -f 2`
+	fi
+	[ -n "$prov_code" ] && $UCI_SET easycwmp.@local[0].provisioning_code=$prov_code
+	if [ -n "$acsurl" ]; then
+		$UCI_SET easycwmp.@acs[0].url=$acsurl
+		sed -i -e "s/\(default_management_server_acs_hostname=\).*/\1\"$acsurl\"/" /usr/share/easycwmp/defaults
+	fi
+	if [ -n "$acsuname" ]; then $UCI_SET easycwmp.@acs[0].username=$acsuname
+	elif [ -n "$acsunamev6" ]; then $UCI_SET easycwmp.@acs[0].username=$acsunamev6; fi
+	if [ -n "$acspwd" ]; then $UCI_SET easycwmp.@acs[0].password=$acspwd
+	elif [ -n "$acspwdv6" ]; then $UCI_SET easycwmp.@acs[0].password=$acspwdv6; fi
+	[ -n "$minwaitint" ] && $UCI_SET easycwmp.@acs[0].cwmpretryinterval=$minwaitint
+	[ -n "$intmult" ] && $UCI_SET easycwmp.@acs[0].cwmpretryintervalmultiplier=$intmult
+	if [ -n "$crurl" ]; then $UCI_SET easycwmp.@local[0].ip=$crurl
+	elif [ -n "$crurlv6" ]; then $UCI_SET easycwmp.@local[0].ip=$crurlv6; fi
+	if [ -n "$cruname" ]; then $UCI_SET easycwmp.@local[0].username=$cruname
+	elif [ -n "$crunamev6" ]; then $UCI_SET easycwmp.@local[0].username=$crunamev6; fi
+	if [ -n "$crpwd" ]; then $UCI_SET easycwmp.@local[0].password=$crpwd
+	elif [ -n "$crpwdv6" ]; then $UCI_SET easycwmp.@local[0].password=$crpwdv6; fi
+	if [ -n "$perinfenable" ]; then $UCI_SET easycwmp.@acs[0].periodic_enable=$perinfenable
+	elif [ -n "$perinfenablev6" ]; then $UCI_SET easycwmp.@acs[0].periodic_enable=$perinfenablev6; fi
+	if [ -n "$perinfinterval" ]; then $UCI_SET easycwmp.@acs[0].periodic_interval=$perinfinterval
+	elif [ -n "$perinfintervalv6" ]; then $UCI_SET easycwmp.@acs[0].periodic_interval=$perinfintervalv6; fi
+	$UCI_COMMIT easycwmp
+}
+
+# --- lifted from easycwmpd: identity of the Inform -----------------------------
+init_device_info() {
+	local val oval
+	local change=0
+
+	val="HUMAX Networks, Inc."
+	oval=`$UCI_GET easycwmp.@device[0].manufacturer`
+	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].manufacturer="$val"; change=1; }
+
+	val=`$UCI_GET system.@devinfo[0].hardware_version`
+	oval=`$UCI_GET easycwmp.@device[0].hardware_version`
+	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].hardware_version="$val"; change=1; }
+
+	val=$(/usr/bin/prolinecmd manufacturerOUI get 2>/dev/null | grep "Value" | cut -f2 -d '=' | xargs)
+	oval=`$UCI_GET easycwmp.@device[0].oui`
+	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].oui="$val"; change=1; }
+
+	val=`$UCI_GET pon.@xpon_auth[0].sn`
+	oval=`$UCI_GET easycwmp.@device[0].serial_number`
+	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].serial_number="$val"; change=1; }
+
+	val=`$UCI_GET system.@devinfo[0].product_class`
+	oval=`$UCI_GET easycwmp.@device[0].product_class`
+	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].product_class="$val"; change=1; }
+
+	val=`$UCI_GET system.@devinfo[0].software_version`
+	oval=`$UCI_GET easycwmp.@device[0].software_version`
+	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].software_version="$val"; change=1; }
+
+	$UCI_SET easycwmp.@device[0].description=""; change=1;
+
+	[ "$change" = "1" ] && $UCI_COMMIT easycwmp
+}
+
+# first-boot seed: sections icwmpd expects in the cwmp config
+init_cwmp_config() {
+	[ -d "$STATE_DIR" ] || mkdir -p "$STATE_DIR"
+	[ -f /etc/config/cwmp ] || touch /etc/config/cwmp
+	[ -n "`$UCI_GET cwmp.acs`" ] || { $UCI_SET cwmp.acs=acs; $UCI_COMMIT cwmp; }
+	[ -n "`$UCI_GET cwmp.cpe`" ] || { $UCI_SET cwmp.cpe=cpe; $UCI_COMMIT cwmp; }
+	[ -n "`$UCI_GET cwmp.lwn`" ] || { $UCI_SET cwmp.lwn=lwn; $UCI_SET cwmp.lwn.enable=0; $UCI_COMMIT cwmp; }
+}
+
+start_service() {
+	local enable=`$UCI_GET easycwmp.@local[0].enable`
+	local opmode=`$UCI_GET clay.opermode.mode`
+
+	# [ARHT-348] firewall rule for the connection request port on the WAN
+	[ -x /usr/sbin/easycwmp_firewall.sh ] && /usr/sbin/easycwmp_firewall.sh init
+
+	[ "$enable" = "1" ] || { echo "icwmpd: easycwmp.@local[0].enable=$enable, not started"; return; }
+	[ "$opmode" = "auto" ] && { echo "icwmpd: opermode auto, not started"; return; }
+	[ "`$UCI_GET easycwmp.@acs[0].enablecwmp`" = "1" ] || { echo "icwmpd: EnableCWMP=0, not started"; return; }
+
+	local notify_interval=`$UCI_GET easycwmp.@acs[0].notification_interval`
+	[ -n "$notify_interval" ] || notify_interval=30
+
+	[ -f /lib/functions/tr069dhcpoptionparse.sh ] && . /lib/functions/tr069dhcpoptionparse.sh
+	init_cwmp_config
+	init_device_info
+	dhcp_option_parse
+
+	# connection request address: the WAN interface of easycwmp.@local[0].network
+	local wan4_ip wan6_ip wan4_interface wan6_interface wan_type current_iface network
+	wan_type=`$UCI_GET easycwmp.@local[0].wan_type`
+	network=`$UCI_GET easycwmp.@local[0].network`
+	[ -n "$network" ] || { network=if0; $UCI_SET easycwmp.@local[0].network=$network; $UCI_COMMIT easycwmp; }
+
+	wan6_ip=""; wan6_interface=""
+	if [ "$wan_type" = "ipv6" ]; then
+		json_load "$(ubus -S call network.interface.${network}_6 status 2>/dev/null)" 2>/dev/null
+		json_get_var wan6_interface l3_device
+		json_select "ipv6-address" 2>/dev/null && json_select "1" 2>/dev/null && json_get_var wan6_ip address
+	fi
+	wan4_ip=""; wan4_interface=""
+	if [ "$wan_type" != "ipv6" ] || [ -z "$wan6_ip" ] || [ -z "$wan6_interface" ]; then
+		json_load "$(ubus -S call network.interface.$network status 2>/dev/null)" 2>/dev/null
+		json_get_var wan4_interface l3_device
+		json_select "ipv4-address" 2>/dev/null && json_select "1" 2>/dev/null && json_get_var wan4_ip address
+	fi
+
+	current_iface=`$UCI_GET easycwmp.@local[0].interface`
+	if [ -n "$wan6_interface" ] && [ "$wan_type" = "ipv6" ]; then
+		[ "$current_iface" != "$wan6_interface" ] && { $UCI_SET easycwmp.@local[0].interface=$wan6_interface; $UCI_COMMIT easycwmp; }
+	elif [ -n "$wan4_interface" ]; then
+		[ "$current_iface" != "$wan4_interface" ] && { $UCI_SET easycwmp.@local[0].interface=$wan4_interface; $UCI_COMMIT easycwmp; }
+	fi
+
+	if [ -z "$wan4_ip" ] && [ -z "$wan6_ip" ]; then
+		# no WAN address yet: the watcher restarts us when one shows up
+		procd_open_instance
+		procd_set_param command /usr/sbin/wan_interface_up
+		procd_close_instance
+		echo "icwmpd: no WAN IP yet, waiting"
+		return
+	fi
+
+	local wan_ip port path
+	port=`$UCI_GET easycwmp.@local[0].port`; [ -n "$port" ] || port=7547
+	path=`$UCI_GET easycwmp.@local[0].path`
+	if [ -n "$wan6_ip" ] && [ "$wan_type" = "ipv6" ]; then
+		wan_ip=$wan6_ip
+	else
+		wan_ip=$wan4_ip
+	fi
+	$UCI_SET easycwmp.@local[0].ip=$wan_ip
+	$UCI_COMMIT easycwmp
+	echo "icwmpd: Connection Request URL http://$wan_ip:$port/$path"
+
+	# value change polling (ubus call tr069 notify every notification_interval s).
+	# fd 1000 is procd_lock()'s flock on /var/lock/procd_icwmpd.lock (procd.sh):
+	# a child that inherits it holds the lock for its whole life and every later
+	# /etc/init.d/icwmpd call (restart, running, the reload trigger) hangs in
+	# "flock 1000".  Close it, and the rc.common stdio, in the background child.
+	chmod +x /usr/sbin/value_monitoring
+	/usr/sbin/value_monitoring $notify_interval </dev/null >/dev/null 2>&1 1000>&- &
+
+	# easycwmp -> cwmp mirror is done by icwmpd itself at start (mtk/icwmp_mtk.c)
+	procd_open_instance
+	procd_set_param command "$PROG"
+	if [ "$1" = "--boot" ] || [ -f $BOOT_UP_FILE ]; then
+		procd_append_param command -b
+		rm -f $BOOT_UP_FILE
+	else
+		procd_append_param command -g
+	fi
+	procd_set_param respawn "3" "10" "0"
+	procd_set_param netdev $network
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_close_instance
+	echo "icwmpd: started ($PROG)"
+}
+
+boot() {
+	echo "" > $BOOT_UP_FILE
+	start --boot
+}
+
+cwmp_add_network() {
+	local network
+	config_get network $1 network
+	procd_add_interface_trigger "interface.*" $network /etc/init.d/icwmpd reload
+}
+
+service_triggers() {
+	procd_add_reload_trigger easycwmp cwmp
+	config_load easycwmp
+	config_foreach cwmp_add_network local
+}
+
+stop_service() {
+	local pid=`pidof value_monitoring`
+	[ -n "$pid" ] && kill -9 $pid 2>/dev/null
+	# the data model child of icwmpd (icwmp_dm.sh) exits with its stdin, help it along
+	pid=`pgrep -f icwmp_dm.sh`
+	[ -n "$pid" ] && kill $pid 2>/dev/null
+	[ -x /usr/sbin/easycwmp_firewall.sh ] && /usr/sbin/easycwmp_firewall.sh cleanup
+}
+
+reload_service() {
+	# [ARHT-348] firewall rule follows the port
+	[ -x /usr/sbin/easycwmp_uci_trigger.sh ] && /usr/sbin/easycwmp_uci_trigger.sh
+	stop
+	start --getrpcmethod
+}

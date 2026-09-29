@@ -1,0 +1,94 @@
+# icwmpd default configuration for Broadcom BDK (MO77300EB).
+# Installed read-only as /etc/icwmp/cwmp and copied to /data/icwmp/config/cwmp
+# on first start (icwmp_bdk.c bdk_prepare_fs).  The ACS fields below are only
+# placeholders: at every start and on CMS_MSG_ACS_CONFIG_CHANGED icwmpd copies
+# Device.ManagementServer.* from the MDM over them, so configure the ACS with
+# the WebUI / tr69_mdmcli / configure-tr069-genieacs.sh as before, never here.
+
+config acs 'acs'
+	option url ''
+	option userid ''
+	option passwd ''
+	option periodic_inform_enable '1'
+	option periodic_inform_interval '3600'
+	option periodic_inform_time '0001-01-01T00:00:00Z'
+	option dhcp_discovery 'disable'
+	option compression 'Disabled'
+	option retry_min_wait_interval '5'
+	option retry_interval_multiplier '2000'
+	option ParameterKey ''
+	# TLS: CA bundle of the image (import the ACS CA with certificate name
+	# "acscert" as documented in issues/20260914_.../genieacs-configuration.md,
+	# or point https_ssl_capath at a directory with the CA in c_rehash form)
+	option https_ssl_capath '/etc/ssl/certs'
+	option insecure_enable '0'
+	option ipv6_enable '0'
+
+config cpe 'cpe'
+	# Identity override (bring-up only).  Empty = values from the MDM
+	# (Device.DeviceInfo.*).  Non-empty replaces them in the Inform DeviceId
+	# and in InternetGatewayDevice.DeviceInfo.* (libtr098 deviceinfo_bdk.c),
+	# e.g. to appear on the ACS as a device that already has a record:
+	#   uci -c /data/icwmp/config set cwmp.cpe.oui='ABCDEF'
+	#   uci -c /data/icwmp/config set cwmp.cpe.product_class='TEST_CLASS'
+	#   uci -c /data/icwmp/config set cwmp.cpe.serial_number='1234567890'
+	option manufacturer ''
+	option oui ''
+	option product_class ''
+	option serial_number ''
+	option software_version ''
+	option hardware_version ''
+	option model_name ''
+	option description ''
+	# X_BROADCOM_COM_BoundIfName from the MDM overrides this at start
+	option interface 'eth1.1'
+	option default_wan_interface 'eth1.1'
+	option userid ''
+	option passwd ''
+	# 30005 = TR69C_CONN_REQ_PORT: the SDK firewall (rut_iptables.c rutIpt_initCWMPChk)
+	# only opens this port for Connection Requests when EnableCWMP is true
+	option port '30005'
+	# Behind NAT (WAN of the AP = LAN of an ONT): the ACS cannot reach the WAN
+	# address, so tell it the ONT side of a port forward instead.  Empty = own
+	# address / port.  Also ManagementServer.X_MARUSYS_COM_Icwmp.ConnectionRequestHost /
+	# ConnectionRequestExternalPort from the ACS.
+	#   uci -c /data/icwmp/config set cwmp.cpe.cr_host='172.16.0.98'   # WAN IP of the ONT
+	#   uci -c /data/icwmp/config set cwmp.cpe.cr_port='30005'        # external port forwarded to <AP>:30005
+	option cr_host ''
+	option cr_port ''
+	option log_to_console 'disable'
+	option log_to_file 'enable'
+	option log_severity 'INFO'
+	option log_file_name '/var/log/icwmpd.log'
+	option log_max_size '102400'
+	option ubus_socket '/var/run/ubus/ubus.sock'
+	option provisioning_code ''
+	# CWMP amendment sent in the Inform namespace (xml.c cwmp_urls[amd-1]):
+	# 1=cwmp-1-0 2=1-1 3=1-2 4=1-3 5=1-4.  5 also adds the SupportedCWMPVersions
+	# header; the lab ITMS (172.16.0.15) answers "400 Unrecognized CWMP version"
+	# to it (2026-09-19).  3 = TR-069 amd-3, what tr69c and most ACS speak.
+	option amd_version '3'
+	option instance_mode 'InstanceNumber'
+	option session_timeout '60'
+	option notification '1'
+	# Data model root, picked at start (icwmpd restart after a change):
+	#   tr098  InternetGatewayDevice. curated tree (libtr098 tr098/bdk/*), plus
+	#          InternetGatewayDevice.X_MARUSYS_COM_Device.<rest> = Device.<rest>
+	#   tr181  Device. = the whole Distributed MDM through the generic HAL,
+	#          same view as tr69c (libtr098 platform/bdk/dmproxy_bdk.c)
+	#   uci -c /data/icwmp/config set cwmp.cpe.datamodel='tr181'
+	#   uci -c /data/icwmp/config commit cwmp ; ubus call tr069 command '{"command":"reload"}'
+	option datamodel 'tr098'
+	option exec_download '0'
+
+# Developer template object X_MARUSYS_COM_Sample. (libtr098 tr098/bdk/sample_bdk.c,
+# built with -DBDK_SAMPLE_OBJECT): enable '1' shows it under both roots,
+# text is the value behind UciText.  Existing boards: uci set cwmp.sample=sample first.
+config sample 'sample'
+	option enable '0'
+	option text ''
+
+config lwn 'lwn'
+	option enable '0'
+	option hostname ''
+	option port ''

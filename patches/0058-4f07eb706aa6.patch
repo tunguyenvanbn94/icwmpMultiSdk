@@ -1,0 +1,475 @@
+From 4f07eb706aa672f286b9f05af4eec81a20007fe9 Mon Sep 17 00:00:00 2001
+From: TuNV <tunguyenvanbn94@gmail.com>
+Date: Fri, 25 Sep 2026 14:45:48 +0700
+Subject: [PATCH] [icwmp tr098] P5b: NSLookupDiagnostics and DNSDiagnostics, 20
+ parameters
+
+Ported from functions/tr098/nslookup_diagnostic and dns_diagnostics;
+the lookups stay in nslookup_launch / dnsDiagnostics_launch.
+
+NSLookupDiagnostics: 8 leaves + Result.{i} (5 leaves).  Result.<n> is
+easycwmp.@local[<n>] of -P /var/state/nslookup_result, where the launcher
+"uci add"s one section per answer; the count comes from
+ResultNumberOfEntries of the parameter store.  The launcher's
+"uci -P ... commit" is a no-op (uci cli.c: -P sets CLI_FLAG_NOCOMMIT), so
+results never reach /etc/config.
+
+DNSDiagnostics: 7 leaves.  DNSServer, ResultNumberOfEntries and the
+Result. object are commented out in the shell (dns_diagnostics:15/18/21),
+so Result.{i} was never reachable on the product; not ported.
+
+Kept: Timeout and NumberOfRepetitions are stored unchecked and without
+stopping a running lookup (nslookup_set / dnslookup_set).  Deliberate
+difference: Result.{i} stops at 256 instances.
+
+diag_mtk: diag_dns store, diag_store_value_nostop(), diag_result_get(),
+diag_ifconfig_prints() moved here from traceroute_mtk.c.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c  |  25 ++
+ .../libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h  |  24 ++
+ .../src/sdk/mtk/dm098/lookupdiag_mtk.c        | 300 ++++++++++++++++++
+ .../src/sdk/mtk/dm098/traceroute_mtk.c        |  12 +-
+ public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk    |   3 +-
+ 5 files changed, 352 insertions(+), 12 deletions(-)
+ create mode 100644 public/libs/libicwmp_dm/src/sdk/mtk/dm098/lookupdiag_mtk.c
+
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c
+index 644266b..6342af7 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c
+@@ -23,6 +23,7 @@
+ const struct diag_store diag_ipping     = { "/var/state",            "ipping_launch" };
+ const struct diag_store diag_traceroute = { "/var/state/traceroute", "traceroute_launch" };
+ const struct diag_store diag_nslookup   = { "/var/state/nslookup",   "nslookup_launch" };
++const struct diag_store diag_dns        = { "/var/state/dnsDiagnostics", "dnsDiagnostics_launch" };
+ 
+ char *diag_get(const struct diag_store *d, const char *option, const char *def)
+ {
+@@ -52,6 +53,30 @@ void diag_store_value(const struct diag_store *d, const char *option, const char
+ 	diag_set(d, option, value);
+ }
+ 
++void diag_store_value_nostop(const struct diag_store *d, const char *option, const char *value)
++{
++	if (strcmp(diag_get(d, "DiagnosticsState", NULL), "Requested") != 0)
++		diag_set(d, "DiagnosticsState", "None");
++	diag_set(d, option, value);
++}
++
++char *diag_result_get(const char *dir, int idx, const char *option)
++{
++	char sec[32];
++
++	snprintf(sec, sizeof(sec), "@local[%d]", idx);
++	return mtk_state(dir, DIAG_PKG, sec, option);
++}
++
++int diag_ifconfig_prints(const char *v)
++{
++	if (!*v || strcmp(v, "-a") == 0)
++		return 1;
++	if (strpbrk(v, " \t\n"))
++		return 0;
++	return mtk_netdev_exists(v);
++}
++
+ void diag_request(const struct diag_store *d)
+ {
+ 	char cmd[256];
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h
+index 7a420b5..76adf7f 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h
+@@ -44,6 +44,16 @@ struct diag_store {
+ extern const struct diag_store diag_ipping;		/* -P /var/state */
+ extern const struct diag_store diag_traceroute;	/* -P /var/state/traceroute */
+ extern const struct diag_store diag_nslookup;		/* -P /var/state/nslookup */
++extern const struct diag_store diag_dns;		/* -P /var/state/dnsDiagnostics */
++
++/* where the launchers of the two lookup diagnostics put Result.{i}: the
++ * launcher "uci -P <dir> add"s one "local" section per answer, so Result.<n>
++ * is easycwmp.@local[<n>] of that store (@local[0] is the section already in
++ * /etc/config/easycwmp).  "uci -P ... commit" in the launcher is a no-op --
++ * uci-2020-10-06 cli.c: -P sets CLI_FLAG_NOCOMMIT -- so nothing reaches
++ * flash and the store is emptied at the start of every run. */
++#define DIAG_NSLOOKUP_RESULT_DIR	"/var/state/nslookup_result"
++#define DIAG_DNS_RESULT_DIR		"/var/state/dnsDiagnostics_result"
+ 
+ /* <x>_get: "${val:-def}" of easycwmp.@local[0].<option> */
+ char *diag_get(const struct diag_store *d, const char *option, const char *def);
+@@ -58,6 +68,11 @@ void diag_stop(const struct diag_store *d);
+  *	[ DiagnosticsState != Requested ] && DiagnosticsState=None
+  *	<option>=<value> */
+ void diag_store_value(const struct diag_store *d, const char *option, const char *value);
++/* the same tail WITHOUT the stop: nslookup_set / dnslookup_set (Timeout,
++ * NumberOfRepetitions) leave a running launcher alone */
++void diag_store_value_nostop(const struct diag_store *d, const char *option, const char *value);
++/* <x>_get_result: "${val:-}" of easycwmp.@local[<idx>].<option> in <dir> */
++char *diag_result_get(const char *dir, int idx, const char *option);
+ /* <x>_set_diagnostic_state Requested: stop, Requested, queue the launcher */
+ void diag_request(const struct diag_store *d);
+ 
+@@ -78,4 +93,13 @@ int diag_check_uint(const char *v, long long min, long long max);
+  *	anything else: not checked */
+ int diag_host_valid(const struct diag_store *d, const char *host);
+ 
++/* <x>_set_interface of traceroute, nslookup and dns: accepted when
++ * "$(ifconfig $2)" -- unquoted -- prints something:
++ *	""     ifconfig alone lists the up interfaces      -> accepted
++ *	"-a"   lists all of them                           -> accepted
++ *	"a b"  two words: ifconfig tries to CONFIGURE a    -> rejected
++ * The third case also ran that configuration ("eth0 down" took eth0 down);
++ * the rejection is kept, the side effect is not. */
++int diag_ifconfig_prints(const char *v);
++
+ #endif
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/lookupdiag_mtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/lookupdiag_mtk.c
+new file mode 100644
+index 0000000..ede8207
+--- /dev/null
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/lookupdiag_mtk.c
+@@ -0,0 +1,300 @@
++/*
++ *	This program is free software: you can redistribute it and/or modify
++ *	it under the terms of the GNU General Public License as published by
++ *	the Free Software Foundation, either version 2 of the License, or
++ *	(at your option) any later version.
++ *
++ *	The two name lookup diagnostics:
++ *	  InternetGatewayDevice.NSLookupDiagnostics.   13 parameters + Result.{i}
++ *	  InternetGatewayDevice.DNSDiagnostics.         7 parameters
++ *
++ *	Ported from functions/tr098/nslookup_diagnostic and dns_diagnostics.  The
++ *	lookups stay in functions/common/nslookup_launch and
++ *	dnsDiagnostics_launch, queued by DiagnosticsState=Requested; see
++ *	diag_mtk.h.
++ *
++ *	Stores: -P /var/state/nslookup and -P /var/state/dnsDiagnostics for the
++ *	parameters, -P /var/state/nslookup_result for NSLookup's Result.{i}.
++ *
++ *	WHAT DNSDiagnostics REALLY IS ON THE PRODUCT: seven parameters.  The
++ *	shell has the lines for DNSServer, ResultNumberOfEntries and the
++ *	Result. object commented out (dns_diagnostics:15, :18, :21), so
++ *	Result.{i} was never reachable even though its sub_entry function and
++ *	its launcher half are still there.  The coverage matrix, extracted from
++ *	the text, lists the five Result.{i} leaves anyway; verify-dm-paths.py
++ *	reports them as unreachable instead of missing.  Not ported.
++ *
++ *	VENDOR QUIRKS KEPT:
++ *
++ *	  - Timeout and NumberOfRepetitions go through nslookup_set /
++ *	    dnslookup_set: NO check at all (typed unsignedInt, yet "abc" is
++ *	    stored) and NO stop of a running lookup -- unlike every other
++ *	    writable leaf here.
++ *	  - DNSServer takes the same host check as HostName, so an empty value
++ *	    ("use the system resolver", which the launcher supports) cannot be
++ *	    written back once set.
++ *	  - Interface takes a network device name, "$(ifconfig $2)" rule
++ *	    (diag_ifconfig_prints).
++ *
++ *	ONE DELIBERATE DIFFERENCE: Result.{i} stops at 256 instances.  The shell
++ *	ran "seq 1 $ResultNumberOfEntries" on whatever the store held; the
++ *	launcher writes the number of answer lines of one nslookup.
++ *
++ *	NOT BUILD-TESTED YET.
++ */
++#include <stdio.h>
++#include <stdlib.h>
++#include <stdint.h>
++#include <string.h>
++
++#include "dmuci.h"
++#include "dmcommon.h"
++#include "dm_registry.h"
++#include "dmmtk.h"
++#include "diag_mtk.h"
++
++#define NSL	(&diag_nslookup)
++#define DNSD	(&diag_dns)
++
++#define LOOKUP_MAX_RESULTS	256
++
++/* ------------------------------------------------------------------ */
++/* shared setters                                                      */
++/* ------------------------------------------------------------------ */
++
++static int lookup_set_state(const struct diag_store *d, char *value, int action)
++{
++	if (strcmp(value, "Requested") != 0)
++		return FAULT_9007;
++	if (action == VALUESET)
++		diag_request(d);
++	return 0;
++}
++
++static int lookup_set_host(const struct diag_store *d, const char *option, char *value, int action)
++{
++	if (!diag_host_valid(d, value))
++		return FAULT_9007;
++	if (action == VALUESET)
++		diag_store_value(d, option, value);
++	return 0;
++}
++
++static int lookup_set_interface(const struct diag_store *d, char *value, int action)
++{
++	if (!diag_ifconfig_prints(value))
++		return FAULT_9007;
++	if (action == VALUESET)
++		diag_store_value(d, "Interface", value);
++	return 0;
++}
++
++/* nslookup_set / dnslookup_set: no check, no stop */
++static int lookup_set_plain(const struct diag_store *d, const char *option, char *value, int action)
++{
++	if (action == VALUESET)
++		diag_store_value_nostop(d, option, value);
++	return 0;
++}
++
++/* ------------------------------------------------------------------ */
++/* NSLookupDiagnostics                                                 */
++/* ------------------------------------------------------------------ */
++
++#define NSL_GET(fn, option, def)						\
++static int fn(char *refparam, struct dmctx *ctx, void *data,			\
++	      char *instance, char **value)					\
++{										\
++	*value = diag_get(NSL, option, def);					\
++	return 0;								\
++}
++
++NSL_GET(get_nsl_state,       "DiagnosticsState",      "None")
++NSL_GET(get_nsl_hostname,    "HostName",              NULL)
++NSL_GET(get_nsl_dnsserver,   "DNSServer",             NULL)
++NSL_GET(get_nsl_interface,   "Interface",             "default")
++NSL_GET(get_nsl_timeout,     "Timeout",               "5000")
++NSL_GET(get_nsl_resultcount, "ResultNumberOfEntries", "0")
++NSL_GET(get_nsl_repetitions, "NumberOfRepetitions",   "3")
++NSL_GET(get_nsl_success,     "SuccessCount",          "0")
++
++static int set_nsl_state(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return lookup_set_state(NSL, value, action);
++}
++
++static int set_nsl_hostname(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return lookup_set_host(NSL, "HostName", value, action);
++}
++
++static int set_nsl_dnsserver(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return lookup_set_host(NSL, "DNSServer", value, action);
++}
++
++static int set_nsl_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return lookup_set_interface(NSL, value, action);
++}
++
++static int set_nsl_timeout(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return lookup_set_plain(NSL, "Timeout", value, action);
++}
++
++static int set_nsl_repetitions(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return lookup_set_plain(NSL, "NumberOfRepetitions", value, action);
++}
++
++/* Result.<n> -> easycwmp.@local[<n>] of the result store; data = n */
++#define NSL_RESULT_GET(fn, option)						\
++static int fn(char *refparam, struct dmctx *ctx, void *data,			\
++	      char *instance, char **value)					\
++{										\
++	*value = diag_result_get(DIAG_NSLOOKUP_RESULT_DIR,			\
++				 (int)(uintptr_t)data, option);			\
++	return 0;								\
++}
++
++NSL_RESULT_GET(get_nsl_res_status,   "Status")
++NSL_RESULT_GET(get_nsl_res_hostname, "HostNameReturned")
++NSL_RESULT_GET(get_nsl_res_ips,      "IPAddresses")
++NSL_RESULT_GET(get_nsl_res_server,   "DNSServerIP")
++NSL_RESULT_GET(get_nsl_res_time,     "ResponseTime")
++
++/* dnsdiag_nslookupresult_browse_instances: "seq 1 $ResultNumberOfEntries",
++ * the count read from the parameter store, not from the result store */
++static int browseNSLookupResultInst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
++{
++	const char *count = diag_get(NSL, "ResultNumberOfEntries", NULL);
++	char *idx, *idx_last = NULL;
++	long n;
++	int i;
++
++	if (diag_check_uint(count, 0, -1) != 0)
++		return 0;		/* seq: invalid number -> no line */
++	n = strtol(count, NULL, 10);	/* digits only: overflow saturates */
++	if (n > LOOKUP_MAX_RESULTS)
++		n = LOOKUP_MAX_RESULTS;
++	for (i = 1; i <= n; i++) {
++		idx = handle_update_instance(4, dmctx, &idx_last, update_instance_without_section,
++					     1, i);
++		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)(uintptr_t)i, idx) == DM_STOP)
++			break;
++	}
++	return 0;
++}
++
++static DMLEAF tNSLookupResultParams[] = {
++/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
++{"Status", &DMREAD, DMT_STRING, get_nsl_res_status, NULL, NULL, NULL},
++{"HostNameReturned", &DMREAD, DMT_STRING, get_nsl_res_hostname, NULL, NULL, NULL},
++{"IPAddresses", &DMREAD, DMT_STRING, get_nsl_res_ips, NULL, NULL, NULL},
++{"DNSServerIP", &DMREAD, DMT_STRING, get_nsl_res_server, NULL, NULL, NULL},
++{"ResponseTime", &DMREAD, DMT_UNINT, get_nsl_res_time, NULL, NULL, NULL},
++{0}
++};
++
++static DMLEAF tNSLookupParams[] = {
++{"DiagnosticsState", &DMWRITE, DMT_STRING, get_nsl_state, set_nsl_state, NULL, NULL},
++{"HostName", &DMWRITE, DMT_STRING, get_nsl_hostname, set_nsl_hostname, NULL, NULL},
++{"DNSServer", &DMWRITE, DMT_STRING, get_nsl_dnsserver, set_nsl_dnsserver, NULL, NULL},
++{"Interface", &DMWRITE, DMT_STRING, get_nsl_interface, set_nsl_interface, NULL, NULL},
++{"Timeout", &DMWRITE, DMT_UNINT, get_nsl_timeout, set_nsl_timeout, NULL, NULL},
++{"ResultNumberOfEntries", &DMREAD, DMT_UNINT, get_nsl_resultcount, NULL, NULL, NULL},
++{"NumberOfRepetitions", &DMWRITE, DMT_UNINT, get_nsl_repetitions, set_nsl_repetitions, NULL, NULL},
++{"SuccessCount", &DMREAD, DMT_UNINT, get_nsl_success, NULL, NULL, NULL},
++{0}
++};
++
++static DMOBJ tNSLookupChildObj[] = {
++/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
++{"Result", &DMREAD, NULL, NULL, NULL, browseNSLookupResultInst, NULL, &DMNONE,
++ NULL, tNSLookupResultParams, NULL},
++{0}
++};
++
++/* ------------------------------------------------------------------ */
++/* DNSDiagnostics                                                      */
++/* ------------------------------------------------------------------ */
++
++#define DNS_GET(fn, option, def)						\
++static int fn(char *refparam, struct dmctx *ctx, void *data,			\
++	      char *instance, char **value)					\
++{										\
++	*value = diag_get(DNSD, option, def);					\
++	return 0;								\
++}
++
++DNS_GET(get_dns_state,       "DiagnosticsState",    "None")
++DNS_GET(get_dns_host,        "Host",                NULL)
++DNS_GET(get_dns_interface,   "Interface",           "default")
++DNS_GET(get_dns_timeout,     "Timeout",             "5000")
++DNS_GET(get_dns_repetitions, "NumberOfRepetitions", "3")
++DNS_GET(get_dns_success,     "SuccessCount",        "0")
++DNS_GET(get_dns_failure,     "FailureCount",        "0")
++
++static int set_dns_state(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return lookup_set_state(DNSD, value, action);
++}
++
++static int set_dns_host(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return lookup_set_host(DNSD, "Host", value, action);
++}
++
++static int set_dns_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return lookup_set_interface(DNSD, value, action);
++}
++
++static int set_dns_timeout(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return lookup_set_plain(DNSD, "Timeout", value, action);
++}
++
++static int set_dns_repetitions(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return lookup_set_plain(DNSD, "NumberOfRepetitions", value, action);
++}
++
++static DMLEAF tDNSDiagParams[] = {
++{"DiagnosticsState", &DMWRITE, DMT_STRING, get_dns_state, set_dns_state, NULL, NULL},
++{"Host", &DMWRITE, DMT_STRING, get_dns_host, set_dns_host, NULL, NULL},
++{"Interface", &DMWRITE, DMT_STRING, get_dns_interface, set_dns_interface, NULL, NULL},
++{"Timeout", &DMWRITE, DMT_UNINT, get_dns_timeout, set_dns_timeout, NULL, NULL},
++{"NumberOfRepetitions", &DMWRITE, DMT_UNINT, get_dns_repetitions, set_dns_repetitions, NULL, NULL},
++{"SuccessCount", &DMREAD, DMT_UNINT, get_dns_success, NULL, NULL, NULL},
++{"FailureCount", &DMREAD, DMT_UNINT, get_dns_failure, NULL, NULL, NULL},
++{0}
++};
++
++/* ------------------------------------------------------------------ */
++/* registration                                                        */
++/* ------------------------------------------------------------------ */
++
++static DMOBJ tLookupDiagMtkObj[] = {
++{"NSLookupDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
++ tNSLookupChildObj, tNSLookupParams, NULL},
++{"DNSDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
++ NULL, tDNSDiagParams, NULL},
++{0}
++};
++
++static const char *const lookupdiag_mtk_paths[] = {
++	"InternetGatewayDevice.NSLookupDiagnostics.",
++	"InternetGatewayDevice.DNSDiagnostics.",
++	NULL
++};
++
++static const struct dm_module lookupdiag_mtk_module = {
++	.name  = "mtk-lookupdiag",
++	.model = DM_MODEL_TR098,
++	.order = DM_ORDER_SDK,
++	.objs  = tLookupDiagMtkObj,
++	.paths = lookupdiag_mtk_paths,
++};
++DM_MODULE_REGISTER(lookupdiag_mtk_module);
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/traceroute_mtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/traceroute_mtk.c
+index e82d92b..1b3554f 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/traceroute_mtk.c
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/traceroute_mtk.c
+@@ -110,19 +110,9 @@ TRACEROUTE_SET_RANGE(set_trc_maxhops,   "MaxHopCount",   1,  64)
+ TRACEROUTE_SET_RANGE(set_trc_blocksize, "DataBlockSize", 38, 32768)
+ TRACEROUTE_SET_RANGE(set_trc_dscp,      "DSCP",          0,  63)
+ 
+-/* "$(ifconfig $2)" is not empty -- see the header for the three cases */
+-static int trc_ifconfig_prints(const char *v)
+-{
+-	if (!*v || strcmp(v, "-a") == 0)
+-		return 1;
+-	if (strpbrk(v, " \t\n"))
+-		return 0;
+-	return mtk_netdev_exists(v);
+-}
+-
+ static int set_trc_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+ {
+-	if (!trc_ifconfig_prints(value))
++	if (!diag_ifconfig_prints(value))
+ 		return FAULT_9007;
+ 	if (action == VALUESET)
+ 		diag_store_value(TRC, "Interface", value);
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk b/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk
+index 3a8e615..a9f83d5 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk
+@@ -23,7 +23,8 @@ libtr098_la_SOURCES +=	\
+ 	../sdk/mtk/dm098/servicelist_mtk.c	\
+ 	../sdk/mtk/dm098/diag_mtk.c	\
+ 	../sdk/mtk/dm098/ipping_mtk.c	\
+-	../sdk/mtk/dm098/traceroute_mtk.c
++	../sdk/mtk/dm098/traceroute_mtk.c	\
++	../sdk/mtk/dm098/lookupdiag_mtk.c
+ 
+ if DM_MTK_SCRIPT_COMPAT
+ libtr098_la_SOURCES +=	\
+-- 
+2.34.1
+

@@ -1,0 +1,58 @@
+From e4b6cbec5f7ce8e0b9c0e277289c5c54edf2837b Mon Sep 17 00:00:00 2001
+From: TuNV <tunguyenvanbn94@gmail.com>
+Date: Thu, 24 Sep 2026 15:58:26 +0700
+Subject: [PATCH] [icwmp release] apply: say how to refresh the airoha feed for
+ a one-package build
+
+The +zlib fix of the previous commit did not reach the build: the airoha feed
+is src-cpy, so feeds/airoha holds a COPY of the two package Makefiles apply
+rewrites, and "make package/icwmp_tr098/compile" kept reading the old DEPENDS.
+Same error, twice in a row, with a correct tree.
+
+The full build apply already prints is not affected -- airoha-compile.sh calls
+airoha-feeds-prepare.sh, which runs "feeds update airoha".  Only the fast
+per-package loop needs the refresh, and nothing told the reader that.
+
+apply now prints it for the MTK SDK, right after the build commands:
+
+  ./scripts/feeds update airoha
+  ./scripts/feeds install -p airoha -f libtr098 icwmp_tr098
+
+build-commands.md section 1.3 already said this; the instruction was missing
+where it was actually needed, next to the commands people copy.
+
+release/tests/verify-apply.py: 6/6 PASS, including the Python 3.6 source scan
+and the 3.6 shim run over apply.py.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ release/apply.py | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/release/apply.py b/release/apply.py
+index dd0c1ce..ff0435c 100755
+--- a/release/apply.py
++++ b/release/apply.py
+@@ -286,6 +286,19 @@ def main():
+             execute(target, copies, edits, removals)
+         print("\nBuild next, from SDK root with its toolchain environment:")
+         print("\n".join(build_commands(sdk, profile)))
++        if sdk == "mtk":
++            # airoha-compile.sh calls airoha-feeds-prepare.sh, which runs
++            # "feeds update airoha" -- so the full build above is fine.  A
++            # single-package build is not: feeds.conf.default uses src-cpy, so
++            # feeds/airoha holds a COPY of the two package Makefiles this just
++            # rewrote, and the build keeps the old DEPENDS until refreshed.
++            print("\nBuilding one package instead of the whole image?  Refresh the")
++            print("feed first -- apply rewrote two feed Makefiles and the airoha feed")
++            print("is src-cpy, a copy:")
++            print("cd openwrt-21.02/openwrt-21.02.1_dev")
++            print("./scripts/feeds update airoha")
++            print("./scripts/feeds install -p airoha -f libtr098 icwmp_tr098")
++            print("make package/icwmp_tr098/{clean,compile} V=sc -j1")
+         print("\nApply does not run the compiler or flash a board.")
+         return 0
+     except (OSError, ValueError, KeyError) as error:
+-- 
+2.34.1
+

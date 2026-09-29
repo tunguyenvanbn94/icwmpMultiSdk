@@ -1,0 +1,7 @@
+OSS_REFERENCE_Name: microxml
+OSS_REFERENCE_BinaryName: libmicroxml.so
+OSS_REFERENCE_Version: 1.0 (git commit 80a15162f3a8318c70e8688d8ecbfc38676bd9a2, 2018-06-14)
+OSS_REFERENCE_License: LGPL-2.0 with static-linking exception (see microxml/COPYING)
+OSS_REFERENCE_DownloadURL: https://github.com/pivasoftware/microxml.git
+OSS_REFERENCE_BroadcomURL: 
+OSS_Broadcom_RelativePath: ./microxml

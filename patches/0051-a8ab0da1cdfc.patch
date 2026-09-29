@@ -1,0 +1,67 @@
+From a8ab0da1cdfc27c1ad8d5b117186bb1db719e6d6 Mon Sep 17 00:00:00 2001
+From: TuNV <tunguyenvanbn94@gmail.com>
+Date: Thu, 24 Sep 2026 16:20:56 +0700
+Subject: [PATCH] [icwmp feed] Pull in ecnt-trunkdir.mk: nothing else defines
+ TRUNK_DIR
+
+TRUNK_DIR is written to include/ecnt-trunkdir.mk by
+airoha_script/airoha-compile.sh, but no makefile in the OpenWrt tree includes
+that file -- rules.mk, toplevel.mk, package.mk, target.mk and kernel.mk all
+have no reference to it.  A package build therefore only sees TRUNK_DIR when
+the invoking shell happens to export it, which is the case right after
+airoha-compile.sh and not in a fresh terminal.
+
+Both feed Makefiles now "-include $(TOPDIR)/include/ecnt-trunkdir.mk"
+themselves, so PKG_SOURCE resolves the same way no matter which shell runs
+the build.  "-include" keeps a tree without the file parsing.
+
+Together with the previous commit (PKG_SOURCE from TRUNK_DIR, plus the guard
+that refuses to copy / when it is empty) this makes "make
+package/icwmp_tr098/{clean,compile}" self-contained.
+
+NOT BUILD-TESTED on this host: no make and no compiler here -- the build tree
+under 1_src has been updated in place for the user to build.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ release/feeds/icwmp_tr098/Makefile | 6 ++++++
+ release/feeds/libtr098/Makefile    | 6 ++++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/release/feeds/icwmp_tr098/Makefile b/release/feeds/icwmp_tr098/Makefile
+index 333af15..74de8d6 100644
+--- a/release/feeds/icwmp_tr098/Makefile
++++ b/release/feeds/icwmp_tr098/Makefile
+@@ -9,6 +9,12 @@ include $(TOPDIR)/rules.mk
+ include $(INCLUDE_DIR)/kernel.mk
+ include $(INCLUDE_DIR)/target.mk
+ 
++# TRUNK_DIR lives in include/ecnt-trunkdir.mk, written by
++# airoha_script/airoha-compile.sh.  Nothing in the OpenWrt tree includes that
++# file, so in a shell that has not exported TRUNK_DIR it is empty -- pull it in
++# here.  "-include": a tree without the file still parses.
++-include $(TOPDIR)/include/ecnt-trunkdir.mk
++
+ PKG_NAME:=icwmp_tr098
+ PKG_VERSION:=3
+ PKG_RELEASE:=2
+diff --git a/release/feeds/libtr098/Makefile b/release/feeds/libtr098/Makefile
+index 1e62c6f..41fc20a 100644
+--- a/release/feeds/libtr098/Makefile
++++ b/release/feeds/libtr098/Makefile
+@@ -2,6 +2,12 @@ include $(TOPDIR)/rules.mk
+ include $(INCLUDE_DIR)/kernel.mk
+ include $(INCLUDE_DIR)/target.mk
+ 
++# TRUNK_DIR lives in include/ecnt-trunkdir.mk, written by
++# airoha_script/airoha-compile.sh.  Nothing in the OpenWrt tree includes that
++# file, so in a shell that has not exported TRUNK_DIR it is empty -- pull it in
++# here.  "-include": a tree without the file still parses.
++-include $(TOPDIR)/include/ecnt-trunkdir.mk
++
+ PKG_NAME:=libtr098
+ PKG_RELEASE:=3
+ 
+-- 
+2.34.1
+

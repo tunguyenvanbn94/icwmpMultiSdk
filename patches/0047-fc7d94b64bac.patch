@@ -1,0 +1,72 @@
+From fc7d94b64bac15a72b5881dd2a712af409fa0722 Mon Sep 17 00:00:00 2001
+From: TuNV <tunguyenvanbn94@gmail.com>
+Date: Thu, 24 Sep 2026 15:24:55 +0700
+Subject: [PATCH] [icwmp mtk] Brace the CWMP_LOG branches: the macro carries
+ its own ";"
+
+  ../sdk/mtk/icwmp_mtk.c:179:4: error: expected '}' before 'else'
+
+inc/log.h:45 defines the logger with a trailing semicolon:
+
+  #define CWMP_LOG(SEV,MESSAGE,args...) puts_log(SEV,MESSAGE,##args);
+
+so an unbraced branch expands to "if (x) puts_log(...); ;" -- the if statement
+ends at the first semicolon and the null statement that follows leaves the
+else with no if to bind to.  Upstream icwmp never writes CWMP_LOG as the body
+of an if that has an else, so the hazard had not shown up before.
+
+Braced both branches of the secret/non-secret log in
+icwmp_mtk_sync_easycwmp_to_cwmp(), and the single-branch CWMP_LOG in
+icwmp_platform_init() as well -- that one compiles either way today, but it is
+the same construct and the next statement added under it would break silently.
+
+The errors after line 179 (conflicting types for uci_free_context, and the
+three "expected identifier" lines) are the parser falling out to file scope;
+there is one defect here, not five.
+
+check-c-sanity.py gains a layer for this: a macro whose definition ends in ";"
+used as the unbraced body of an if that is followed by else.  Brace counting
+cannot see it -- it counts before the preprocessor runs.
+
+NOT BUILD-TESTED on this host: no compiler here.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ public/apps/icwmp/icwmp/sdk/mtk/icwmp_mtk.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/public/apps/icwmp/icwmp/sdk/mtk/icwmp_mtk.c b/public/apps/icwmp/icwmp/sdk/mtk/icwmp_mtk.c
+index d051778..715968a 100644
+--- a/public/apps/icwmp/icwmp/sdk/mtk/icwmp_mtk.c
++++ b/public/apps/icwmp/icwmp/sdk/mtk/icwmp_mtk.c
+@@ -174,10 +174,14 @@ int icwmp_mtk_sync_easycwmp_to_cwmp(void)
+ 			continue;
+ 		if (uci_set_str(c, m->cwmp, v) == 0) {
+ 			changed = 1;
+-			if (is_secret(m->cwmp))
++			/* Braces are load-bearing: inc/log.h defines CWMP_LOG with a
++			 * trailing ";", so an unbraced branch leaves a null statement
++			 * between the if and the else ("expected '}' before 'else'"). */
++			if (is_secret(m->cwmp)) {
+ 				CWMP_LOG(INFO, "sync easycwmp->cwmp %s (masked)", m->cwmp);
+-			else
++			} else {
+ 				CWMP_LOG(INFO, "sync easycwmp->cwmp %s=%s", m->cwmp, v);
++			}
+ 		}
+ 	}
+ 	if (changed)
+@@ -232,8 +236,9 @@ int icwmp_platform_init(void)
+ 	struct stat st;
+ 
+ 	/* backup session file and boot flag live here (bin/Makefile.am CWMP_BKP_FILE) */
+-	if (stat(ICWMP_MTK_STATE_DIR, &st) != 0 && mkdir(ICWMP_MTK_STATE_DIR, 0755) != 0)
++	if (stat(ICWMP_MTK_STATE_DIR, &st) != 0 && mkdir(ICWMP_MTK_STATE_DIR, 0755) != 0) {
+ 		CWMP_LOG(ERROR, "cannot create %s: %s", ICWMP_MTK_STATE_DIR, strerror(errno));
++	}
+ 	icwmp_mtk_sync_easycwmp_to_cwmp();
+ 	return 0;
+ }
+-- 
+2.34.1
+

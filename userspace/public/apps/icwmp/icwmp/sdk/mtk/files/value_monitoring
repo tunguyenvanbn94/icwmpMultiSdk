@@ -1,0 +1,11 @@
+#!/bin/sh
+# Poll icwmpd for value changes every $1 seconds (ubus "tr069 notify" runs
+# the DM_ENABLED_NOTIFY diff, event.c cwmp_add_notification).  Same loop as
+# easycwmp's valuemonitoring.sh; one instance only.
+kill -9 `ps | grep "value_monitoring" | grep -v grep | grep -v "$$" | awk '{ print $1 }'` 2>/dev/null
+while true; do
+	if ubus list tr069 >/dev/null 2>&1; then
+		ubus call tr069 notify >/dev/null 2>&1
+	fi
+	sleep ${1:-30}
+done

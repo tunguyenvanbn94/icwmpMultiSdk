@@ -1,0 +1,95 @@
+From 05336c1cd7f5ec3e8533ba411e81c069ec93872b Mon Sep 17 00:00:00 2001
+From: TuNV <steven.nguyen.bn@gmail.com>
+Date: Thu, 24 Sep 2026 14:07:15 +0700
+Subject: [PATCH] [icwmp app] SDK fragments must append under ICWMP_TR098 too
+
+  sdk/mtk/sdk.mk:4: error: cannot apply '+=' because 'icwmp_tr098d_SOURCES'
+      is not defined in the following conditions:
+      ICWMP_SDK_MTK and !ICWMP_TR098
+
+bin/Makefile.am defines icwmp_tr098d_SOURCES/CFLAGS/LDFLAGS/LDADD inside
+"if ICWMP_TR098", but each sdk/<name>/sdk.mk appended to them guarded only by
+its own ICWMP_SDK_<X>.  automake checks that statically over every combination
+of conditions, not over the one configure selects, so the combination
+ICWMP_SDK_<X> and !ICWMP_TR098 has an append with no base definition.
+
+All three fragments now nest ICWMP_SDK_<X> inside ICWMP_TR098.  Nothing is
+built differently: under !ICWMP_TR098 the app builds icwmpd against bbfdm and
+the SDK glue never contributed to it.
+
+libtr098 is unaffected: its bin/Makefile.am defines libtr098_la_SOURCES
+unconditionally, which is why the library built.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ public/apps/icwmp/icwmp/sdk/bdk/sdk.mk | 8 ++++++++
+ public/apps/icwmp/icwmp/sdk/mtk/sdk.mk | 8 ++++++++
+ public/apps/icwmp/icwmp/sdk/uci/sdk.mk | 8 ++++++++
+ 3 files changed, 24 insertions(+)
+
+diff --git a/public/apps/icwmp/icwmp/sdk/bdk/sdk.mk b/public/apps/icwmp/icwmp/sdk/bdk/sdk.mk
+index 649aa0e..ad42978 100644
+--- a/public/apps/icwmp/icwmp/sdk/bdk/sdk.mk
++++ b/public/apps/icwmp/icwmp/sdk/bdk/sdk.mk
+@@ -1,4 +1,11 @@
+ # SDK "bdk" -- automake fragment, included from bin/Makefile.am.
++# bin/Makefile.am defines icwmp_tr098d_* only inside "if ICWMP_TR098", so every
++# "+=" here has to sit under that same condition.  automake checks this
++# statically over EVERY combination of conditions, not just the one configure
++# actually selects:
++#   error: cannot apply '+=' because 'icwmp_tr098d_SOURCES' is not defined
++#          in the following conditions: ICWMP_SDK_<X> and !ICWMP_TR098
++if ICWMP_TR098
+ if ICWMP_SDK_BDK
+ # C glue instead of the /usr/sbin/icwmp shell backend
+ icwmp_tr098d_SOURCES +=	\
+@@ -20,3 +27,4 @@ icwmp_tr098d_CFLAGS += -I../sdk/bdk -g
+ icwmp_tr098d_LDFLAGS += -rdynamic
+ icwmp_tr098d_LDADD += $(BDK_LIBS)
+ endif
++endif
+diff --git a/public/apps/icwmp/icwmp/sdk/mtk/sdk.mk b/public/apps/icwmp/icwmp/sdk/mtk/sdk.mk
+index a4f164f..1c83059 100644
+--- a/public/apps/icwmp/icwmp/sdk/mtk/sdk.mk
++++ b/public/apps/icwmp/icwmp/sdk/mtk/sdk.mk
+@@ -1,4 +1,11 @@
+ # SDK "mtk" -- automake fragment, included from bin/Makefile.am.
++# bin/Makefile.am defines icwmp_tr098d_* only inside "if ICWMP_TR098", so every
++# "+=" here has to sit under that same condition.  automake checks this
++# statically over EVERY combination of conditions, not just the one configure
++# actually selects:
++#   error: cannot apply '+=' because 'icwmp_tr098d_SOURCES' is not defined
++#          in the following conditions: ICWMP_SDK_<X> and !ICWMP_TR098
++if ICWMP_TR098
+ if ICWMP_SDK_MTK
+ # easycwmp <-> cwmp config mirror + the shell backend for the actions
+ icwmp_tr098d_SOURCES +=	\
+@@ -8,3 +15,4 @@ icwmp_tr098d_SOURCES +=	\
+ icwmp_tr098d_CFLAGS += -DICWMP_SDK_HEADER='"icwmp_mtk.h"'
+ icwmp_tr098d_CFLAGS += -I../sdk/mtk
+ endif
++endif
+diff --git a/public/apps/icwmp/icwmp/sdk/uci/sdk.mk b/public/apps/icwmp/icwmp/sdk/uci/sdk.mk
+index 9f4a54b..ed568a0 100644
+--- a/public/apps/icwmp/icwmp/sdk/uci/sdk.mk
++++ b/public/apps/icwmp/icwmp/sdk/uci/sdk.mk
+@@ -1,4 +1,11 @@
+ # SDK "uci" -- automake fragment, included from bin/Makefile.am.
++# bin/Makefile.am defines icwmp_tr098d_* only inside "if ICWMP_TR098", so every
++# "+=" here has to sit under that same condition.  automake checks this
++# statically over EVERY combination of conditions, not just the one configure
++# actually selects:
++#   error: cannot apply '+=' because 'icwmp_tr098d_SOURCES' is not defined
++#          in the following conditions: ICWMP_SDK_<X> and !ICWMP_TR098
++if ICWMP_TR098
+ if ICWMP_SDK_UCI
+ icwmp_tr098d_SOURCES +=	\
+ 	../sdk/uci/icwmp_uci.c	\
+@@ -6,3 +13,4 @@ icwmp_tr098d_SOURCES +=	\
+ 
+ icwmp_tr098d_CFLAGS += -I../sdk/uci
+ endif
++endif
+-- 
+2.34.1
+

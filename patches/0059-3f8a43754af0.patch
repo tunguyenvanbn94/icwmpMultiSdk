@@ -1,0 +1,476 @@
+From 3f8a43754af08af7b4eee8ec69eec3289d351e5b Mon Sep 17 00:00:00 2001
+From: TuNV <tunguyenvanbn94@gmail.com>
+Date: Fri, 25 Sep 2026 14:53:50 +0700
+Subject: [PATCH] [icwmp tr098] P5c: TR-143 DownloadDiagnostics and
+ UploadDiagnostics, 26 parameters
+
+Ported from functions/tr143/download_diagnostic and upload_diagnostic;
+the transfers stay in DownloadDiagnostics_launch / UploadDiagnostics_launch.
+
+TR-143 stops differently from every other diagnostic: the data model
+never kills.  downloadDiag_stop_diagnostic() queues "<launcher> stop" on
+the apply-service list when DiagnosticsState is Requested, so the order of
+the queue decides what runs after the session ("Requested" then
+"DownloadURL" in one SPV queues "run &" then "stop").  Kept, call for call;
+icwmp applies an SPV in order (set_list_tmp, list_add_tail, FIFO).
+
+Vendor bug kept: uploadDiag_stop_diagnostic() reads the state with
+$UCI_SET_VARSTATE_UPLOAD.  "uci set x.y.z" without a value fails
+(uci list.c:702 UCI_ASSERT(ptr->value)), -q hides it, so the Upload
+setters never queue a stop.
+
+Quirks kept: http/ftp only, the URL must equal what grep -o prints (and
+so "" is accepted); Interface reads "" when unset; EthernetPriority is
+option EthPriority; TestFileLength has no upper bound; the *Time leaves
+are strings reading 0000-00-00T00:00:00.000000 before the first run.
+
+dmmtk: mtk_grep_o() -- "$(echo "$s" | grep -E -o re)".
+diag_mtk: download/upload stores, diag_stop_queued(), diag_queue_run(),
+diag_url_valid().
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c  |  34 +++
+ .../libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h  |  16 ++
+ .../src/sdk/mtk/dm098/tr143diag_mtk.c         | 241 ++++++++++++++++++
+ public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c   |  56 ++++
+ public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h   |   5 +
+ public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk    |   3 +-
+ 6 files changed, 354 insertions(+), 1 deletion(-)
+ create mode 100644 public/libs/libicwmp_dm/src/sdk/mtk/dm098/tr143diag_mtk.c
+
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c
+index 6342af7..0d67fc3 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.c
+@@ -24,6 +24,8 @@ const struct diag_store diag_ipping     = { "/var/state",            "ipping_lau
+ const struct diag_store diag_traceroute = { "/var/state/traceroute", "traceroute_launch" };
+ const struct diag_store diag_nslookup   = { "/var/state/nslookup",   "nslookup_launch" };
+ const struct diag_store diag_dns        = { "/var/state/dnsDiagnostics", "dnsDiagnostics_launch" };
++const struct diag_store diag_download   = { "/var/state/downloadDiag", "DownloadDiagnostics_launch" };
++const struct diag_store diag_upload     = { "/var/state/uploadDiag",   "UploadDiagnostics_launch" };
+ 
+ char *diag_get(const struct diag_store *d, const char *option, const char *def)
+ {
+@@ -134,3 +136,35 @@ int diag_host_valid(const struct diag_store *d, const char *host)
+ 	}
+ 	return 1;
+ }
++
++static void diag_queue(const struct diag_store *d, const char *verb)
++{
++	char cmd[256];
++
++	snprintf(cmd, sizeof(cmd), "/bin/sh %s/%s %s", DIAG_FUNCTION_PATH, d->launcher, verb);
++	mtk_apply_service(cmd);
++}
++
++void diag_stop_queued(const struct diag_store *d)
++{
++	if (strcmp(diag_get(d, "DiagnosticsState", NULL), "Requested") == 0)
++		diag_queue(d, "stop");
++}
++
++void diag_queue_run(const struct diag_store *d)
++{
++	diag_queue(d, "run &");
++}
++
++/* The shell's pattern, as grep receives it once the double quotes are
++ * undone: "\\[" -> "\[", "\\]" -> "\]", "\+" stays.  Inside a bracket
++ * expression a backslash is an ordinary character, so the two brackets
++ * accept "\" as well -- kept. */
++#define RE_TR143_URL \
++	"(http|ftp)://[-A-Za-z0-9\\[\\+&@#/%?=~_|! /:/,.;]*(\\])*[-A-Za-z0-9\\+&@#/%=~_|]*"
++
++int diag_url_valid(const char *url)
++{
++	return strcmp(mtk_grep_o(RE_TR143_URL, url), url) == 0;
++}
++
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h
+index 76adf7f..e0b7c11 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/diag_mtk.h
+@@ -45,6 +45,8 @@ extern const struct diag_store diag_ipping;		/* -P /var/state */
+ extern const struct diag_store diag_traceroute;	/* -P /var/state/traceroute */
+ extern const struct diag_store diag_nslookup;		/* -P /var/state/nslookup */
+ extern const struct diag_store diag_dns;		/* -P /var/state/dnsDiagnostics */
++extern const struct diag_store diag_download;		/* -P /var/state/downloadDiag */
++extern const struct diag_store diag_upload;		/* -P /var/state/uploadDiag */
+ 
+ /* where the launchers of the two lookup diagnostics put Result.{i}: the
+  * launcher "uci -P <dir> add"s one "local" section per answer, so Result.<n>
+@@ -75,6 +77,15 @@ void diag_store_value_nostop(const struct diag_store *d, const char *option, con
+ char *diag_result_get(const char *dir, int idx, const char *option);
+ /* <x>_set_diagnostic_state Requested: stop, Requested, queue the launcher */
+ void diag_request(const struct diag_store *d);
++/* TR-143 (downloadDiag_stop_diagnostic): no kill from the data model --
++ * when DiagnosticsState is Requested, queue "<launcher> stop" on the
++ * apply-service list, and do nothing else.  The launcher's stop kills the
++ * running test and resets the results; the ORDER of the queue therefore
++ * decides what runs, and it is kept by calling this exactly where the shell
++ * did. */
++void diag_stop_queued(const struct diag_store *d);
++/* queue "<launcher> run &" -- the tail of the TR-143 Requested setters */
++void diag_queue_run(const struct diag_store *d);
+ 
+ /* "case $v in (*[^0-9]*|'') fault", then the "[ $v -lt MIN -o $v -gt MAX ]"
+  * range test.  Returns 0 when the value is accepted.
+@@ -102,4 +113,9 @@ int diag_host_valid(const struct diag_store *d, const char *host);
+  * the rejection is kept, the side effect is not. */
+ int diag_ifconfig_prints(const char *v);
+ 
++/* <x>Diag_set_DownloadURL / _UploadURL: the value must equal what
++ *	echo "$url" | grep -E -o "(http|ftp)://[...]*(\])*[...]*"
++ * prints -- a whole-string match, http or ftp only (not https). */
++int diag_url_valid(const char *url);
++
+ #endif
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/tr143diag_mtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/tr143diag_mtk.c
+new file mode 100644
+index 0000000..03f51ba
+--- /dev/null
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/tr143diag_mtk.c
+@@ -0,0 +1,241 @@
++/*
++ *	This program is free software: you can redistribute it and/or modify
++ *	it under the terms of the GNU General Public License as published by
++ *	the Free Software Foundation, either version 2 of the License, or
++ *	(at your option) any later version.
++ *
++ *	TR-143 throughput diagnostics:
++ *	  InternetGatewayDevice.DownloadDiagnostics.   13 parameters
++ *	  InternetGatewayDevice.UploadDiagnostics.     13 parameters
++ *
++ *	Ported from functions/tr143/download_diagnostic and upload_diagnostic.
++ *	The transfers stay in functions/common/DownloadDiagnostics_launch and
++ *	UploadDiagnostics_launch; see diag_mtk.h.
++ *
++ *	Stores: -P /var/state/downloadDiag and -P /var/state/uploadDiag.
++ *
++ *	HOW TR-143 STOPS, unlike every other diagnostic: the data model never
++ *	kills.  downloadDiag_stop_diagnostic() queues "<launcher> stop" on the
++ *	apply-service list when DiagnosticsState is Requested, and the setter
++ *	goes on.  The launcher's stop kills every running "DownloadDiagnostics"
++ *	process and resets state and results.  So the ORDER of the queue decides
++ *	what happens after the session -- for example "DiagnosticsState=Requested"
++ *	followed by "DownloadURL=..." in the same SetParameterValues queues
++ *	"run &" then "stop", and the test that was just requested is killed as
++ *	soon as it starts.  Kept: the calls below sit exactly where the shell's
++ *	were, and icwmp applies the parameters of an SPV in their order.
++ *
++ *	VENDOR BUG KEPT: uploadDiag_stop_diagnostic() reads the state with
++ *	$UCI_SET_VARSTATE_UPLOAD instead of the getter.  "uci set x.y.z" with no
++ *	value fails (uci-2020-10-06 list.c:702 UCI_ASSERT(ptr->value)), -q hides
++ *	the error, the output is empty, and "" is never "Requested".  So the
++ *	UploadDiagnostics setters NEVER queue a stop: changing UploadURL while
++ *	an upload runs leaves it running.
++ *
++ *	Other quirks kept:
++ *	  - DownloadURL / UploadURL: http:// or ftp:// only (no https), the value
++ *	    must equal what grep -o prints (diag_url_valid) -- so "" is ACCEPTED
++ *	    (grep prints nothing, "" == ""), and the launcher then reports
++ *	    Error_InitConnectionFailed;
++ *	  - Interface: device name, "$(ifconfig $2)" rule, reads "" when unset
++ *	    (no "default" here, unlike the other diagnostics);
++ *	  - EthernetPriority lives in option EthPriority;
++ *	  - TestFileLength: digits only, no upper bound;
++ *	  - ROMTime/BOMTime/EOMTime/TCPOpen*Time are strings, not dateTime,
++ *	    reading "0000-00-00T00:00:00.000000" before the first run.
++ *
++ *	NOT BUILD-TESTED YET.
++ */
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++#include "dmuci.h"
++#include "dmcommon.h"
++#include "dm_registry.h"
++#include "dmmtk.h"
++#include "diag_mtk.h"
++
++#define DLD	(&diag_download)
++#define ULD	(&diag_upload)
++
++#define TR143_ZERO_TIME	"0000-00-00T00:00:00.000000"
++
++/* <x>_stop_diagnostic of each object: download queues, upload never does */
++static void tr143_stop(const struct diag_store *d)
++{
++	if (d == DLD)
++		diag_stop_queued(d);
++}
++
++/* the tail of every writable setter: stop, None unless Requested, store */
++static void tr143_store(const struct diag_store *d, const char *option, const char *value)
++{
++	tr143_stop(d);
++	diag_store_value_nostop(d, option, value);
++}
++
++static int tr143_set_state(const struct diag_store *d, char *value, int action)
++{
++	if (strcmp(value, "Requested") != 0)
++		return FAULT_9007;
++	if (action == VALUESET) {
++		tr143_stop(d);
++		diag_set(d, "DiagnosticsState", "Requested");
++		diag_queue_run(d);
++	}
++	return 0;
++}
++
++static int tr143_set_interface(const struct diag_store *d, char *value, int action)
++{
++	if (!diag_ifconfig_prints(value))
++		return FAULT_9007;
++	if (action == VALUESET)
++		tr143_store(d, "Interface", value);
++	return 0;
++}
++
++static int tr143_set_url(const struct diag_store *d, const char *option, char *value, int action)
++{
++	if (!diag_url_valid(value))
++		return FAULT_9007;
++	if (action == VALUESET)
++		tr143_store(d, option, value);
++	return 0;
++}
++
++static int tr143_set_range(const struct diag_store *d, const char *option, long long lo,
++			   long long hi, char *value, int action)
++{
++	if (diag_check_uint(value, lo, hi) != 0)
++		return FAULT_9007;
++	if (action == VALUESET)
++		tr143_store(d, option, value);
++	return 0;
++}
++
++/* ------------------------------------------------------------------ */
++/* getters, one pair of tables per object                              */
++/* ------------------------------------------------------------------ */
++
++#define TR143_GET(fn, store, option, def)					\
++static int fn(char *refparam, struct dmctx *ctx, void *data,			\
++	      char *instance, char **value)					\
++{										\
++	*value = diag_get(store, option, def);					\
++	return 0;								\
++}
++
++TR143_GET(get_dld_state,      DLD, "DiagnosticsState",    "None")
++TR143_GET(get_dld_interface,  DLD, "Interface",           NULL)
++TR143_GET(get_dld_transports, DLD, "DownloadTransports",  "HTTP,FTP")
++TR143_GET(get_dld_dscp,       DLD, "DSCP",                "0")
++TR143_GET(get_dld_url,        DLD, "DownloadURL",         NULL)
++TR143_GET(get_dld_ethprio,    DLD, "EthPriority",         "0")
++TR143_GET(get_dld_rom,        DLD, "ROMTime",             TR143_ZERO_TIME)
++TR143_GET(get_dld_bom,        DLD, "BOMTime",             TR143_ZERO_TIME)
++TR143_GET(get_dld_eom,        DLD, "EOMTime",             TR143_ZERO_TIME)
++TR143_GET(get_dld_tcpreq,     DLD, "TCPOpenRequestTime",  TR143_ZERO_TIME)
++TR143_GET(get_dld_tcpresp,    DLD, "TCPOpenResponseTime", TR143_ZERO_TIME)
++TR143_GET(get_dld_testbytes,  DLD, "TestBytesReceived",   "0")
++TR143_GET(get_dld_totalbytes, DLD, "TotalBytesReceived",  "0")
++
++TR143_GET(get_uld_state,      ULD, "DiagnosticsState",    "None")
++TR143_GET(get_uld_interface,  ULD, "Interface",           NULL)
++TR143_GET(get_uld_transports, ULD, "UploadTransports",    "HTTP,FTP")
++TR143_GET(get_uld_dscp,       ULD, "DSCP",                "0")
++TR143_GET(get_uld_url,        ULD, "UploadURL",           NULL)
++TR143_GET(get_uld_ethprio,    ULD, "EthPriority",         "0")
++TR143_GET(get_uld_rom,        ULD, "ROMTime",             TR143_ZERO_TIME)
++TR143_GET(get_uld_bom,        ULD, "BOMTime",             TR143_ZERO_TIME)
++TR143_GET(get_uld_eom,        ULD, "EOMTime",             TR143_ZERO_TIME)
++TR143_GET(get_uld_tcpreq,     ULD, "TCPOpenRequestTime",  TR143_ZERO_TIME)
++TR143_GET(get_uld_tcpresp,    ULD, "TCPOpenResponseTime", TR143_ZERO_TIME)
++TR143_GET(get_uld_filelen,    ULD, "TestFileLength",      "0")
++TR143_GET(get_uld_totalsent,  ULD, "TotalBytesSent",      "0")
++
++/* ------------------------------------------------------------------ */
++/* setters                                                             */
++/* ------------------------------------------------------------------ */
++
++#define TR143_SETTER(fn, body)							\
++static int fn(char *refparam, struct dmctx *ctx, void *data,			\
++	      char *instance, char *value, int action)				\
++{										\
++	return body;								\
++}
++
++TR143_SETTER(set_dld_state,     tr143_set_state(DLD, value, action))
++TR143_SETTER(set_dld_interface, tr143_set_interface(DLD, value, action))
++TR143_SETTER(set_dld_dscp,      tr143_set_range(DLD, "DSCP", 0, 63, value, action))
++TR143_SETTER(set_dld_url,       tr143_set_url(DLD, "DownloadURL", value, action))
++TR143_SETTER(set_dld_ethprio,   tr143_set_range(DLD, "EthPriority", 0, 7, value, action))
++
++TR143_SETTER(set_uld_state,     tr143_set_state(ULD, value, action))
++TR143_SETTER(set_uld_interface, tr143_set_interface(ULD, value, action))
++TR143_SETTER(set_uld_dscp,      tr143_set_range(ULD, "DSCP", 0, 63, value, action))
++TR143_SETTER(set_uld_url,       tr143_set_url(ULD, "UploadURL", value, action))
++TR143_SETTER(set_uld_ethprio,   tr143_set_range(ULD, "EthPriority", 0, 7, value, action))
++TR143_SETTER(set_uld_filelen,   tr143_set_range(ULD, "TestFileLength", 0, -1, value, action))
++
++/* ------------------------------------------------------------------ */
++/* tables                                                              */
++/* ------------------------------------------------------------------ */
++
++static DMLEAF tDownloadDiagParams[] = {
++/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
++{"DiagnosticsState", &DMWRITE, DMT_STRING, get_dld_state, set_dld_state, NULL, NULL},
++{"Interface", &DMWRITE, DMT_STRING, get_dld_interface, set_dld_interface, NULL, NULL},
++{"DownloadTransports", &DMREAD, DMT_STRING, get_dld_transports, NULL, NULL, NULL},
++{"DSCP", &DMWRITE, DMT_UNINT, get_dld_dscp, set_dld_dscp, NULL, NULL},
++{"DownloadURL", &DMWRITE, DMT_STRING, get_dld_url, set_dld_url, NULL, NULL},
++{"EthernetPriority", &DMWRITE, DMT_UNINT, get_dld_ethprio, set_dld_ethprio, NULL, NULL},
++{"ROMTime", &DMREAD, DMT_STRING, get_dld_rom, NULL, NULL, NULL},
++{"BOMTime", &DMREAD, DMT_STRING, get_dld_bom, NULL, NULL, NULL},
++{"EOMTime", &DMREAD, DMT_STRING, get_dld_eom, NULL, NULL, NULL},
++{"TCPOpenRequestTime", &DMREAD, DMT_STRING, get_dld_tcpreq, NULL, NULL, NULL},
++{"TCPOpenResponseTime", &DMREAD, DMT_STRING, get_dld_tcpresp, NULL, NULL, NULL},
++{"TestBytesReceived", &DMREAD, DMT_UNINT, get_dld_testbytes, NULL, NULL, NULL},
++{"TotalBytesReceived", &DMREAD, DMT_UNINT, get_dld_totalbytes, NULL, NULL, NULL},
++{0}
++};
++
++static DMLEAF tUploadDiagParams[] = {
++{"DiagnosticsState", &DMWRITE, DMT_STRING, get_uld_state, set_uld_state, NULL, NULL},
++{"Interface", &DMWRITE, DMT_STRING, get_uld_interface, set_uld_interface, NULL, NULL},
++{"UploadTransports", &DMREAD, DMT_STRING, get_uld_transports, NULL, NULL, NULL},
++{"DSCP", &DMWRITE, DMT_UNINT, get_uld_dscp, set_uld_dscp, NULL, NULL},
++{"UploadURL", &DMWRITE, DMT_STRING, get_uld_url, set_uld_url, NULL, NULL},
++{"EthernetPriority", &DMWRITE, DMT_UNINT, get_uld_ethprio, set_uld_ethprio, NULL, NULL},
++{"ROMTime", &DMREAD, DMT_STRING, get_uld_rom, NULL, NULL, NULL},
++{"BOMTime", &DMREAD, DMT_STRING, get_uld_bom, NULL, NULL, NULL},
++{"EOMTime", &DMREAD, DMT_STRING, get_uld_eom, NULL, NULL, NULL},
++{"TCPOpenRequestTime", &DMREAD, DMT_STRING, get_uld_tcpreq, NULL, NULL, NULL},
++{"TCPOpenResponseTime", &DMREAD, DMT_STRING, get_uld_tcpresp, NULL, NULL, NULL},
++{"TestFileLength", &DMWRITE, DMT_UNINT, get_uld_filelen, set_uld_filelen, NULL, NULL},
++{"TotalBytesSent", &DMREAD, DMT_UNINT, get_uld_totalsent, NULL, NULL, NULL},
++{0}
++};
++
++static DMOBJ tTr143DiagMtkObj[] = {
++/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
++{"DownloadDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tDownloadDiagParams, NULL},
++{"UploadDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tUploadDiagParams, NULL},
++{0}
++};
++
++static const char *const tr143diag_mtk_paths[] = {
++	"InternetGatewayDevice.DownloadDiagnostics.",
++	"InternetGatewayDevice.UploadDiagnostics.",
++	NULL
++};
++
++static const struct dm_module tr143diag_mtk_module = {
++	.name  = "mtk-tr143diag",
++	.model = DM_MODEL_TR098,
++	.order = DM_ORDER_SDK,
++	.objs  = tTr143DiagMtkObj,
++	.paths = tr143diag_mtk_paths,
++};
++DM_MODULE_REGISTER(tr143diag_mtk_module);
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c
+index c74be81..f24f632 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c
+@@ -202,6 +202,62 @@ int mtk_netdev_exists(const char *name)
+ 	return if_nametoindex(name) != 0;
+ }
+ 
++char *mtk_grep_o(const char *re, const char *s)
++{
++	regex_t rx;
++	char *out = NULL, *line;
++	size_t olen = 0;
++	const char *p, *nl;
++
++	if (!re || !s)
++		return "";
++	if (regcomp(&rx, re, REG_EXTENDED) != 0)
++		return "";
++	/* echo "$s": the lines of s, the last one included even when empty */
++	for (p = s;; p = nl + 1) {
++		regmatch_t m;
++		size_t ll;
++		char *q;
++		int eflags = 0;
++
++		nl = strchr(p, '\n');
++		ll = nl ? (size_t)(nl - p) : strlen(p);
++		line = dmmalloc(ll + 1);
++		if (!line)
++			break;
++		memcpy(line, p, ll);
++		line[ll] = '\0';
++		for (q = line; regexec(&rx, q, 1, &m, eflags) == 0; eflags = REG_NOTBOL) {
++			size_t n = (size_t)(m.rm_eo - m.rm_so);
++
++			if (n == 0) {		/* grep -o prints no empty match */
++				if (!q[m.rm_eo])
++					break;
++				q += m.rm_eo + 1;
++				continue;
++			}
++			out = dmrealloc(out, olen + n + 2);
++			if (!out)
++				break;
++			memcpy(out + olen, q + m.rm_so, n);
++			olen += n;
++			out[olen++] = '\n';
++			out[olen] = '\0';
++			q += m.rm_eo;
++			if (!*q)
++				break;
++		}
++		if (!nl)
++			break;
++	}
++	regfree(&rx);
++	if (!out)
++		return "";
++	while (olen && out[olen - 1] == '\n')
++		out[--olen] = '\0';
++	return out;
++}
++
+ int mtk_ere_match(const char *re, const char *s)
+ {
+ 	regex_t rx;
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h b/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h
+index 74284f9..65ec9d8 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h
+@@ -80,6 +80,11 @@ int mtk_netdev_exists(const char *name);
+ /* "echo <s> | grep -E -q <re>": POSIX ERE, ^ and $ bound to each line like
+  * grep does.  1 on a match, 0 otherwise (a bad pattern never matches). */
+ int mtk_ere_match(const char *re, const char *s);
++/* "$(echo "$s" | grep -E -o <re>)": every non-empty match of every line,
++ * joined with newlines, trailing newlines stripped the way command
++ * substitution strips them.  dm-allocated, "" when nothing matches or the
++ * pattern does not compile. */
++char *mtk_grep_o(const char *re, const char *s);
+ 
+ /* IPv4 --------------------------------------------------------------- */
+ /* Dotted quad -> host order integer, mirroring is_valid_ipv4 + ipstr2int
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk b/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk
+index a9f83d5..b110157 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk
+@@ -24,7 +24,8 @@ libtr098_la_SOURCES +=	\
+ 	../sdk/mtk/dm098/diag_mtk.c	\
+ 	../sdk/mtk/dm098/ipping_mtk.c	\
+ 	../sdk/mtk/dm098/traceroute_mtk.c	\
+-	../sdk/mtk/dm098/lookupdiag_mtk.c
++	../sdk/mtk/dm098/lookupdiag_mtk.c	\
++	../sdk/mtk/dm098/tr143diag_mtk.c
+ 
+ if DM_MTK_SCRIPT_COMPAT
+ libtr098_la_SOURCES +=	\
+-- 
+2.34.1
+

@@ -1,0 +1,25 @@
+# Build artifacts and autotools generated files
+*.o
+*.so*
+*.a
+*.la
+*.lai
+*.lo
+*.log
+*.status
+*.cache
+*.pc
+autom4te.cache/
+.deps/
+.libs/
+*-build/
+microxml/microxml/Makefile
+microxml/microxml/config.h
+microxml/microxml/config.log
+microxml/microxml/config.status
+microxml/microxml/microxml.list
+microxml/microxml/microxml.pc
+libtr098/libtr098/Makefile
+libtr098/libtr098/bin/Makefile
+icwmp/icwmp/Makefile
+icwmp/icwmp/bin/Makefile

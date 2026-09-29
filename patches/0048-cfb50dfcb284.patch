@@ -1,0 +1,63 @@
+From cfb50dfcb284b7ed2d589c41fdf7fd9b0897c210 Mon Sep 17 00:00:00 2001
+From: TuNV <tunguyenvanbn94@gmail.com>
+Date: Thu, 24 Sep 2026 15:35:44 +0700
+Subject: [PATCH] [icwmp feed] DEPENDS must carry zlib: the binary links -lz
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+  Package icwmp_tr098 is missing dependencies for the following libraries:
+  libz.so.1
+
+Compile and link both succeeded; ipkg-build is what refused.  bin/Makefile.am
+puts $(LIBZ_LIBS) on icwmp_tr098d_LDADD for zlib.c (SOAP compression), which
+the cwmpclient package this replaces never linked -- so the dependency is new
+rather than dropped, and nothing in the DEPENDS line covered it.
+
+Also added +libubox.  The binary NEEDs libubox.so directly; it is installed
+anyway as a dependency of libblobmsg-json (same source package), which is why
+ipkg-build never complained.  libtr098 lists it explicitly and this package
+now does too.
+
+-lcrypto and -lssl stay out on purpose: they are on the link line but nothing
+here calls OpenSSL (curl does), so --as-needed drops them and the ELF has no
+NEEDED entry.  Adding +libopenssl would pull openssl into the image for no
+reason.
+
+check-pkg-deps.py compares <target>_LDADD against DEPENDS, resolving each -l to
+its OpenWrt package by searching the SDK tree for the Makefile that installs
+lib<x>.so, rather than a hand-written table.  On the pre-fix Makefile it
+reports exactly "-lz -> cần +zlib".
+
+NOT BUILD-TESTED on this host: no compiler here.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ release/feeds/icwmp_tr098/Makefile | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/release/feeds/icwmp_tr098/Makefile b/release/feeds/icwmp_tr098/Makefile
+index d54cc14..709d896 100644
+--- a/release/feeds/icwmp_tr098/Makefile
++++ b/release/feeds/icwmp_tr098/Makefile
+@@ -29,7 +29,16 @@ define Package/icwmp_tr098
+   CATEGORY:=Utilities
+   SUBMENU:=TRx69
+   TITLE:=TR069 CWMP client (icwmp + libtr098, replaces cwmpclient)
+-  DEPENDS:=+libubus +libuci +libcurl +libmicroxml +libjson-c +libblobmsg-json +libpthread +libtr098
++  # +zlib: bin/Makefile.am links icwmp_tr098d with $(LIBZ_LIBS) for zlib.c (SOAP
++  # compression).  The cwmpclient package this replaces never linked it, so the
++  # dependency is new -- without it ipkg-build fails with "missing dependencies
++  # for the following libraries: libz.so.1".
++  # +libubox: the binary NEEDs libubox.so directly.  It happens to be installed
++  # anyway as a dependency of libblobmsg-json (same source package), which is
++  # why ipkg-build never complained -- libtr098 lists it explicitly and so does
++  # this now.  -lcrypto/-lssl are on the link line too but --as-needed drops
++  # them: nothing here calls OpenSSL, curl does, so no +libopenssl.
++  DEPENDS:=+libubus +libuci +libubox +libcurl +libmicroxml +libjson-c +libblobmsg-json +libpthread +zlib +libtr098
+   CONFLICTS:=cwmpclient
+ endef
+ 
+-- 
+2.34.1
+

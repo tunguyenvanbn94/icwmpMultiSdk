@@ -1,0 +1,1977 @@
+From e58c83cdd2c6b860982c3d35eaeb5b7940c57425 Mon Sep 17 00:00:00 2001
+From: TuNV <tunguyenvanbn94@gmail.com>
+Date: Wed, 23 Sep 2026 22:36:10 +0700
+Subject: [PATCH] [icwmp P2] TR-098 LAN branch in C for the MTK SDK
+
+Ports phase P2 of the data model off the easycwmp shell library and into C,
+70 parameters over four modules that the registry merges into one LANDevice:
+
+  lan_mtk.c        LANDevice.1 counters, transmit power, and the whole
+                   LANHostConfigManagement subtree with IPInterface.1
+  lanhosts_mtk.c   Hosts.Host.{i} browsed from the product's UCI "lanhost",
+                   lease time still read from /tmp/dhcp.leases
+  laneth_mtk.c     LANEthernetInterfaceConfig.{i} and .Stats, four ports,
+                   counters from /proc/tc3162/gsw_stats and the port netdev
+  x_ais_mesh_mtk.c X_AIS_Mesh, the operator's forced-inform mesh object
+
+Same UCI options, same reload commands and the same fault codes as the shell
+functions they replace, including dhcp.lan.configurable refusing writes with
+9002 everywhere but MaxAddress, which answers 9007.  Service reloads and the
+mesh reboot are queued on the apply-service list so they run after the engine
+commits, which is what the shell got from committing inline.
+
+dmmtk gains mtk_uci_default() ($UCI_GET_DEFAULT, the /rom factory tree),
+mtk_ipv4_parse()/mtk_ipv4_str() and mtk_file_write().
+
+Parameter names verified against the product tree: 70 of 70, no extras.
+NOT build tested: no compiler in this environment.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ .../libicwmp_dm/src/sdk/mtk/dm098/lan_mtk.c   | 719 ++++++++++++++++++
+ .../src/sdk/mtk/dm098/laneth_mtk.c            | 503 ++++++++++++
+ .../src/sdk/mtk/dm098/lanhosts_mtk.c          | 282 +++++++
+ .../src/sdk/mtk/dm098/x_ais_mesh_mtk.c        | 248 ++++++
+ public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c   |  86 +++
+ public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h   |  16 +
+ public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk    |   6 +-
+ 7 files changed, 1859 insertions(+), 1 deletion(-)
+ create mode 100644 public/libs/libicwmp_dm/src/sdk/mtk/dm098/lan_mtk.c
+ create mode 100644 public/libs/libicwmp_dm/src/sdk/mtk/dm098/laneth_mtk.c
+ create mode 100644 public/libs/libicwmp_dm/src/sdk/mtk/dm098/lanhosts_mtk.c
+ create mode 100644 public/libs/libicwmp_dm/src/sdk/mtk/dm098/x_ais_mesh_mtk.c
+
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/lan_mtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/lan_mtk.c
+new file mode 100644
+index 0000000..1a453f5
+--- /dev/null
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/lan_mtk.c
+@@ -0,0 +1,719 @@
++/*
++ *	This program is free software: you can redistribute it and/or modify
++ *	it under the terms of the GNU General Public License as published by
++ *	the Free Software Foundation, either version 2 of the License, or
++ *	(at your option) any later version.
++ *
++ *	InternetGatewayDevice.LANDevice.1. of the MTK/Airoha product: the object
++ *	itself, its counters, and the whole LANHostConfigManagement subtree.
++ *
++ *	Ported from functions/tr098/lan_device, landevice_execute_params() and
++ *	lanhostconfigManagement_execute_params().  Same UCI options, same reload
++ *	commands and the same fault codes as the shell it replaces -- the WebUI
++ *	and hal_gateway write these very options, so moving a value elsewhere
++ *	would be a product change, not a CWMP change.
++ *
++ *	The neighbouring subtrees are their own modules, merged into this same
++ *	LANDevice object by dm_registry.c: lanhosts_mtk.c (Hosts), laneth_mtk.c
++ *	(LANEthernetInterfaceConfig), x_ais_mesh_mtk.c (X_AIS_Mesh).  The single
++ *	LANDevice instance is browsed here, they leave that field NULL.
++ *	WLANConfiguration is still served by the shell bridge (phase P3).
++ *
++ *	NOT BUILD-TESTED YET.
++ */
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <dirent.h>
++
++#include "dmtr098.h"
++#include "dmuci.h"
++#include "dmmem.h"
++#include "dm_registry.h"
++#include "dmmtk.h"
++
++/* wireless.<radio> of this board, functions/tr098/lan_device:14 */
++#define RADIO_DEVICE_2G		"MT7993_1_1"
++#define RADIO_DEVICE_5G		"MT7993_1_2"
++/* uci txpower percent <-> the NBTC steps the operator's ACS uses */
++#define TXPOWER_LOW		"30"
++#define TXPOWER_MEDIUM		"60"
++#define TXPOWER_HIGH		"100"
++#define NBTC_STANDARD_50	"50"
++#define NBTC_STANDARD_100	"75"
++#define NBTC_STANDARD_MAX	"100"
++
++/* ------------------------------------------------------------------ */
++/* helpers                                                             */
++/* ------------------------------------------------------------------ */
++
++/* dhcp.lan.configurable = 0 means the product locked the LAN pool: every
++ * shell setter below refuses then, most with 9002 and MaxAddress with 9007.
++ * Kept exactly as it was, an ACS script tells the two apart. */
++static int lan_locked(void)
++{
++	return strcmp(mtk_uci("dhcp", "lan", "configurable"), "0") == 0;
++}
++
++static void dnsmasq_reload(void)
++{
++	mtk_apply_service("/etc/init.d/dnsmasq reload &");
++}
++
++static void odhcpd_reload(void)
++{
++	mtk_apply_service("/etc/init.d/odhcpd reload &");
++}
++
++/* lan_device_network_reload() */
++static void network_reload(void)
++{
++	mtk_apply_service("/etc/init.d/network reload");
++}
++
++/* (gateway & netmask), the first address of the LAN subnet */
++static int lan_subnet_base(unsigned int *base, unsigned int *mask)
++{
++	unsigned int gw, nm;
++
++	if (mtk_ipv4_parse(mtk_uci("network", "lan", "ipaddr"), &gw))
++		return -1;
++	if (mtk_ipv4_parse(mtk_uci("network", "lan", "netmask"), &nm))
++		return -1;
++	if (base)
++		*base = gw & nm;
++	if (mask)
++		*mask = nm;
++	return 0;
++}
++
++static long uci_long(char *package, char *section, char *option, long def)
++{
++	char *v = mtk_uci(package, section, option);
++	char *end;
++	long n;
++
++	if (!v || !*v)
++		return def;
++	n = strtol(v, &end, 10);
++	if (*end)
++		return def;
++	return n;
++}
++
++/* ------------------------------------------------------------------ */
++/* LANDevice.1 leaves                                                   */
++/* ------------------------------------------------------------------ */
++
++/* ls /sys/class/net/br-lan/brif | grep eth | wc -l */
++static int get_eth_entries(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	struct dirent *d;
++	int n = 0;
++	DIR *dir;
++
++	dir = opendir("/sys/class/net/br-lan/brif");
++	if (dir) {
++		while ((d = readdir(dir)) != NULL) {
++			if (strstr(d->d_name, "eth"))
++				n++;
++		}
++		closedir(dir);
++	}
++	dmasprintf(value, "%d", n);
++	return 0;
++}
++
++static int get_usb_entries(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = "0";
++	return 0;
++}
++
++/* get_LANWLANConfigurationNumberOfEntries(): AP interfaces that are not disabled */
++static int get_wlan_entries(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	static const char *const ifaces[] = {
++		"ra0", "ra1", "ra2", "ra3", "ra4", "ra5",
++		"rai0", "rai1", "rai2", "rai3", "rai4", "rai5", NULL
++	};
++	int i, n = 0;
++
++	for (i = 0; ifaces[i]; i++) {
++		char *mode = mtk_uci("wireless", (char *)ifaces[i], "mode");
++		char *disabled = mtk_uci("wireless", (char *)ifaces[i], "disabled");
++
++		if (strcmp(mode, "ap") == 0 && strcmp(disabled, "1") != 0)
++			n++;
++	}
++	dmasprintf(value, "%d", n);
++	return 0;
++}
++
++static int txpower_get(const char *radio, char **value)
++{
++	char *v = mtk_uci("wireless", (char *)radio, "txpower");
++
++	if (!v || !*v)
++		v = TXPOWER_HIGH;
++	if (strcmp(v, TXPOWER_LOW) == 0)
++		*value = NBTC_STANDARD_50;
++	else if (strcmp(v, TXPOWER_MEDIUM) == 0)
++		*value = NBTC_STANDARD_100;
++	else
++		*value = NBTC_STANDARD_MAX;
++	return 0;
++}
++
++static int txpower_set(const char *radio, char *value, int action)
++{
++	const char *target;
++
++	if (strcmp(value, NBTC_STANDARD_50) == 0)
++		target = TXPOWER_LOW;
++	else if (strcmp(value, NBTC_STANDARD_100) == 0)
++		target = TXPOWER_MEDIUM;
++	else if (strcmp(value, NBTC_STANDARD_MAX) == 0)
++		target = TXPOWER_HIGH;
++	else
++		return FAULT_9007;
++	if (action == VALUECHECK)
++		return 0;
++	dmuci_set_value("wireless", (char *)radio, "txpower", (char *)target);
++	/* mapd_wireless_commit_reload(): mapd and wireless are committed by the
++	 * engine at the end of the RPC, the reload is what has to be queued */
++	mtk_apply_service("/sbin/wifi reload &");
++	return 0;
++}
++
++static int get_txpower_2g(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return txpower_get(RADIO_DEVICE_2G, value);
++}
++
++static int set_txpower_2g(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return txpower_set(RADIO_DEVICE_2G, value, action);
++}
++
++static int get_txpower_5g(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return txpower_get(RADIO_DEVICE_5G, value);
++}
++
++static int set_txpower_5g(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return txpower_set(RADIO_DEVICE_5G, value, action);
++}
++
++/* ------------------------------------------------------------------ */
++/* LANHostConfigManagement                                              */
++/* ------------------------------------------------------------------ */
++
++static int get_lanhost_mac(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	char *mac = mtk_file_line("/sys/class/net/br-lan/address");
++
++	if (!mac || !*mac) {
++		/* what get_LanHostConfig_MacAddress() did */
++		char *argv[] = { "/sbin/ifconfig", "br-lan", NULL };
++		char *out = mtk_exec(argv);
++		char *p = out ? strstr(out, "HWaddr") : NULL;
++
++		if (p) {
++			char buf[32];
++			int i = 0;
++
++			p += 6;
++			while (*p == ' ')
++				p++;
++			while (*p && *p != ' ' && *p != '\n' && i < (int)sizeof(buf) - 1)
++				buf[i++] = *p++;
++			buf[i] = '\0';
++			mac = dmstrdup(buf);
++		}
++	}
++	*value = (mac && *mac) ? mac : "";
++	return 0;
++}
++
++static int get_dhcp_configurable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = lan_locked() ? "0" : "1";
++	return 0;
++}
++
++/*
++ * "false" restores the factory LAN pool, option by option, from /rom/etc/config
++ * -- the shell did the same with $UCI_GET_DEFAULT.  Anything the factory tree
++ * does not carry is left to the literal defaults the shell also hardcoded.
++ */
++static int set_dhcp_configurable(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	static const struct {
++		const char *option;
++		const char *value;
++	} defaults[] = {
++		{ "dynamicdhcp", "1" }, { "dhcpv4", "server" }, { "dhcpv6", "server" },
++		{ "ra", "server" }, { "ra_slaac", "1" }, { "ra_dns", "0" },
++		{ "ra_flags", "managed-config other-config" }, { "stateless", "0" },
++		{ "leasetime_ipv6", "43200" }, { "start_ipv6", "33" }, { "end_ipv6", "254" },
++		{ "assignment", "0" }, { "dnsv4_type", "0" }, { "dhcp_option", "" },
++	};
++	int b = mtk_parse_bool(value), i;
++
++	if (b < 0)
++		return FAULT_9007;
++	if (action == VALUECHECK)
++		return 0;
++	if (b) {
++		dmuci_set_value("dhcp", "lan", "configurable", "1");
++		return 0;
++	}
++	dmuci_set_value("dhcp", "lan", "configurable", "0");
++	for (i = 0; i < (int)(sizeof(defaults) / sizeof(defaults[0])); i++)
++		dmuci_set_value("dhcp", "lan", (char *)defaults[i].option, (char *)defaults[i].value);
++	dmuci_set_value("dhcp", "lan", "limit", mtk_uci_default("dhcp", "lan", "limit"));
++	dmuci_set_value("dhcp", "lan", "start", mtk_uci_default("dhcp", "lan", "start"));
++	dmuci_set_value("dhcp", "lan", "leasetime", mtk_uci_default("dhcp", "lan", "leasetime"));
++	dmuci_set_value("network", "lan", "ipaddr", mtk_uci_default("network", "lan", "ipaddr"));
++	dmuci_set_value("network", "lan", "netmask", mtk_uci_default("network", "lan", "netmask"));
++	dnsmasq_reload();
++	odhcpd_reload();
++	network_reload();
++	return 0;
++}
++
++static int get_dhcp_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = strcmp(mtk_uci("dhcp", "lan", "dynamicdhcp"), "0") == 0 ? "0" : "1";
++	return 0;
++}
++
++static int set_dhcp_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	int b = mtk_parse_bool(value);
++
++	if (b < 0)
++		return FAULT_9007;
++	if (action == VALUECHECK)
++		return 0;
++	if (lan_locked())
++		return FAULT_9002;
++	dmuci_set_value("dhcp", "lan", "dynamicdhcp", b ? "1" : "0");
++	dnsmasq_reload();
++	return 0;
++}
++
++static int get_dhcp_relay(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = "0";
++	return 0;
++}
++
++static int get_min_address(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	unsigned int base;
++
++	if (lan_subnet_base(&base, NULL))
++		return 0;
++	*value = mtk_ipv4_str(base + (unsigned int)uci_long("dhcp", "lan", "start", 0));
++	return 0;
++}
++
++static int set_min_address(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	unsigned int base, mask, ip, gw;
++	char buf[16];
++
++	if (mtk_ipv4_parse(value, &ip))
++		return FAULT_9007;
++	if (action == VALUECHECK)
++		return 0;
++	if (lan_locked())
++		return FAULT_9002;
++	if (lan_subnet_base(&base, &mask))
++		return FAULT_9002;
++	if (mtk_ipv4_parse(mtk_uci("network", "lan", "ipaddr"), &gw))
++		return FAULT_9002;
++	if ((ip & mask) != base || ip <= gw)
++		return FAULT_9007;
++	snprintf(buf, sizeof(buf), "%u", ip - base);
++	dmuci_set_value("dhcp", "lan", "start", buf);
++	dmuci_set_value("dhcp", "lan", "assignment", "0");
++	dnsmasq_reload();
++	return 0;
++}
++
++static int get_max_address(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	unsigned int base;
++
++	if (lan_subnet_base(&base, NULL))
++		return 0;
++	*value = mtk_ipv4_str(base + (unsigned int)uci_long("dhcp", "lan", "start", 0)
++			      + (unsigned int)uci_long("dhcp", "lan", "limit", 0) - 1);
++	return 0;
++}
++
++/* the one setter of this object that answers 9007, not 9002, when locked */
++static int set_max_address(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	unsigned int base, mask, ip;
++	long start, limit;
++	char buf[16];
++
++	if (mtk_ipv4_parse(value, &ip))
++		return FAULT_9007;
++	if (action == VALUECHECK)
++		return 0;
++	if (lan_locked())
++		return FAULT_9007;
++	if (lan_subnet_base(&base, &mask))
++		return FAULT_9002;
++	if ((ip & mask) != base)
++		return FAULT_9007;
++	start = uci_long("dhcp", "lan", "start", 0);
++	limit = (long)(ip - base) - start + 1;
++	if (limit < 0)
++		return FAULT_9007;
++	snprintf(buf, sizeof(buf), "%ld", limit);
++	dmuci_set_value("dhcp", "lan", "limit", buf);
++	dmuci_set_value("dhcp", "lan", "assignment", "0");
++	dnsmasq_reload();
++	return 0;
++}
++
++static int get_subnet_mask(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = mtk_uci("network", "lan", "netmask");
++	return 0;
++}
++
++static int set_subnet_mask(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	if (mtk_ipv4_parse(value, NULL))
++		return FAULT_9007;
++	if (action == VALUECHECK)
++		return 0;
++	if (lan_locked())
++		return FAULT_9002;
++	dmuci_set_value("network", "lan", "netmask", value);
++	network_reload();
++	return 0;
++}
++
++/* dhcp_option is "6,<dns>[,<dns>]"; empty means "the router itself" */
++static int get_dns_servers(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	char *opt = mtk_uci("dhcp", "lan", "dhcp_option");
++	char *comma;
++
++	if (!opt || !*opt) {
++		*value = mtk_uci("network", "lan", "ipaddr");
++		return 0;
++	}
++	comma = strchr(opt, ',');
++	*value = comma ? dmstrdup(comma + 1) : opt;
++	return 0;
++}
++
++static int set_dns_servers(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	char *copy, *tok, *save = NULL, *opt;
++	int n = 0;
++
++	copy = dmstrdup(value ? value : "");
++	for (tok = strtok_r(copy, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
++		if (mtk_ipv4_parse(tok, NULL))
++			return FAULT_9007;
++		n++;
++	}
++	/* the shell counted the lines of "tr ',' '\n'", so an empty string is
++	 * one entry and more than two is refused */
++	if (n > 2)
++		return FAULT_9007;
++	if (action == VALUECHECK)
++		return 0;
++	if (lan_locked())
++		return FAULT_9002;
++	dmasprintf(&opt, "6,%s", value ? value : "");
++	dmuci_set_value("dhcp", "lan", "dhcp_option", opt);
++	dmuci_set_value("dhcp", "lan", "dnsv4_type", "1");
++	dnsmasq_reload();
++	return 0;
++}
++
++static int get_domain_name(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = mtk_uci("dhcp", "lan", "domain");
++	return 0;
++}
++
++static int set_domain_name(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	if (action == VALUECHECK)
++		return 0;
++	if (lan_locked())
++		return FAULT_9002;
++	dmuci_set_value("dhcp", "lan", "domain", value);
++	dmuci_set_value("dhcp", "@dnsmasq[0]", "domain", value);
++	dnsmasq_reload();
++	odhcpd_reload();
++	return 0;
++}
++
++static int get_ip_routers(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = mtk_uci("network", "lan", "ipaddr");
++	return 0;
++}
++
++/*
++ * Moving the LAN address invalidates a DMZ target that pointed into the old
++ * subnet, so the shell cleared it and asked hni.service to re-apply.  The ubus
++ * call is queued, not made here: it has to run after the engine commits.
++ */
++static int set_ip_routers(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	char *current;
++
++	if (mtk_ipv4_parse(value, NULL))
++		return FAULT_9007;
++	if (action == VALUECHECK)
++		return 0;
++	if (lan_locked())
++		return FAULT_9002;
++	current = mtk_uci("network", "lan", "ipaddr");
++	dmuci_set_value("network", "lan", "ipaddr", value);
++	network_reload();
++	if (strcmp(current, value) != 0) {
++		dmuci_set_value("firewall_clay", "@dmz[0]", "active", "no");
++		dmuci_set_value("firewall_clay", "@dmz[0]", "dmz_ip", "0.0.0.0");
++		mtk_apply_service("ubus call hni.service commit '{ \"param\": \"DMZ\", \"action\": \"updateConfig\" }'");
++	}
++	return 0;
++}
++
++/* uci keeps "12h"/"30m"/"600"; the data model wants seconds */
++static int get_lease_time(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	char *v = mtk_uci("dhcp", "lan", "leasetime");
++	char *end;
++	long n;
++
++	if (!v || !*v) {
++		*value = "43200";
++		return 0;
++	}
++	n = strtol(v, &end, 10);
++	switch (*end) {
++	case 'h':
++		n *= 3600;
++		break;
++	case 'm':
++		n *= 60;
++		break;
++	case 's':
++	case '\0':
++		break;
++	default:
++		n = 43200;
++		break;
++	}
++	dmasprintf(value, "%ld", n);
++	return 0;
++}
++
++static int set_lease_time(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	char *end;
++
++	if (!value || !*value)
++		return FAULT_9007;
++	strtol(value, &end, 10);
++	if (*end)
++		return FAULT_9007;
++	if (action == VALUECHECK)
++		return 0;
++	if (lan_locked())
++		return FAULT_9002;
++	dmuci_set_value("dhcp", "lan", "leasetime", value);
++	dnsmasq_reload();
++	return 0;
++}
++
++/*
++ * Writable in the product's tree but with no setter behind them: the shell
++ * registered the name with permission 1 and no set command, so an ACS write
++ * was accepted and dropped.  Kept identical on purpose -- turning them into
++ * 9008 would fault provisioning scripts that have been writing them for years.
++ */
++static int set_accept_and_drop(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	return 0;
++}
++
++static int get_empty_string(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = "";
++	return 0;
++}
++
++static int get_use_allocated_wan(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = "Normal";
++	return 0;
++}
++
++static int get_passthrough_lease(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = "600";
++	return 0;
++}
++
++static int get_one(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = "1";
++	return 0;
++}
++
++static int get_zero(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = "0";
++	return 0;
++}
++
++/* IPInterface.1 ------------------------------------------------------ */
++
++static int get_ipif_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = "0";
++	return 0;
++}
++
++static int get_ipif_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = "cpe-ipif1";
++	return 0;
++}
++
++static int get_ipif_addressing(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = "Static";
++	return 0;
++}
++
++static int browseIPInterfaceInst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
++{
++	char *idx, *idx_last = NULL;
++
++	idx = handle_update_instance(2, dmctx, &idx_last, update_instance_without_section, 1, 1);
++	DM_LINK_INST_OBJ(dmctx, parent_node, NULL, idx);
++	return 0;
++}
++
++/* LANDevice instance: this product has exactly one, hardcoded as 1 in every
++ * path of the shell library. */
++static int browseLanDeviceInst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
++{
++	char *idx, *idx_last = NULL;
++
++	idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section, 1, 1);
++	DM_LINK_INST_OBJ(dmctx, parent_node, NULL, idx);
++	return 0;
++}
++
++/* ------------------------------------------------------------------ */
++/* tables                                                              */
++/* ------------------------------------------------------------------ */
++
++static DMLEAF tIPInterfaceParam[] = {
++/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
++{"Enable", &DMWRITE, DMT_BOOL, get_ipif_enable, set_accept_and_drop, NULL, NULL},
++{"Alias", &DMWRITE, DMT_STRING, get_ipif_alias, set_accept_and_drop, NULL, NULL},
++{"IPInterfaceIPAddress", &DMWRITE, DMT_STRING, get_ip_routers, set_ip_routers, NULL, NULL},
++{"IPInterfaceSubnetMask", &DMWRITE, DMT_STRING, get_subnet_mask, set_subnet_mask, NULL, NULL},
++{"IPInterfaceAddressingType", &DMWRITE, DMT_STRING, get_ipif_addressing, set_accept_and_drop, NULL, NULL},
++{0}
++};
++
++static DMLEAF tLanHostCfgParam[] = {
++{"MACAddress", &DMREAD, DMT_STRING, get_lanhost_mac, NULL, NULL, NULL},
++{"DHCPServerConfigurable", &DMWRITE, DMT_BOOL, get_dhcp_configurable, set_dhcp_configurable, NULL, NULL},
++{"DHCPServerEnable", &DMWRITE, DMT_BOOL, get_dhcp_enable, set_dhcp_enable, NULL, NULL},
++{"DHCPRelay", &DMREAD, DMT_BOOL, get_dhcp_relay, NULL, NULL, NULL},
++{"MinAddress", &DMWRITE, DMT_STRING, get_min_address, set_min_address, NULL, NULL},
++{"MaxAddress", &DMWRITE, DMT_STRING, get_max_address, set_max_address, NULL, NULL},
++{"ReservedAddresses", &DMWRITE, DMT_STRING, get_empty_string, set_accept_and_drop, NULL, NULL},
++{"SubnetMask", &DMWRITE, DMT_STRING, get_subnet_mask, set_subnet_mask, NULL, NULL},
++{"DNSServers", &DMWRITE, DMT_STRING, get_dns_servers, set_dns_servers, NULL, NULL},
++{"DomainName", &DMWRITE, DMT_STRING, get_domain_name, set_domain_name, NULL, NULL},
++{"IPRouters", &DMWRITE, DMT_STRING, get_ip_routers, set_ip_routers, NULL, NULL},
++{"DHCPLeaseTime", &DMWRITE, DMT_INT, get_lease_time, set_lease_time, NULL, NULL},
++{"UseAllocatedWAN", &DMWRITE, DMT_STRING, get_use_allocated_wan, set_accept_and_drop, NULL, NULL},
++{"AssociatedConnection", &DMWRITE, DMT_STRING, get_empty_string, set_accept_and_drop, NULL, NULL},
++{"PassthroughLease", &DMWRITE, DMT_INT, get_passthrough_lease, set_accept_and_drop, NULL, NULL},
++{"PassthroughMACAddress", &DMWRITE, DMT_STRING, get_empty_string, set_accept_and_drop, NULL, NULL},
++{"AllowedMACAddresses", &DMWRITE, DMT_STRING, get_empty_string, set_accept_and_drop, NULL, NULL},
++{"IPInterfaceNumberOfEntries", &DMREAD, DMT_UNINT, get_one, NULL, NULL, NULL},
++{"DHCPStaticAddressNumberOfEntries", &DMREAD, DMT_UNINT, get_zero, NULL, NULL, NULL},
++{"DHCPOptionNumberOfEntries", &DMREAD, DMT_UNINT, get_zero, NULL, NULL, NULL},
++{"DHCPConditionalPoolNumberOfEntries", &DMREAD, DMT_UNINT, get_zero, NULL, NULL, NULL},
++{0}
++};
++
++static DMOBJ tLanHostCfgObj[] = {
++/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
++{"DHCPStaticAddress", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
++{"DHCPOption", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
++{"IPInterface", &DMREAD, NULL, NULL, NULL, browseIPInterfaceInst, NULL, &DMNONE, NULL, tIPInterfaceParam, NULL},
++{0}
++};
++
++static DMLEAF tLanDeviceParam[] = {
++{"LANEthernetInterfaceNumberOfEntries", &DMREAD, DMT_UNINT, get_eth_entries, NULL, NULL, NULL},
++{"LANUSBInterfaceNumberOfEntries", &DMREAD, DMT_UNINT, get_usb_entries, NULL, NULL, NULL},
++{"LANWLANConfigurationNumberOfEntries", &DMREAD, DMT_UNINT, get_wlan_entries, NULL, NULL, NULL},
++{"X-AIS_2-4GHzTransmitPower", &DMWRITE, DMT_UNINT, get_txpower_2g, set_txpower_2g, NULL, NULL},
++{"X-AIS_5GHzTransmitPower", &DMWRITE, DMT_UNINT, get_txpower_5g, set_txpower_5g, NULL, NULL},
++{0}
++};
++
++static DMOBJ tLanDeviceObj[] = {
++{"LANHostConfigManagement", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tLanHostCfgObj, tLanHostCfgParam, NULL},
++{"DHCPStaticAddress", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
++{"LANUSBInterfaceConfig", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
++{0}
++};
++
++static DMOBJ tLanDeviceRoot[] = {
++{"LANDevice", &DMREAD, NULL, NULL, NULL, browseLanDeviceInst, NULL, &DMNONE, tLanDeviceObj, tLanDeviceParam, NULL},
++{0}
++};
++
++/*
++ * Claimed path by path, not the whole LANDevice branch: WLANConfiguration is
++ * still the shell's until phase P3, and dm_registry_owns() is what keeps the
++ * bridge from answering twice.
++ */
++static const char *const lan_mtk_paths[] = {
++	"InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.",
++	"InternetGatewayDevice.LANDevice.1.DHCPStaticAddress.",
++	"InternetGatewayDevice.LANDevice.1.LANUSBInterfaceConfig.",
++	"InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceNumberOfEntries",
++	"InternetGatewayDevice.LANDevice.1.LANUSBInterfaceNumberOfEntries",
++	"InternetGatewayDevice.LANDevice.1.LANWLANConfigurationNumberOfEntries",
++	"InternetGatewayDevice.LANDevice.1.X-AIS_2-4GHzTransmitPower",
++	"InternetGatewayDevice.LANDevice.1.X-AIS_5GHzTransmitPower",
++	NULL
++};
++
++static const struct dm_module lan_mtk_module = {
++	.name  = "mtk-landevice",
++	.model = DM_MODEL_TR098,
++	.order = DM_ORDER_SDK,
++	.objs  = tLanDeviceRoot,
++	.paths = lan_mtk_paths,
++};
++DM_MODULE_REGISTER(lan_mtk_module);
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/laneth_mtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/laneth_mtk.c
+new file mode 100644
+index 0000000..03f8d44
+--- /dev/null
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/laneth_mtk.c
+@@ -0,0 +1,503 @@
++/*
++ *	This program is free software: you can redistribute it and/or modify
++ *	it under the terms of the GNU General Public License as published by
++ *	the Free Software Foundation, either version 2 of the License, or
++ *	(at your option) any later version.
++ *
++ *	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.{i}. of the
++ *	MTK/Airoha product, including .Stats.
++ *
++ *	Ported from functions/tr098/lan_device: sub_entry_LANEthIfConfig_params(),
++ *	LANEthernet_Stats_execute_params() and the get_Stats_* helpers.  Four
++ *	instances are always published, exactly like sub_entry_LANEthIfConfig_all()
++ *	which loops 1..4 whatever LANEthernetInterfaceNumberOfEntries says.
++ *
++ *	Counters: byte counts come from the netdev of the port (eth0.{i}), every
++ *	packet counter from the switch dump /proc/tc3162/gsw_stats, whose section
++ *	header is the PHYSICAL port -- the same 1->6, 2->3, 3->2, 4->1 mapping the
++ *	shell's toPhysical() did.  Reading the dump once per parameter is what the
++ *	shell did outside its bulk-get cache, and it is a sysfs-cheap read.
++ *
++ *	The LANDevice object and its single instance are browsed in lan_mtk.c.
++ *
++ *	NOT BUILD-TESTED YET.
++ */
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++#include "dmtr098.h"
++#include "dmuci.h"
++#include "dmmem.h"
++#include "dm_registry.h"
++#include "dmmtk.h"
++
++#define LAN_ETH_PORTS		4
++#define GSW_STATS_FILE		"/proc/tc3162/gsw_stats"
++#define SYSFS_NET_DIR		"/sys/devices/virtual/net"
++
++/* instance number 1..4, handed to the getters as data */
++static const int eth_instances[LAN_ETH_PORTS] = { 1, 2, 3, 4 };
++
++static int eth_inst(void *data)
++{
++	return data ? *(const int *)data : 1;
++}
++
++/* toPhysical(): data model instance -> switch port in the dump */
++static int eth_physical(int inst)
++{
++	switch (inst) {
++	case 1: return 6;
++	case 2: return 3;
++	case 3: return 2;
++	case 4: return 1;
++	}
++	return inst;
++}
++
++/* network.@SwitchPara[<inst-1>] */
++static char *eth_switchpara(int inst, char *option)
++{
++	char section[32];
++
++	snprintf(section, sizeof(section), "@SwitchPara[%d]", inst - 1);
++	return mtk_uci("network", section, option);
++}
++
++/* ------------------------------------------------------------------ */
++/* switch counter dump                                                  */
++/* ------------------------------------------------------------------ */
++
++/*
++ * The dump is a flat file of "[ Port N ]" sections, each a list of
++ * "<name> = <value>" rows (decimal, sometimes 0x hex).  Sum the rows whose
++ * name appears in keys[], inside this port's section only.
++ */
++static unsigned long long gsw_sum(int inst, const char *const keys[])
++{
++	char header[32], line[256];
++	unsigned long long total = 0;
++	int in_port = 0, i;
++	FILE *f;
++
++	snprintf(header, sizeof(header), "[ Port %d ]", eth_physical(inst));
++	f = fopen(GSW_STATS_FILE, "r");
++	if (!f)
++		return 0;
++	while (fgets(line, sizeof(line), f)) {
++		char *nl = strchr(line, '\n');
++
++		if (nl)
++			*nl = '\0';
++		if (strcmp(line, header) == 0) {
++			in_port = 1;
++			continue;
++		}
++		if (strncmp(line, "[ Port ", 7) == 0) {
++			if (in_port)
++				break;
++			continue;
++		}
++		if (!in_port)
++			continue;
++		for (i = 0; keys[i]; i++) {
++			char *p = strstr(line, keys[i]);
++			char *eq;
++
++			if (!p)
++				continue;
++			eq = strchr(p, '=');
++			if (!eq)
++				continue;
++			total += strtoull(eq + 1, NULL, 0);
++			break;
++		}
++	}
++	fclose(f);
++	return total;
++}
++
++static int gsw_value(char **value, int inst, const char *const keys[])
++{
++	dmasprintf(value, "%llu", gsw_sum(inst, keys));
++	return 0;
++}
++
++static int sysfs_counter(char **value, int inst, const char *name)
++{
++	char path[128];
++	char *v;
++
++	snprintf(path, sizeof(path), "%s/eth0.%d/statistics/%s", SYSFS_NET_DIR, inst, name);
++	v = mtk_file_line(path);
++	*value = (v && *v) ? v : "0";
++	return 0;
++}
++
++/* ------------------------------------------------------------------ */
++/* port parameters                                                      */
++/* ------------------------------------------------------------------ */
++
++static int get_eth_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	dmasprintf(value, "Ethernet-%d", eth_inst(data));
++	return 0;
++}
++
++static int get_eth_name(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	dmasprintf(value, "eth0.%d", eth_inst(data));
++	return 0;
++}
++
++static int get_eth_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = strcmp(eth_switchpara(eth_inst(data), "enable"), "Yes") == 0 ? "1" : "0";
++	return 0;
++}
++
++/*
++ * The shell drove the PHY before touching UCI, and did nothing at all when the
++ * port was already in the requested state.  Port 1 is the 2.5G PHY behind
++ * /proc/tc3162/en8811_power, the other three are switch ports.
++ */
++static int set_eth_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	int inst = eth_inst(data), phy = inst - 1, b = mtk_parse_bool(value);
++	char *old, *bit_rate;
++	char section[32], port[8];
++
++	if (b < 0)
++		return FAULT_9007;
++	if (action == VALUECHECK)
++		return 0;
++	old = eth_switchpara(inst, "enable");
++	if ((b && strcmp(old, "Yes") == 0) || (!b && strcmp(old, "No") == 0))
++		return 0;
++	snprintf(section, sizeof(section), "@SwitchPara[%d]", phy);
++	snprintf(port, sizeof(port), "%d", phy);
++	if (b) {
++		bit_rate = eth_switchpara(inst, "maxBitRate");
++		if (phy == 0) {
++			mtk_file_write("/proc/tc3162/en8811_power", "power on");
++		} else if (strcmp(bit_rate, "auto") == 0 || strcmp(bit_rate, "1000") == 0) {
++			char *argv[] = { "/userfs/bin/ethphxcmd", "eth0", "media-type",
++					       "auto", "port", port, NULL };
++			mtk_exec(argv);
++		} else {
++			char media[16];
++			char *argv[] = { "/userfs/bin/ethphxcmd", "eth0", "media-type",
++					       media, "port", port, NULL };
++
++			snprintf(media, sizeof(media), "%sFD", bit_rate);
++			mtk_exec(argv);
++		}
++		dmuci_set_value("network", section, "enable", "Yes");
++	} else {
++		if (phy == 0) {
++			mtk_file_write("/proc/tc3162/en8811_power", "power off");
++		} else {
++			char *argv[] = { "/userfs/bin/ethphxcmd", "eth0", "lanchip",
++					       "disable", "port", port, NULL };
++			mtk_exec(argv);
++		}
++		dmuci_set_value("network", section, "enable", "No");
++	}
++	return 0;
++}
++
++static int get_eth_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	int inst = eth_inst(data), phy = inst - 1;
++
++	if (strcmp(eth_switchpara(inst, "enable"), "No") == 0) {
++		*value = "Disable";
++		return 0;
++	}
++	if (phy == 0) {
++		/* "PHY[eth0.1]: 1000Mbps/Full" or "PHY[eth0.1]: Down" */
++		char *line = mtk_file_line("/proc/tc3162/en8811_link_st");
++
++		if (!line || !*line)
++			*value = "Error";
++		else
++			*value = strstr(line, ": Down") ? "NoLink" : "Up";
++	} else {
++		char port[8];
++		char *argv[] = { "/userfs/bin/switchmgr", "port", "linkstate", port, NULL };
++		char *out, *p;
++
++		snprintf(port, sizeof(port), "%d", phy);
++		out = mtk_exec(argv);
++		p = out ? strstr(out, "link_sate") : NULL;
++		if (!p)
++			*value = "Error";
++		else if (strstr(p, "up"))
++			*value = "Up";
++		else if (strstr(p, "down"))
++			*value = "NoLink";
++		else
++			*value = "Error";
++	}
++	return 0;
++}
++
++static int get_eth_mac(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	char *mac = mtk_file_line(SYSFS_NET_DIR "/br-lan/address");
++
++	if (!mac || !*mac)
++		mac = mtk_file_line("/sys/class/net/br-lan/address");
++	*value = (mac && *mac) ? mac : "";
++	return 0;
++}
++
++static int get_eth_mac_control(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = "1";
++	return 0;
++}
++
++static int get_eth_maxbitrate(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	char *v = eth_switchpara(eth_inst(data), "maxBitRate");
++
++	*value = strcmp(v, "auto") == 0 ? "Auto" : v;
++	return 0;
++}
++
++static int set_eth_maxbitrate(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	int inst = eth_inst(data), phy = inst - 1;
++	char section[32], port[8];
++	char *enable;
++
++	if (strcmp(value, "Auto") && strcmp(value, "10") && strcmp(value, "100") && strcmp(value, "1000"))
++		return FAULT_9007;
++	if (action == VALUECHECK)
++		return 0;
++	snprintf(section, sizeof(section), "@SwitchPara[%d]", phy);
++	snprintf(port, sizeof(port), "%d", phy);
++	enable = eth_switchpara(inst, "enable");
++	if (phy == 0) {
++		const char *mode;
++
++		if (strcmp(value, "Auto") == 0)
++			mode = "Auto";
++		else if (strcmp(value, "1000") == 0)
++			mode = "1Gbps";
++		else if (strcmp(value, "100") == 0)
++			mode = "100Mbps";
++		else
++			return FAULT_9007;	/* the 2.5G PHY has no 10Mbps mode */
++		mtk_file_write("/proc/tc3162/en8811_speed_mode", mode);
++	} else if (strcmp(enable, "Yes") == 0) {
++		if (strcmp(value, "Auto") == 0 || strcmp(value, "1000") == 0) {
++			char *argv[] = { "/userfs/bin/ethphxcmd", "eth0", "media-type",
++					       "auto", "port", port, NULL };
++			mtk_exec(argv);
++		} else {
++			char media[16];
++			char *argv[] = { "/userfs/bin/ethphxcmd", "eth0", "media-type",
++					       media, "port", port, NULL };
++
++			snprintf(media, sizeof(media), "%sFD", value);
++			mtk_exec(argv);
++		}
++	}
++	dmuci_set_value("network", section, "maxBitRate",
++			strcmp(value, "Auto") == 0 ? "auto" : value);
++	return 0;
++}
++
++static int get_eth_duplex(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = "Full";
++	return 0;
++}
++
++static int set_eth_duplex(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	if (strcmp(value, "Full") != 0)
++		return FAULT_9007;
++	return 0;
++}
++
++/* ------------------------------------------------------------------ */
++/* Stats                                                                */
++/* ------------------------------------------------------------------ */
++
++static const char *const k_tx_unicast[]	  = { "Tx Unicase Pkts", NULL };
++static const char *const k_rx_unicast[]	  = { "Rx Unicase Pkts", NULL };
++static const char *const k_tx_multicast[] = { "Tx Multicast Pkts", NULL };
++static const char *const k_rx_multicast[] = { "Rx Multicast Pkts", NULL };
++static const char *const k_tx_broadcast[] = { "Tx Broadcast Pkts", NULL };
++static const char *const k_rx_broadcast[] = { "Rx Broadcast Pkts", NULL };
++static const char *const k_tx_packets[]	  = { "Tx Unicase Pkts", "Tx Multicast Pkts",
++					      "Tx Broadcast Pkts", NULL };
++static const char *const k_rx_packets[]	  = { "Rx Unicase Pkts", "Rx Multicast Pkts",
++					      "Rx Broadcast Pkts", NULL };
++static const char *const k_tx_errors[]	  = { "Tx Collision", "Tx Late Collision",
++					      "Tx eXcessive Collision", NULL };
++static const char *const k_rx_errors[]	  = { "Rx CRC Error", "Rx Fragment Error",
++					      "Rx Align Error", "Rx Jabber Error", NULL };
++static const char *const k_tx_discard[]	  = { "Tx Drop Pkts", NULL };
++static const char *const k_rx_discard[]	  = { "Rx Drop Pkts", "Rx ING Drop Pkts",
++					      "Rx ARL Drop Pkts", "Rx FILTER Drop Pkts", NULL };
++static const char *const k_rx_unknown[]	  = { "Rx Under Size Pkts", "Rx Over Size Pkts", NULL };
++
++static int get_st_bytes_sent(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return sysfs_counter(value, eth_inst(data), "tx_bytes");
++}
++
++static int get_st_bytes_recv(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return sysfs_counter(value, eth_inst(data), "rx_bytes");
++}
++
++static int get_st_packets_sent(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return gsw_value(value, eth_inst(data), k_tx_packets);
++}
++
++static int get_st_packets_recv(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return gsw_value(value, eth_inst(data), k_rx_packets);
++}
++
++static int get_st_errors_sent(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return gsw_value(value, eth_inst(data), k_tx_errors);
++}
++
++static int get_st_errors_recv(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return gsw_value(value, eth_inst(data), k_rx_errors);
++}
++
++static int get_st_discard_sent(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return gsw_value(value, eth_inst(data), k_tx_discard);
++}
++
++static int get_st_discard_recv(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return gsw_value(value, eth_inst(data), k_rx_discard);
++}
++
++static int get_st_multicast_sent(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return gsw_value(value, eth_inst(data), k_tx_multicast);
++}
++
++static int get_st_multicast_recv(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return gsw_value(value, eth_inst(data), k_rx_multicast);
++}
++
++static int get_st_broadcast_sent(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return gsw_value(value, eth_inst(data), k_tx_broadcast);
++}
++
++static int get_st_broadcast_recv(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return gsw_value(value, eth_inst(data), k_rx_broadcast);
++}
++
++static int get_st_unknown_recv(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return gsw_value(value, eth_inst(data), k_rx_unknown);
++}
++
++static int get_st_unicast_sent(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return gsw_value(value, eth_inst(data), k_tx_unicast);
++}
++
++static int get_st_unicast_recv(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	return gsw_value(value, eth_inst(data), k_rx_unicast);
++}
++
++static int browseLanEthInst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
++{
++	char *idx, *idx_last = NULL;
++	int i;
++
++	for (i = 0; i < LAN_ETH_PORTS; i++) {
++		idx = handle_update_instance(2, dmctx, &idx_last, update_instance_without_section, 1, i + 1);
++		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)&eth_instances[i], idx) == DM_STOP)
++			break;
++	}
++	return 0;
++}
++
++/* ------------------------------------------------------------------ */
++/* tables                                                              */
++/* ------------------------------------------------------------------ */
++
++static DMLEAF tLanEthStatsParam[] = {
++/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
++{"BytesSent", &DMREAD, DMT_UNINT, get_st_bytes_sent, NULL, NULL, NULL},
++{"BytesReceived", &DMREAD, DMT_UNINT, get_st_bytes_recv, NULL, NULL, NULL},
++{"PacketsSent", &DMREAD, DMT_UNINT, get_st_packets_sent, NULL, NULL, NULL},
++{"PacketsReceived", &DMREAD, DMT_UNINT, get_st_packets_recv, NULL, NULL, NULL},
++{"ErrorsSent", &DMREAD, DMT_UNINT, get_st_errors_sent, NULL, NULL, NULL},
++{"ErrorsReceived", &DMREAD, DMT_UNINT, get_st_errors_recv, NULL, NULL, NULL},
++{"DiscardPacketsSent", &DMREAD, DMT_UNINT, get_st_discard_sent, NULL, NULL, NULL},
++{"DiscardPacketsReceived", &DMREAD, DMT_UNINT, get_st_discard_recv, NULL, NULL, NULL},
++{"MulticastPacketsSent", &DMREAD, DMT_UNINT, get_st_multicast_sent, NULL, NULL, NULL},
++{"MulticastPacketsReceived", &DMREAD, DMT_UNINT, get_st_multicast_recv, NULL, NULL, NULL},
++{"BroadcastPacketsSent", &DMREAD, DMT_UNINT, get_st_broadcast_sent, NULL, NULL, NULL},
++{"BroadcastPacketsReceived", &DMREAD, DMT_UNINT, get_st_broadcast_recv, NULL, NULL, NULL},
++{"UnknownProtoPacketsReceived", &DMREAD, DMT_UNINT, get_st_unknown_recv, NULL, NULL, NULL},
++{"UnicastPacketsSent", &DMREAD, DMT_UNINT, get_st_unicast_sent, NULL, NULL, NULL},
++{"UnicastPacketsReceived", &DMREAD, DMT_UNINT, get_st_unicast_recv, NULL, NULL, NULL},
++{0}
++};
++
++static DMOBJ tLanEthInstObj[] = {
++/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
++{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tLanEthStatsParam, NULL},
++{0}
++};
++
++static DMLEAF tLanEthInstParam[] = {
++{"Alias", &DMREAD, DMT_STRING, get_eth_alias, NULL, NULL, NULL},
++{"Enable", &DMWRITE, DMT_BOOL, get_eth_enable, set_eth_enable, NULL, NULL},
++{"Status", &DMREAD, DMT_STRING, get_eth_status, NULL, NULL, NULL},
++{"Name", &DMREAD, DMT_STRING, get_eth_name, NULL, NULL, NULL},
++{"MACAddress", &DMREAD, DMT_STRING, get_eth_mac, NULL, NULL, NULL},
++{"MACAddressControlEnabled", &DMWRITE, DMT_BOOL, get_eth_mac_control, NULL, NULL, NULL},
++{"MaxBitRate", &DMWRITE, DMT_STRING, get_eth_maxbitrate, set_eth_maxbitrate, NULL, NULL},
++{"DuplexMode", &DMWRITE, DMT_STRING, get_eth_duplex, set_eth_duplex, NULL, NULL},
++{0}
++};
++
++static DMOBJ tLanDeviceEthObj[] = {
++{"LANEthernetInterfaceConfig", &DMREAD, NULL, NULL, NULL, browseLanEthInst, NULL, &DMNONE, tLanEthInstObj, tLanEthInstParam, NULL},
++{0}
++};
++
++/* browseinstobj left NULL on purpose: lan_mtk.c owns the LANDevice instance */
++static DMOBJ tLanDeviceEthRoot[] = {
++{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tLanDeviceEthObj, NULL, NULL},
++{0}
++};
++
++static const char *const laneth_mtk_paths[] = {
++	"InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.",
++	NULL
++};
++
++static const struct dm_module laneth_mtk_module = {
++	.name  = "mtk-laneth",
++	.model = DM_MODEL_TR098,
++	.order = DM_ORDER_SDK,
++	.objs  = tLanDeviceEthRoot,
++	.paths = laneth_mtk_paths,
++};
++DM_MODULE_REGISTER(laneth_mtk_module);
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/lanhosts_mtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/lanhosts_mtk.c
+new file mode 100644
+index 0000000..e6ba071
+--- /dev/null
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/lanhosts_mtk.c
+@@ -0,0 +1,282 @@
++/*
++ *	This program is free software: you can redistribute it and/or modify
++ *	it under the terms of the GNU General Public License as published by
++ *	the Free Software Foundation, either version 2 of the License, or
++ *	(at your option) any later version.
++ *
++ *	InternetGatewayDevice.LANDevice.1.Hosts. of the MTK/Airoha product.
++ *
++ *	Ported from functions/tr098/lan_device, hosts_* helpers.  The host list
++ *	is the product's own UCI config "lanhost" (sections of type "host",
++ *	written by the LAN host tracker), in section order, numbered from 1 --
++ *	exactly what hosts_lanhost_sections() piped into awk.
++ *
++ *	LeaseTimeRemaining still comes from /tmp/dhcp.leases, the dnsmasq lease
++ *	file, because "lanhost" does not carry the expiry.
++ *
++ *	The LANDevice object and its single instance are browsed in lan_mtk.c,
++ *	dm_registry.c merges this subtree into it.
++ *
++ *	NOT BUILD-TESTED YET.
++ */
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <strings.h>
++#include <time.h>
++#include <ctype.h>
++
++#include "dmtr098.h"
++#include "dmuci.h"
++#include "dmmem.h"
++#include "dm_registry.h"
++#include "dmmtk.h"
++
++#define LEASE_FILE	"/tmp/dhcp.leases"
++
++static char *host_opt(void *data, char *option)
++{
++	struct uci_section *s = (struct uci_section *)data;
++	char *v = NULL;
++
++	if (!s)
++		return "";
++	dmuci_get_value_by_section_string(s, option, &v);
++	return v ? v : "";
++}
++
++/* ------------------------------------------------------------------ */
++/* leaves                                                              */
++/* ------------------------------------------------------------------ */
++
++static int get_host_active(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	/* the shell answered a constant "true" here, the tracker only keeps
++	 * sections for hosts it still sees */
++	*value = "1";
++	return 0;
++}
++
++static int get_host_ip(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = host_opt(data, "ip");
++	return 0;
++}
++
++static int get_host_addresssource(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = host_opt(data, "addressSrc");
++	return 0;
++}
++
++static int get_host_mac(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = host_opt(data, "mac");
++	return 0;
++}
++
++/* get_lan_device_hostname(): the tracker may have quoted the name, and "*"
++ * means "not known" and is passed through as is */
++static int get_host_name(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	char *host = host_opt(data, "hostname");
++	size_t l;
++
++	if (!host || !*host) {
++		*value = "*";
++		return 0;
++	}
++	if (host[0] == '\'') {
++		host = dmstrdup(host + 1);
++		l = strlen(host);
++		if (l && host[l - 1] == '\'')
++			host[l - 1] = '\0';
++	}
++	*value = host;
++	return 0;
++}
++
++static int get_host_interfacetype(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	char *iface = host_opt(data, "interface");
++
++	if (strcmp(iface, "Ethernet") == 0 || strcmp(iface, "802.11") == 0)
++		*value = iface;
++	else
++		*value = "other";
++	return 0;
++}
++
++/* "LAN3" -> ...LANEthernetInterfaceConfig.3., "SSID2" -> ...WLANConfiguration.2.
++ * A prefix followed by anything but digits was answered as empty. */
++static int get_host_layer2(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	char *l2 = host_opt(data, "layer2interface");
++	const char *suffix = NULL, *obj = NULL;
++	const char *p;
++
++	if (strncmp(l2, "LAN", 3) == 0) {
++		suffix = l2 + 3;
++		obj = "LANEthernetInterfaceConfig";
++	} else if (strncmp(l2, "SSID", 4) == 0) {
++		suffix = l2 + 4;
++		obj = "WLANConfiguration";
++	}
++	if (!obj) {
++		*value = l2;
++		return 0;
++	}
++	if (!*suffix) {
++		*value = "";
++		return 0;
++	}
++	for (p = suffix; *p; p++) {
++		if (!isdigit((unsigned char)*p)) {
++			*value = "";
++			return 0;
++		}
++	}
++	dmasprintf(value, "%s.LANDevice.1.%s.%s.", dmroot, obj, suffix);
++	return 0;
++}
++
++/* dnsmasq writes "<expiry epoch> <mac> <ip> <name> <clientid>" per line */
++static long lease_expiry(const char *mac)
++{
++	char line[256];
++	FILE *f;
++	long expiry = -1;
++
++	if (!mac || !*mac)
++		return -1;
++	f = fopen(LEASE_FILE, "r");
++	if (!f)
++		return -1;
++	while (fgets(line, sizeof(line), f)) {
++		char ts[32], lmac[64];
++
++		if (sscanf(line, "%31s %63s", ts, lmac) != 2)
++			continue;
++		if (strcasecmp(lmac, mac) != 0)
++			continue;
++		if (ts[strspn(ts, "0123456789")] == '\0')
++			expiry = strtol(ts, NULL, 10);
++		break;
++	}
++	fclose(f);
++	return expiry;
++}
++
++static int get_host_leasetime(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	long expiry, remain;
++
++	if (strcmp(host_opt(data, "addressSrc"), "Static") == 0) {
++		*value = "0";
++		return 0;
++	}
++	expiry = lease_expiry(host_opt(data, "mac"));
++	if (expiry < 0) {
++		*value = "0";
++		return 0;
++	}
++	remain = expiry - (long)time(NULL);
++	if (remain < 0)
++		remain = 0;
++	dmasprintf(value, "%ld", remain);
++	return 0;
++}
++
++static int get_host_empty(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	*value = "";
++	return 0;
++}
++
++static int get_host_entries(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	struct uci_section *s;
++	int n = 0;
++
++	uci_foreach_sections("lanhost", "host", s)
++		n++;
++	if (n == 0) {
++		/* what the tracker leaves behind when it has no section yet */
++		char *total = mtk_uci("lanhost", "common", "total_hosts");
++
++		*value = (total && *total) ? total : "0";
++		return 0;
++	}
++	dmasprintf(value, "%d", n);
++	return 0;
++}
++
++static int browseHostInst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
++{
++	struct uci_section *s;
++	char *idx, *idx_last = NULL;
++	int id = 0;
++
++	uci_foreach_sections("lanhost", "host", s) {
++		idx = handle_update_instance(2, dmctx, &idx_last, update_instance_without_section, 1, ++id);
++		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)s, idx) == DM_STOP)
++			break;
++	}
++	return 0;
++}
++
++/* ------------------------------------------------------------------ */
++/* tables                                                              */
++/* ------------------------------------------------------------------ */
++
++static DMLEAF tHostParam[] = {
++/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
++{"Active", &DMREAD, DMT_BOOL, get_host_active, NULL, NULL, NULL},
++{"IPAddress", &DMREAD, DMT_STRING, get_host_ip, NULL, NULL, NULL},
++{"AddressSource", &DMREAD, DMT_STRING, get_host_addresssource, NULL, NULL, NULL},
++{"LeaseTimeRemaining", &DMREAD, DMT_INT, get_host_leasetime, NULL, NULL, NULL},
++{"MACAddress", &DMREAD, DMT_STRING, get_host_mac, NULL, NULL, NULL},
++{"HostName", &DMREAD, DMT_STRING, get_host_name, NULL, NULL, NULL},
++{"Layer2Interface", &DMREAD, DMT_STRING, get_host_layer2, NULL, NULL, NULL},
++{"InterfaceType", &DMREAD, DMT_STRING, get_host_interfacetype, NULL, NULL, NULL},
++{"VendorClassID", &DMREAD, DMT_STRING, get_host_empty, NULL, NULL, NULL},
++{"UserClassID", &DMREAD, DMT_STRING, get_host_empty, NULL, NULL, NULL},
++{"ClientID", &DMREAD, DMT_STRING, get_host_empty, NULL, NULL, NULL},
++{0}
++};
++
++static DMOBJ tHostsObj[] = {
++/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
++{"Host", &DMREAD, NULL, NULL, NULL, browseHostInst, NULL, &DMNONE, NULL, tHostParam, NULL},
++{0}
++};
++
++static DMLEAF tHostsParam[] = {
++{"HostNumberOfEntries", &DMREAD, DMT_UNINT, get_host_entries, NULL, NULL, NULL},
++{0}
++};
++
++static DMOBJ tLanDeviceHostsObj[] = {
++{"Hosts", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tHostsObj, tHostsParam, NULL},
++{0}
++};
++
++/* browseinstobj left NULL on purpose: lan_mtk.c owns the LANDevice instance */
++static DMOBJ tLanDeviceHostsRoot[] = {
++{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tLanDeviceHostsObj, NULL, NULL},
++{0}
++};
++
++static const char *const lanhosts_mtk_paths[] = {
++	"InternetGatewayDevice.LANDevice.1.Hosts.",
++	NULL
++};
++
++static const struct dm_module lanhosts_mtk_module = {
++	.name  = "mtk-lanhosts",
++	.model = DM_MODEL_TR098,
++	.order = DM_ORDER_SDK,
++	.objs  = tLanDeviceHostsRoot,
++	.paths = lanhosts_mtk_paths,
++};
++DM_MODULE_REGISTER(lanhosts_mtk_module);
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dm098/x_ais_mesh_mtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/x_ais_mesh_mtk.c
+new file mode 100644
+index 0000000..1810c27
+--- /dev/null
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dm098/x_ais_mesh_mtk.c
+@@ -0,0 +1,248 @@
++/*
++ *	This program is free software: you can redistribute it and/or modify
++ *	it under the terms of the GNU General Public License as published by
++ *	the Free Software Foundation, either version 2 of the License, or
++ *	(at your option) any later version.
++ *
++ *	InternetGatewayDevice.LANDevice.1.X_AIS_Mesh. -- the operator's mesh
++ *	control object, ported from functions/tr098/X_AIS_Mesh.
++ *
++ *	All four leaves are forced-inform in the product's tree, so they travel
++ *	in every Inform and the ACS notices a mesh state change without polling.
++ *
++ *	Three different subsystems answer here, exactly as in the shell:
++ *	  MeshEnabled            wireless.<radio>.map_mode + the backhaul iface
++ *	  MeshMaximumHopNumber   1905d_cfg.map.max_hop
++ *	  MeshMode               clay.opermode (the product's operating mode)
++ *	  MeshHopNumberStatus    mapd topology dump, live
++ *
++ *	The LANDevice object and its single instance are browsed in lan_mtk.c.
++ *
++ *	NOT BUILD-TESTED YET.
++ */
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++#include "dmtr098.h"
++#include "dmuci.h"
++#include "dmmem.h"
++#include "dm_registry.h"
++#include "dmmtk.h"
++
++#define RADIO_DEVICE_2G		"MT7993_1_1"
++#define RADIO_DEVICE_5G		"MT7993_1_2"
++#define RADIO_DEVICE_BH		"rai4"
++#define MAPD_DUMP_FILE		"/tmp/dump.txt"
++
++/* clay.opermode -> the operator's MeshMode numbering */
++static int mesh_mode_value(void)
++{
++	char *mode = mtk_uci("clay", "opermode", "mode");
++	char *tagged = mtk_uci("clay", "opermode", "tagged");
++
++	if (!mode || !*mode)
++		return -1;
++	if (strcmp(mode, "auto") == 0)
++		return 0;
++	if (strcmp(mode, "ap") == 0)
++		return 3;
++	if (strcmp(mode, "router") == 0)
++		return strcmp(tagged, "1") == 0 ? 1 : 2;
++	return 0;
++}
++
++/* is_router_meshmode(): mesh may only be driven from a router mode */
++static int is_router_meshmode(void)
++{
++	int m = mesh_mode_value();
++
++	return m == 1 || m == 2;
++}
++
++/*
++ * The shell returned 9002 when both map_mode options were missing, while still
++ * printing "0".  A fault inside the bulk GetParameterValues the ACS runs would
++ * fail the whole RPC for one missing option, so the value is reported and the
++ * fault is not -- the only intentional behaviour change in this object.
++ */
++static int get_mesh_enabled(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	char *m2g = mtk_uci("wireless", RADIO_DEVICE_2G, "map_mode");
++	char *m5g = mtk_uci("wireless", RADIO_DEVICE_5G, "map_mode");
++
++	*value = (strcmp(m2g, "1") == 0 && strcmp(m5g, "1") == 0) ? "1" : "0";
++	return 0;
++}
++
++static int set_mesh_enabled(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	int b = mtk_parse_bool(value);
++	char *current = NULL;
++
++	if (b < 0)
++		return FAULT_9007;
++	if (action == VALUECHECK)
++		return 0;
++	if (!is_router_meshmode())
++		return FAULT_9001;
++	get_mesh_enabled(refparam, ctx, data, instance, &current);
++	if (current && atoi(current) == b)
++		return 0;	/* no-op, like the shell */
++	dmuci_set_value("wireless", RADIO_DEVICE_2G, "map_mode", b ? "1" : "0");
++	dmuci_set_value("wireless", RADIO_DEVICE_5G, "map_mode", b ? "1" : "0");
++	dmuci_set_value("wireless", RADIO_DEVICE_BH, "disabled", b ? "0" : "1");
++	/* request_reboot(): queued, so it runs after the session and after the
++	 * engine has committed wireless */
++	mtk_apply_service("sh -c 'sync; reboot -b KERNEL_RESET_ACS'");
++	return 0;
++}
++
++/*
++ * 1 = alone, 2 = one agent joined, 3 = more than one.  Counted from the mapd
++ * topology dump: every "Device role" : "02" row is an agent.
++ */
++static int get_mesh_hop_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	char *dump_argv[] = { "/usr/bin/mapd_cli", "/tmp/mapd_ctrl", "dump_topology_v1", NULL };
++	char *pidof_argv[] = { "/bin/pidof", "mapd", NULL };
++	char line[512];
++	int agents = 0;
++	FILE *f;
++
++	*value = "1";
++	if (!is_router_meshmode())
++		return 0;
++	if (!*mtk_exec_line(pidof_argv)) {
++		remove(MAPD_DUMP_FILE);
++		return 0;
++	}
++	mtk_exec(dump_argv);
++	f = fopen(MAPD_DUMP_FILE, "r");
++	if (!f)
++		return 0;
++	while (fgets(line, sizeof(line), f)) {
++		char *p = strstr(line, "\"Device role\"");
++
++		if (p && strstr(p, "\"02\""))
++			agents++;
++	}
++	fclose(f);
++	if (agents == 1)
++		*value = "2";
++	else if (agents > 1)
++		*value = "3";
++	return 0;
++}
++
++static int get_mesh_max_hop(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	char *v = mtk_uci("1905d_cfg", "map", "max_hop");
++
++	*value = (v && *v) ? v : "0";
++	return 0;
++}
++
++static int set_mesh_max_hop(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	const char *p;
++
++	if (!value || !*value)
++		return FAULT_9007;
++	for (p = value; *p; p++) {
++		if (*p < '0' || *p > '9')
++			return FAULT_9007;
++	}
++	if (action == VALUECHECK)
++		return 0;
++	dmuci_set_value("1905d_cfg", "map", "max_hop", value);
++	mtk_apply_service("/etc/init.d/easymesh start");
++	return 0;
++}
++
++static int get_mesh_mode(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
++{
++	int m = mesh_mode_value();
++
++	/* same reasoning as get_mesh_enabled: report 0, do not fault a bulk get */
++	dmasprintf(value, "%d", m < 0 ? 0 : m);
++	return 0;
++}
++
++static int set_mesh_mode(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
++{
++	int want, current;
++
++	if (!value || !*value)
++		return FAULT_9007;
++	want = atoi(value);
++	if (want < 0 || want > 3)
++		return FAULT_9007;
++	if (action == VALUECHECK)
++		return 0;
++	current = mesh_mode_value();
++	if (current == want)
++		return 0;
++	switch (want) {
++	case 0:
++		dmuci_set_value("clay", "opermode", "mode", "auto");
++		dmuci_set_value("clay", "opermode", "uplink", "pon");
++		break;
++	case 1:
++		dmuci_set_value("clay", "opermode", "mode", "router");
++		dmuci_set_value("clay", "opermode", "tagged", "1");
++		dmuci_set_value("clay", "opermode", "uplink", "pon");
++		break;
++	case 2:
++		dmuci_set_value("clay", "opermode", "mode", "router");
++		dmuci_set_value("clay", "opermode", "tagged", "0");
++		dmuci_set_value("clay", "opermode", "uplink", "eth1");
++		break;
++	case 3:
++		dmuci_set_value("clay", "opermode", "mode", "ap");
++		break;
++	}
++	/* both queued: the mode switch must see the committed clay config */
++	mtk_apply_service("/usr/bin/prolinecmd resetreason set RESTORE_DEFAULT_ACS");
++	mtk_apply_service("/etc/init.d/opermode restart");
++	return 0;
++}
++
++/* ------------------------------------------------------------------ */
++/* tables                                                              */
++/* ------------------------------------------------------------------ */
++
++static DMLEAF tMeshParam[] = {
++/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
++{"MeshEnabled", &DMWRITE, DMT_BOOL, get_mesh_enabled, set_mesh_enabled, &DMFINFRM, NULL},
++{"MeshHopNumberStatus", &DMREAD, DMT_UNINT, get_mesh_hop_status, NULL, &DMFINFRM, NULL},
++{"MeshMaximumHopNumber", &DMWRITE, DMT_UNINT, get_mesh_max_hop, set_mesh_max_hop, &DMFINFRM, NULL},
++{"MeshMode", &DMWRITE, DMT_UNINT, get_mesh_mode, set_mesh_mode, &DMFINFRM, NULL},
++{0}
++};
++
++static DMOBJ tLanDeviceMeshObj[] = {
++/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
++{"X_AIS_Mesh", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tMeshParam, NULL},
++{0}
++};
++
++/* browseinstobj left NULL on purpose: lan_mtk.c owns the LANDevice instance */
++static DMOBJ tLanDeviceMeshRoot[] = {
++{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tLanDeviceMeshObj, NULL, NULL},
++{0}
++};
++
++static const char *const mesh_mtk_paths[] = {
++	"InternetGatewayDevice.LANDevice.1.X_AIS_Mesh.",
++	NULL
++};
++
++static const struct dm_module mesh_mtk_module = {
++	.name  = "mtk-x-ais-mesh",
++	.model = DM_MODEL_TR098,
++	.order = DM_ORDER_SDK,
++	.objs  = tLanDeviceMeshRoot,
++	.paths = mesh_mtk_paths,
++};
++DM_MODULE_REGISTER(mesh_mtk_module);
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c b/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c
+index ec6cd19..3623a43 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c
+@@ -60,6 +60,76 @@ int mtk_varstate_set(char *package, char *section, char *option, char *value)
+ 	return 0;
+ }
+ 
++/*
++ * $UCI_GET_DEFAULT reads the factory tree, not the running config, so it needs
++ * its own uci context -- the engine's is bound to /etc/config.  Opened once and
++ * kept: set_LanHostConfig_DHCPServerConfigurable() needs it for every "false".
++ */
++char *mtk_uci_default(char *package, char *section, char *option)
++{
++	static struct uci_context *rom_ctx;
++	struct uci_ptr ptr = {0};
++	char buf[256];
++
++	if (!package || !section || !option)
++		return "";
++	if (!rom_ctx) {
++		rom_ctx = uci_alloc_context();
++		if (!rom_ctx)
++			return "";
++		uci_set_confdir(rom_ctx, "/rom/etc/config");
++	}
++	if (snprintf(buf, sizeof(buf), "%s.%s.%s", package, section, option) >= (int)sizeof(buf))
++		return "";
++	if (uci_lookup_ptr(rom_ctx, &ptr, buf, true) != UCI_OK)
++		return "";
++	if (!ptr.o || !ptr.o->v.string)
++		return "";
++	return dmstrdup(ptr.o->v.string);
++}
++
++int mtk_ipv4_parse(const char *s, unsigned int *out)
++{
++	unsigned int v = 0;
++	int octet, digits, i;
++
++	if (!s)
++		return -1;
++	for (i = 0; i < 4; i++) {
++		octet = 0;
++		digits = 0;
++		while (*s >= '0' && *s <= '9') {
++			octet = octet * 10 + (*s - '0');
++			if (octet > 255)
++				return -1;
++			digits++;
++			s++;
++		}
++		if (!digits || digits > 3)
++			return -1;
++		v = (v << 8) | (unsigned int)octet;
++		if (i < 3) {
++			if (*s != '.')
++				return -1;
++			s++;
++		}
++	}
++	if (*s)
++		return -1;
++	if (out)
++		*out = v;
++	return 0;
++}
++
++char *mtk_ipv4_str(unsigned int v)
++{
++	char buf[16];
++
++	snprintf(buf, sizeof(buf), "%u.%u.%u.%u",
++		 (v >> 24) & 0xff, (v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff);
++	return dmstrdup(buf);
++}
++
+ char *mtk_file_line(const char *path)
+ {
+ 	char buf[512];
+@@ -80,6 +150,22 @@ char *mtk_file_line(const char *path)
+ 	return dmstrdup(buf);
+ }
+ 
++int mtk_file_write(const char *path, const char *value)
++{
++	FILE *f;
++	int rc;
++
++	if (!path || !value)
++		return -1;
++	f = fopen(path, "w");
++	if (!f)
++		return -1;
++	rc = fprintf(f, "%s\n", value) < 0 ? -1 : 0;
++	if (fclose(f))
++		rc = -1;
++	return rc;
++}
++
+ long mtk_meminfo_kb(const char *key)
+ {
+ 	char line[256];
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h b/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h
+index e371746..a36af5a 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h
+@@ -30,6 +30,10 @@ int mtk_varstate_set(char *package, char *section, char *option, char *value);
+ /* System ------------------------------------------------------------ */
+ /* First line of a file, trimmed, dm-allocated, "" when unreadable. */
+ char *mtk_file_line(const char *path);
++/* Write one line to a /proc or /sys control file, what the shell wrote with
++ * "echo <value> > <path>".  Returns 0 on success, -1 when the file cannot be
++ * written (the caller keeps going: the shell ignored that too). */
++int mtk_file_write(const char *path, const char *value);
+ /* A /proc/meminfo row in kB, -1 when absent. */
+ long mtk_meminfo_kb(const char *key);
+ /* /proc/uptime, whole seconds. */
+@@ -51,6 +55,18 @@ int mtk_apply_service(const char *cmd);
+  * compiled in (--disable-dm-script-compat). */
+ void mtk_run_apply_service(void);
+ 
++/* Factory defaults, what the shell calls $UCI_GET_DEFAULT
++ * ("uci -q -c /rom/etc/config get").  Never NULL. */
++char *mtk_uci_default(char *package, char *section, char *option);
++
++/* IPv4 --------------------------------------------------------------- */
++/* Dotted quad -> host order integer, mirroring is_valid_ipv4 + ipstr2int
++ * of functions/common: every octet decimal and <= 255, exactly four of them.
++ * Returns 0 on success, -1 when the string is not an IPv4 address. */
++int mtk_ipv4_parse(const char *s, unsigned int *out);
++/* Back to dotted quad, dm-allocated (int2ipstr). */
++char *mtk_ipv4_str(unsigned int v);
++
+ /* Value shaping ----------------------------------------------------- */
+ /* "1"/"on"/"true"/"yes"/"enabled" -> true, anything else false. */
+ int mtk_bool(const char *v);
+diff --git a/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk b/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk
+index accdd40..40ee436 100644
+--- a/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk
++++ b/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk
+@@ -8,7 +8,11 @@ libtr098_la_SOURCES +=	\
+ 	../sdk/mtk/dm098/deviceinfo_mtk.c			\
+ 	../sdk/mtk/dm098/time_mtk.c				\
+ 	../sdk/mtk/dm098/managementserver_core_mtk.c	\
+-	../sdk/mtk/dm098/managementserver_mtk.c
++	../sdk/mtk/dm098/managementserver_mtk.c		\
++	../sdk/mtk/dm098/lan_mtk.c				\
++	../sdk/mtk/dm098/lanhosts_mtk.c				\
++	../sdk/mtk/dm098/laneth_mtk.c				\
++	../sdk/mtk/dm098/x_ais_mesh_mtk.c
+ 
+ if DM_MTK_SCRIPT_COMPAT
+ libtr098_la_SOURCES +=	\
+-- 
+2.34.1
+

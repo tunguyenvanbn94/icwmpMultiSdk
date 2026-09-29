@@ -1,0 +1,79 @@
+# icwmpd configuration on the MediaTek/Airoha OpenWrt product tree (HNI).
+#
+# The ACS settings of record stay in /etc/config/easycwmp (WebUI, DHCP
+# option 43, stuncd and the data model scripts all use that file).  icwmpd
+# copies them over the acs/cpe options below at every start, at every
+# config reload and at the end of every session (mtk/icwmp_mtk.c), so edit
+# easycwmp.@acs[0] / easycwmp.@local[0] as before, not this file, for:
+#   url username password periodic_enable periodic_interval periodic_time
+#   cwmpretryinterval cwmpretryintervalmultiplier ssl_verify parameter_key
+#   interface port username password provisioning_code logging_level
+# Everything else here is icwmpd's own.
+
+config acs 'acs'
+	option url ''
+	option userid ''
+	option passwd ''
+	option periodic_inform_enable '1'
+	option periodic_inform_interval '43200'
+	option periodic_inform_time '0001-01-01T00:00:00Z'
+	option dhcp_discovery 'disable'
+	option compression 'Disabled'
+	option retry_min_wait_interval '5'
+	option retry_interval_multiplier '2000'
+	option ParameterKey ''
+	# easycwmp.@acs[0].ssl_verify=disable -> 1 (no certificate check)
+	option insecure_enable '1'
+	option ipv6_enable '0'
+
+config cpe 'cpe'
+	# identity override for bring-up only, "" = easycwmp.@device[0].* (libtr098
+	# tr098/mtk/deviceinfo_mtk.c), e.g. uci set cwmp.cpe.serial_number='1234567890'
+	option manufacturer ''
+	option oui ''
+	option product_class ''
+	option serial_number ''
+	option software_version ''
+	# netdev the connection request address is taken from (netlink); mirrored
+	# from easycwmp.@local[0].interface (l3_device of the WAN)
+	option interface 'pppoe-if0'
+	option default_wan_interface 'if0'
+	option userid ''
+	option passwd ''
+	# connection request server port, mirrored from easycwmp.@local[0].port;
+	# easycwmp_firewall.sh opens it on the WAN
+	option port '7547'
+	# behind NAT: address/port the ACS can reach, "" = own (see BDK notes)
+	option cr_host ''
+	option cr_port ''
+	option log_to_console 'disable'
+	option log_to_file 'enable'
+	# mirrored from easycwmp.@local[0].logging_level (0..4 -> CRITIC..DEBUG)
+	option log_severity 'INFO'
+	option log_file_name '/var/log/icwmpd.log'
+	option log_max_size '102400'
+	option ubus_socket '/var/run/ubus/ubus.sock'
+	option provisioning_code ''
+	# CWMP amendment in the Inform namespace: 3 = cwmp-1-2 (what easycwmp sent)
+	option amd_version '3'
+	option instance_mode 'InstanceNumber'
+	option session_timeout '60'
+	option notification '1'
+	option datamodel 'tr098'
+	option exec_download '0'
+	# 1: the data model child (icwmp_dm.sh) keeps its stderr -> /tmp/icwmp_dm.log
+	# shows the shell errors of the easycwmp function library
+	option dm_script_debug '0'
+
+config lwn 'lwn'
+	option enable '0'
+	option hostname ''
+	option port ''
+
+# Active notifications (easycwmp shipped Device.* paths, which never matched
+# the InternetGatewayDevice. tree; these are the same parameters, TR-098 spelling)
+config notifications
+	list active 'InternetGatewayDevice.DeviceInfo.SoftwareVersion'
+	list active 'InternetGatewayDevice.DeviceInfo.ProvisioningCode'
+	list active 'InternetGatewayDevice.ManagementServer.ConnectionRequestURL'
+	list active 'InternetGatewayDevice.ManagementServer.UDPConnectionRequestAddress'

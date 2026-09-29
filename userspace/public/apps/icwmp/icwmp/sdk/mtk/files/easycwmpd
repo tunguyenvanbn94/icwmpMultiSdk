@@ -1,0 +1,6 @@
+#!/bin/sh
+# Compatibility name: the product calls "/etc/init.d/easycwmpd reload|restart"
+# from hal_unify (hal_gateway.c), ubusmon and wan_interface_up.  icwmpd owns
+# the TR-069 client now; forward to its init script.  Not an rc.common
+# script on purpose (no START=): only /etc/init.d/icwmpd is enabled at boot.
+exec /etc/init.d/icwmpd "$@"

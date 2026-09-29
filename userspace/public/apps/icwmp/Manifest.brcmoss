@@ -1,0 +1,7 @@
+OSS_REFERENCE_Name: icwmp
+OSS_REFERENCE_BinaryName: icwmpd
+OSS_REFERENCE_Version: fork nvta2/icwmp master 51513f57917e4255cfa58886f508244f03118602 (2022-03-14, iopsys icwmp 3.x lineage) + Marusys BDK glue (see icwmp/BDK-CHANGES.md)
+OSS_REFERENCE_License: GPL-2.0 (see icwmp/COPYING) -- NOTE: links proprietary Broadcom libraries in-process, legal review required before shipping (docs/icwmp_bdk_port_design.md)
+OSS_REFERENCE_DownloadURL: https://github.com/nvta2/icwmp.git
+OSS_REFERENCE_BroadcomURL: 
+OSS_Broadcom_RelativePath: ./icwmp

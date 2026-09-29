@@ -1,0 +1,38 @@
+From 9692cf8eedbd0a4d4e2f93275991b7a2c5c8f58e Mon Sep 17 00:00:00 2001
+From: TuNV <tunguyenvanbn94@gmail.com>
+Date: Sat, 26 Sep 2026 12:32:42 +0700
+Subject: [PATCH] icwmp mtk: init script, do not leak procd flock fd 1000 into
+ value_monitoring
+
+The background value_monitoring inherited fd 1000 (procd_lock flock on
+/var/lock/procd_icwmpd.lock), so every later /etc/init.d/icwmpd call hung
+in 'flock 1000' (seen on board: S99icwmpd boot and 'icwmpd running').
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ public/apps/icwmp/icwmp/sdk/mtk/files/icwmpd.init | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/public/apps/icwmp/icwmp/sdk/mtk/files/icwmpd.init b/public/apps/icwmp/icwmp/sdk/mtk/files/icwmpd.init
+index 73ec919..f6a7dc1 100644
+--- a/public/apps/icwmp/icwmp/sdk/mtk/files/icwmpd.init
++++ b/public/apps/icwmp/icwmp/sdk/mtk/files/icwmpd.init
+@@ -180,9 +180,13 @@ start_service() {
+ 	$UCI_COMMIT easycwmp
+ 	echo "icwmpd: Connection Request URL http://$wan_ip:$port/$path"
+ 
+-	# value change polling (ubus call tr069 notify every notification_interval s)
++	# value change polling (ubus call tr069 notify every notification_interval s).
++	# fd 1000 is procd_lock()'s flock on /var/lock/procd_icwmpd.lock (procd.sh):
++	# a child that inherits it holds the lock for its whole life and every later
++	# /etc/init.d/icwmpd call (restart, running, the reload trigger) hangs in
++	# "flock 1000".  Close it, and the rc.common stdio, in the background child.
+ 	chmod +x /usr/sbin/value_monitoring
+-	/usr/sbin/value_monitoring $notify_interval &
++	/usr/sbin/value_monitoring $notify_interval </dev/null >/dev/null 2>&1 1000>&- &
+ 
+ 	# easycwmp -> cwmp mirror is done by icwmpd itself at start (mtk/icwmp_mtk.c)
+ 	procd_open_instance
+-- 
+2.34.1
+

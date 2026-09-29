@@ -1,0 +1,256 @@
+From 52be70a986d435e78059fca6d1b3bd8500247ec2 Mon Sep 17 00:00:00 2001
+From: TuNV <steven.nguyen.bn@gmail.com>
+Date: Thu, 24 Sep 2026 11:26:19 +0700
+Subject: [PATCH] [icwmp apply] Run on Python 3.6, the SDK build hosts are
+ older than this tree
+
+Path.is_relative_to() is 3.9 and reached a build host as an AttributeError
+traceback before anything was installed.  Replaced with within(), a
+relative_to() in a try block, plus an explicit version check so an older
+interpreter says so instead of crashing halfway.
+
+release/tests/verify-apply.py now gates both ways: an AST scan of apply.py
+for names that only exist after 3.6, and a dry-run of both SDK fixtures with
+the 3.9 pathlib methods deleted from the interpreter.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ release/apply.py                              |  18 +++++-
+ .../__pycache__/verify-apply.cpython-310.pyc  | Bin 0 -> 8686 bytes
+ release/tests/verify-apply.py                 |  52 ++++++++++++++++++
+ 3 files changed, 69 insertions(+), 1 deletion(-)
+ create mode 100644 release/tests/__pycache__/verify-apply.cpython-310.pyc
+
+diff --git a/release/apply.py b/release/apply.py
+index a7a820c..dd0c1ce 100755
+--- a/release/apply.py
++++ b/release/apply.py
+@@ -15,6 +15,22 @@ from pathlib import Path
+ 
+ HERE = Path(__file__).resolve().parent
+ 
++# The SDK build hosts are older than this workspace: keep to what Python 3.6
++# has.  Path.is_relative_to() is 3.9 and was the one thing that slipped
++# through -- see within() below.
++if sys.version_info < (3, 6):
++    sys.exit("apply.py needs Python 3.6 or newer, found %d.%d"
++             % (sys.version_info[0], sys.version_info[1]))
++
++
++def within(path, other):
++    """path is other or lies under it.  Path.is_relative_to() without 3.9."""
++    try:
++        path.relative_to(other)
++        return True
++    except ValueError:
++        return False
++
+ 
+ def digest(path):
+     return hashlib.sha256(path.read_bytes()).hexdigest()
+@@ -243,7 +259,7 @@ def main():
+     try:
+         metadata = verify_bundle(HERE)
+         target = args.target.resolve(strict=True)
+-        if HERE == target or HERE.is_relative_to(target) or target.is_relative_to(HERE):
++        if HERE == target or within(HERE, target) or within(target, HERE):
+             raise ValueError("extract the bundle outside the SDK target directory")
+         sdk = args.sdk
+         if not sdk:
+diff --git a/release/tests/__pycache__/verify-apply.cpython-310.pyc b/release/tests/__pycache__/verify-apply.cpython-310.pyc
+new file mode 100644
+index 0000000000000000000000000000000000000000..bd7dd8e00facdd604285cb8c2f3ab8f94b561e80
+GIT binary patch
+literal 8686
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/release/tests/verify-apply.py b/release/tests/verify-apply.py
+index d016dca..7bca7fb 100644
+--- a/release/tests/verify-apply.py
++++ b/release/tests/verify-apply.py
+@@ -2,6 +2,7 @@
+ """Exercise apply on small SDK fixtures. --scratch is an empty task-owned directory."""
+ 
+ import argparse
++import ast
+ import hashlib
+ import importlib.util
+ import json
+@@ -70,6 +71,54 @@ def make_test_bundle(dest):
+     (dest / "MANIFEST.json").write_text(json.dumps({"format": 1, "commit": "fixture-working-tree", "files": files}))
+ 
+ 
++# apply.py runs on the SDK build hosts, which are older than this workspace.
++# Two gates so a newer API cannot slip in again: an AST scan, and a run with
++# the 3.9 pathlib methods removed.  (2026-09-24: Path.is_relative_to() reached
++# a build host as an AttributeError traceback.)
++POST36 = {
++    "is_relative_to": "3.9", "with_stem": "3.9", "readlink": "3.9",
++    "removeprefix": "3.9", "removesuffix": "3.9", "root_dir": "3.10",
++    "link_to": "3.8", "missing_ok": "3.8", "dirs_exist_ok": "3.8",
++    "capture_output": "3.7",
++}
++PATHLIB_39 = ("is_relative_to", "with_stem", "readlink")
++
++
++def check_py36_source(path):
++    found = set()
++    tree = ast.parse(path.read_text(), str(path))
++    for node in ast.walk(tree):
++        if isinstance(node, ast.Attribute) and node.attr in POST36:
++            found.add((node.lineno, node.attr, POST36[node.attr]))
++        elif isinstance(node, ast.keyword) and node.arg in POST36:
++            found.add((node.lineno, node.arg + "=", POST36[node.arg]))
++        elif isinstance(node, ast.NamedExpr):
++            found.add((node.lineno, ":=", "3.8"))
++        elif node.__class__.__name__ == "Match":
++            found.add((node.lineno, "match", "3.10"))
++    if found:
++        raise AssertionError("apply.py uses APIs newer than Python 3.6: " + repr(sorted(found)))
++
++
++def run_as_py36(bundle, scratch, *args):
++    """apply.py with the 3.9-only pathlib methods taken away."""
++    shim = scratch / "py36shim.py"
++    shim.write_text(
++        "import pathlib, runpy, sys\n"
++        "for cls in (pathlib.PurePath, pathlib.Path, pathlib.PurePosixPath, pathlib.PosixPath):\n"
++        "    for name in %r:\n"
++        "        if name in cls.__dict__:\n"
++        "            delattr(cls, name)\n"
++        "assert not hasattr(pathlib.Path('/'), 'is_relative_to')\n"
++        "sys.argv = sys.argv[1:]\n"
++        "runpy.run_path(sys.argv[0], run_name='__main__')\n" % (PATHLIB_39,))
++    result = subprocess.run([sys.executable, str(shim), str(bundle / "apply.py"), *map(str, args)],
++                            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
++    if result.returncode:
++        raise RuntimeError("apply.py needs a Python newer than 3.6:\n" + result.stdout)
++    return result.stdout
++
++
+ def main():
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument("--scratch", type=Path, required=True)
+@@ -84,6 +133,7 @@ def main():
+         shutil.copytree(args.bundle, bundle)
+     else:
+         make_test_bundle(bundle)
++    check_py36_source(bundle / "apply.py")
+     results = []
+     for sdk in ("bdk", "mtk"):
+         target = temp / (sdk + " SDK's source")
+@@ -91,6 +141,8 @@ def main():
+         before = snapshot(target)
+         run(bundle, "--sdk", sdk, "--dry-run", target)
+         assert snapshot(target) == before and not (target / ".icwmp-backups").exists()
++        run_as_py36(bundle, temp, "--sdk", sdk, "--dry-run", target)
++        assert snapshot(target) == before and not (target / ".icwmp-backups").exists()
+         run(bundle, target)  # autodetect
+         assert not legacy.exists()
+         backup = next((target / ".icwmp-backups").iterdir())
+-- 
+2.34.1
+
