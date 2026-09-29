@@ -29,7 +29,16 @@ define Package/icwmp_tr098
   CATEGORY:=Utilities
   SUBMENU:=TRx69
   TITLE:=TR069 CWMP client (icwmp + libtr098, replaces cwmpclient)
-  DEPENDS:=+libubus +libuci +libcurl +libmicroxml +libjson-c +libblobmsg-json +libpthread +libtr098
+  # +zlib: bin/Makefile.am links icwmp_tr098d with $(LIBZ_LIBS) for zlib.c (SOAP
+  # compression).  The cwmpclient package this replaces never linked it, so the
+  # dependency is new -- without it ipkg-build fails with "missing dependencies
+  # for the following libraries: libz.so.1".
+  # +libubox: the binary NEEDs libubox.so directly.  It happens to be installed
+  # anyway as a dependency of libblobmsg-json (same source package), which is
+  # why ipkg-build never complained -- libtr098 lists it explicitly and so does
+  # this now.  -lcrypto/-lssl are on the link line too but --as-needed drops
+  # them: nothing here calls OpenSSL, curl does, so no +libopenssl.
+  DEPENDS:=+libubus +libuci +libubox +libcurl +libmicroxml +libjson-c +libblobmsg-json +libpthread +zlib +libtr098
   CONFLICTS:=cwmpclient
 endef
 
