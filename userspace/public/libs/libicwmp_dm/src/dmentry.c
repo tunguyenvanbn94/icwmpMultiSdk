@@ -20,6 +20,7 @@
 #include "wepkey.h"
 #include <unistd.h>
 #include <sys/wait.h>
+#include <ctype.h>
 #include "dmcommon.h"
 #include "dmtr098.h"
 
