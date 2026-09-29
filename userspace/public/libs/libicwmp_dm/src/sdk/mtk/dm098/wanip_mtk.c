@@ -84,27 +84,18 @@
 #include "dmmem.h"
 #include "dm_registry.h"
 #include "dmmtk.h"
+#include "wanconn_mtk.h"
 
 #define WAN_MAX_LAN_PORTS	4	/* MAX_LAN_PORTS of the shell */
 #define WAN_MAX_WLAN_PORTS	8	/* MAX_WLAN_PORTS */
 
-struct wan_entry {
-	struct uci_section *s;
-	int idx;		/* position among "entry" sections = wan.@entry[idx] */
-	int id;			/* the "id" option; instance = id + 1 */
-	int bridge;		/* switch_mode == 1 */
-	int ppp;		/* switch_mode == 0 && conn_type == 2 */
-	int tr069;		/* service_type & 2 */
-	char if4[32];		/* "if<id>" or, bridged, "if_wanbr<id>" */
-	char if6[32];		/* "if<id>_6", empty when bridged */
-	char dev[32];		/* "dev_wanbr<id>", empty when routed */
-};
+/* struct wan_entry and the entry enumeration: wanconn_mtk.h */
 
 /* ------------------------------------------------------------------ */
 /* config                                                              */
 /* ------------------------------------------------------------------ */
 
-static char *sect_opt(struct uci_section *s, char *option)
+char *wan_sect_opt(struct uci_section *s, char *option)
 {
 	char *v = NULL;
 
@@ -114,20 +105,20 @@ static char *sect_opt(struct uci_section *s, char *option)
 	return v ? v : "";
 }
 
-static char *entry_opt(void *data, char *option)
+char *wan_entry_opt(void *data, char *option)
 {
 	struct wan_entry *e = (struct wan_entry *)data;
 
-	return e ? sect_opt(e->s, option) : "";
+	return e ? wan_sect_opt(e->s, option) : "";
 }
 
 /* the shell compared strings, so an unset option is never "0" */
 static int entry_opt_is(void *data, char *option, const char *val)
 {
-	return strcmp(entry_opt(data, option), val) == 0;
+	return strcmp(wan_entry_opt(data, option), val) == 0;
 }
 
-static int str_is_uint(const char *s, long *out)
+int wan_str_is_uint(const char *s, long *out)
 {
 	char *end;
 	long v;
@@ -146,7 +137,7 @@ static int str_is_uint(const char *s, long *out)
 /* ubus                                                                */
 /* ------------------------------------------------------------------ */
 
-static json_object *iface_status(const char *iface)
+json_object *wan_iface_status(const char *iface)
 {
 	json_object *res = NULL;
 	char obj[64];
@@ -160,7 +151,7 @@ static json_object *iface_status(const char *iface)
 
 static char *iface_ipv4(const char *iface)
 {
-	json_object *res = iface_status(iface), *a;
+	json_object *res = wan_iface_status(iface), *a;
 
 	if (!res)
 		return "";
@@ -172,9 +163,9 @@ static char *iface_ipv4(const char *iface)
 
 /* "@.l3_device" of the shell: for PPPoE the counters and the MTU live on the
  * ppp netdev the daemon created, not on the ethernet below it */
-static char *iface_l3_device(const char *iface)
+char *wan_iface_l3_device(const char *iface)
 {
-	json_object *res = iface_status(iface);
+	json_object *res = wan_iface_status(iface);
 
 	return res ? dmjson_get_value(res, 1, "l3_device") : "";
 }
@@ -182,7 +173,7 @@ static char *iface_l3_device(const char *iface)
 /* '$["ipv4-address"][0].ptpaddress': the peer address of the PPP link */
 static char *iface_ptp_peer(const char *iface)
 {
-	json_object *res = iface_status(iface), *a;
+	json_object *res = wan_iface_status(iface), *a;
 
 	if (!res)
 		return "";
@@ -194,7 +185,7 @@ static char *iface_ptp_peer(const char *iface)
 
 /* what the shell queued with common_execute_command_in_apply_service(): the
  * reload runs once at the end of the session, never between two SetParameterValues */
-static void wan_reload(void)
+void wan_reload(void)
 {
 	mtk_apply_service("/usr/sbin/hni_wan_reload.sh");
 }
@@ -204,7 +195,7 @@ static void wan_reload(void)
  * The shell only accepted "result":"SUCCESS"; anything else was an internal
  * error and the reload was NOT queued.  Returns 0 on success.
  */
-static int wan_ubus_set(int index, const char *action, const char *param, const char *value)
+int wan_ubus_set(int index, const char *action, const char *param, const char *value)
 {
 	json_object *res = NULL;
 	char idx[16];
@@ -228,7 +219,7 @@ static int wan_ubus_set(int index, const char *action, const char *param, const 
 }
 
 /* every "modify" of the shell: ubus first, reload only when it succeeded */
-static int wan_modify(struct wan_entry *e, const char *param, const char *value)
+int wan_modify(struct wan_entry *e, const char *param, const char *value)
 {
 	if (wan_ubus_set(e->idx, "modify", param, value) != 0)
 		return FAULT_9002;
@@ -263,17 +254,14 @@ static void entry_fill(struct wan_entry *e)
  * WANPPPConnection takes conn_type 2.  Every entry belongs to exactly one of
  * the two objects, which is why one instance number can be reused on both.
  */
-#define WAN_KIND_IP	0
-#define WAN_KIND_PPP	1
-
-static int wan_entries_kind(struct wan_entry **out, int max, int kind)
+int wan_entries_kind(struct wan_entry **out, int max, int kind)
 {
 	struct uci_section *s;
 	int idx = 0, n = 0;
 
 	uci_foreach_sections("wan", "entry", s) {
-		char *id = sect_opt(s, "id");
-		char *sw = sect_opt(s, "switch_mode");
+		char *id = wan_sect_opt(s, "id");
+		char *sw = wan_sect_opt(s, "switch_mode");
 		long idv = 0, svc = 0;
 		int bridge = 0, ppp = 0;
 
@@ -281,20 +269,20 @@ static int wan_entries_kind(struct wan_entry **out, int max, int kind)
 			break;
 		if (kind == WAN_KIND_PPP) {
 			if (strcmp(sw, "0") != 0 ||
-			    strcmp(sect_opt(s, "conn_type"), "2") != 0) {
+			    strcmp(wan_sect_opt(s, "conn_type"), "2") != 0) {
 				idx++;
 				continue;
 			}
 			ppp = 1;
 		} else if (strcmp(sw, "1") == 0) {
 			bridge = 1;
-		} else if (strcmp(sw, "0") == 0 && strcmp(sect_opt(s, "conn_type"), "0") == 0) {
+		} else if (strcmp(sw, "0") == 0 && strcmp(wan_sect_opt(s, "conn_type"), "0") == 0) {
 			bridge = 0;
 		} else {
 			idx++;
 			continue;	/* PPPoE, or an entry with no mode at all */
 		}
-		if (!str_is_uint(id, &idv)) {
+		if (!wan_str_is_uint(id, &idv)) {
 			idx++;
 			continue;
 		}
@@ -307,7 +295,7 @@ static int wan_entries_kind(struct wan_entry **out, int max, int kind)
 			e->id = (int)idv;
 			e->bridge = bridge;
 			e->ppp = ppp;
-			if (str_is_uint(sect_opt(s, "service_type"), &svc))
+			if (wan_str_is_uint(wan_sect_opt(s, "service_type"), &svc))
 				e->tr069 = (svc & 2) ? 1 : 0;
 			entry_fill(e);
 		}
@@ -361,7 +349,7 @@ static int get_conn_status(char *refparam, struct dmctx *ctx, void *data, char *
 		return 0;
 	}
 	v4 = iface_ipv4(e->if4);
-	res = iface_status(e->if6);
+	res = wan_iface_status(e->if6);
 	if (res) {
 		a = dmjson_select_obj_in_array_idx(res, 0, 1, "ipv6-address");
 		if (a)
@@ -402,7 +390,7 @@ static int set_conn_type(char *refparam, struct dmctx *ctx, void *data, char *in
 
 static int get_conn_name(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = entry_opt(data, "name");
+	*value = wan_entry_opt(data, "name");
 	return 0;
 }
 
@@ -424,7 +412,7 @@ static int set_conn_name(char *refparam, struct dmctx *ctx, void *data, char *in
 static int get_conn_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
 	struct wan_entry *e = (struct wan_entry *)data;
-	char *svc = entry_opt(data, "service_type");
+	char *svc = wan_entry_opt(data, "service_type");
 
 	if (e && e->bridge) {
 		*value = "cpe-other";
@@ -450,7 +438,7 @@ static int get_conn_uptime(char *refparam, struct dmctx *ctx, void *data, char *
 	*value = "0";
 	if (!e)
 		return 0;
-	res = iface_status(e->if4);
+	res = wan_iface_status(e->if4);
 	if (!res)
 		return 0;
 	v = dmjson_get_value(res, 1, "uptime");
@@ -584,14 +572,14 @@ static int get_subnet_mask(char *refparam, struct dmctx *ctx, void *data, char *
 		return 0;
 	}
 	*value = "";
-	res = iface_status(e->if4);
+	res = wan_iface_status(e->if4);
 	if (!res)
 		return 0;
 	a = dmjson_select_obj_in_array_idx(res, 0, 1, "ipv4-address");
 	if (!a)
 		return 0;
 	mask = dmjson_get_value(a, 1, "mask");
-	if (!str_is_uint(mask, &cidr) || cidr > 32)
+	if (!wan_str_is_uint(mask, &cidr) || cidr > 32)
 		return 0;
 	*value = mtk_ipv4_str(cidr ? (0xffffffffu << (32 - (unsigned int)cidr)) : 0u);
 	return 0;
@@ -633,7 +621,7 @@ static int get_default_gateway(char *refparam, struct dmctx *ctx, void *data, ch
 		return 0;
 	}
 	*value = "";
-	res = iface_status(e->if4);
+	res = wan_iface_status(e->if4);
 	if (!res)
 		return 0;
 	r = dmjson_select_obj_in_array_idx(res, 0, 1, "route");
@@ -727,7 +715,7 @@ static int get_dns_servers(char *refparam, struct dmctx *ctx, void *data, char *
 	*value = "";
 	if (!e || e->bridge)
 		return 0;
-	res = iface_status(e->if4);
+	res = wan_iface_status(e->if4);
 	if (!res)
 		return 0;
 	arr = dmjson_get_obj(res, 1, "dns-server");
@@ -786,7 +774,7 @@ static struct uci_section *netdev_section(const char *name)
 	if (!name || !name[0])
 		return NULL;
 	uci_foreach_sections("network", "device", s) {
-		if (strcmp(sect_opt(s, "name"), name) == 0)
+		if (strcmp(wan_sect_opt(s, "name"), name) == 0)
 			return s;
 	}
 	return NULL;
@@ -819,7 +807,7 @@ static int set_max_mtu(char *refparam, struct dmctx *ctx, void *data, char *inst
 
 	if (!e)
 		return FAULT_9002;
-	if (!str_is_uint(value, &mtu))
+	if (!wan_str_is_uint(value, &mtu))
 		return FAULT_9007;
 	if (mtu < 1 || mtu > 1540)
 		return FAULT_9005;	/* the fault the shell returned here */
@@ -898,7 +886,7 @@ static int set_conn_mac(char *refparam, struct dmctx *ctx, void *data, char *ins
 
 static int get_mac_override(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	char *v = entry_opt(data, "mac_override");
+	char *v = wan_entry_opt(data, "mac_override");
 
 	*value = (!v[0] || strcmp(v, "0") == 0) ? "false" : "true";
 	return 0;
@@ -948,7 +936,7 @@ static int set_vlan_enable(char *refparam, struct dmctx *ctx, void *data, char *
 
 static int get_vlan_id(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	char *v = entry_opt(data, "vlan_id");
+	char *v = wan_entry_opt(data, "vlan_id");
 
 	*value = v[0] ? v : "1";
 	return 0;
@@ -961,7 +949,7 @@ static int set_vlan_id(char *refparam, struct dmctx *ctx, void *data, char *inst
 
 	if (!e)
 		return FAULT_9002;
-	if (!str_is_uint(value, &id))
+	if (!wan_str_is_uint(value, &id))
 		return FAULT_9007;
 	if (id < 1 || id > 4094)
 		return FAULT_9007;
@@ -972,7 +960,7 @@ static int set_vlan_id(char *refparam, struct dmctx *ctx, void *data, char *inst
 
 static int get_vlan_priority(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	char *v = entry_opt(data, "vlan_priority");
+	char *v = wan_entry_opt(data, "vlan_priority");
 
 	*value = v[0] ? v : "0";
 	return 0;
@@ -992,7 +980,7 @@ static int set_vlan_priority(char *refparam, struct dmctx *ctx, void *data, char
 
 	if (!e)
 		return FAULT_9002;
-	if (!str_is_uint(value, &prio))
+	if (!wan_str_is_uint(value, &prio))
 		return FAULT_9007;
 	if (prio > 7)
 		return FAULT_9005;	/* the fault the shell returned here */
@@ -1130,7 +1118,7 @@ static int set_x_lan_interface(char *refparam, struct dmctx *ctx, void *data, ch
 		char *last = strrchr(tok, '.');
 		long n = 0;
 
-		if (!last || !str_is_uint(last + 1, &n))
+		if (!last || !wan_str_is_uint(last + 1, &n))
 			continue;
 		if (strstr(tok, "LANEthernetInterfaceConfig.")) {
 			if (n >= 1 && n <= WAN_MAX_LAN_PORTS)
@@ -1167,7 +1155,7 @@ static char *stat_of(void *data, const char *counter)
 	if (!e)
 		return "";
 	if (e->ppp)
-		dev = iface_l3_device(e->if4);
+		dev = wan_iface_l3_device(e->if4);
 	else
 		dev = e->bridge ? mtk_uci("network", e->dev, "name") : entry_netdev(e);
 	if (!dev[0])
@@ -1272,8 +1260,6 @@ static struct dm_forced_inform_s DMFINFRM_EXTIP = { 0, extip_forced_inform };
 /* instances                                                           */
 /* ------------------------------------------------------------------ */
 
-#define WAN_MAX_ENTRIES	32
-
 static int browseWanIpConnInst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
 {
 	struct wan_entry *list;
@@ -1323,7 +1309,7 @@ static int get_transport_type(char *refparam, struct dmctx *ctx, void *data, cha
 
 static int get_ppp_username(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = entry_opt(data, "ppp_username");
+	*value = wan_entry_opt(data, "ppp_username");
 	return 0;
 }
 
@@ -1396,7 +1382,7 @@ static int set_ppp_max_mru(char *refparam, struct dmctx *ctx, void *data, char *
 
 	if (!e)
 		return FAULT_9002;
-	if (!str_is_uint(value, &mru))
+	if (!wan_str_is_uint(value, &mru))
 		return FAULT_9007;
 	if (action == VALUECHECK)
 		return 0;
@@ -1415,7 +1401,7 @@ static int get_ppp_current_mru(char *refparam, struct dmctx *ctx, void *data, ch
 	*value = "";
 	if (!e)
 		return 0;
-	dev = iface_l3_device(e->if4);
+	dev = wan_iface_l3_device(e->if4);
 	if (!dev[0])
 		return 0;
 	snprintf(path, sizeof(path), "/sys/class/net/%s/mtu", dev);
@@ -1442,7 +1428,7 @@ static int set_ppp_max_mtu(char *refparam, struct dmctx *ctx, void *data, char *
 {
 	long mtu = 0;
 
-	if (!str_is_uint(value, &mtu))
+	if (!wan_str_is_uint(value, &mtu))
 		return FAULT_9007;
 	if (mtu < 1 || mtu > 1540)
 		return FAULT_9005;	/* the fault the shell returned here */
