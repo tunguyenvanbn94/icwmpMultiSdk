@@ -288,6 +288,10 @@ int dm_browse(struct dmctx *dmctx, DMNODE *parent_node, DMOBJ *entryobj, void *d
 		node.instance_level = parent_node->instance_level;
 		node.matched = parent_node->matched;
 		dmasprintf(&(node.current_object), "%s%s%c", parent_obj, entryobj->obj, dm_delim);
+		if (entryobj->addressed_only &&
+		    (!dmctx->in_param ||
+		     strncmp(dmctx->in_param, node.current_object, strlen(node.current_object)) != 0))
+			continue;	/* see DMOBJ.addressed_only */
 		if (dmctx->checkobj) {
 			err = dmctx->checkobj(dmctx, &node, entryobj->permission, entryobj->addobj, entryobj->delobj, entryobj->forced_inform, entryobj->notification, entryobj->get_linker, data, instance);
 			if (err)
@@ -298,6 +302,15 @@ int dm_browse(struct dmctx *dmctx, DMNODE *parent_node, DMOBJ *entryobj, void *d
 			return err;
 		if (entryobj->checkobj && ((entryobj->checkobj)(dmctx, data) == false) ){
 			continue;
+		}
+		if (entryobj->browseinstobj && entryobj->container_leaf) {
+			/* see DMOBJ.container_leaf */
+			if (!dmctx->checkleaf ||
+			    !dmctx->checkleaf(dmctx, &node, entryobj->permission, entryobj->addobj, entryobj->delobj, entryobj->forced_inform, entryobj->notification, entryobj->get_linker, data, instance)) {
+				err = dm_browse_leaf(dmctx, &node, entryobj->container_leaf, data, instance);
+				if (dmctx->stop)
+					return err;
+			}
 		}
 		if (entryobj->browseinstobj) {
 			if (dmctx->instance_wildchar) {

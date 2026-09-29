@@ -132,6 +132,9 @@ static void merge_entry(DMOBJ *dst, DMOBJ *src)
 {
 	dst->nextobj = merge_obj(dst->nextobj, src->nextobj);
 	dst->leaf = merge_leaf(dst->leaf, src->leaf);
+	dst->container_leaf = merge_leaf(dst->container_leaf, src->container_leaf);
+	if (src->addressed_only)
+		dst->addressed_only = src->addressed_only;
 	if (src->permission)
 		dst->permission = src->permission;
 	if (src->addobj)

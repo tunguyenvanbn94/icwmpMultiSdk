@@ -130,7 +130,7 @@ typedef struct dm_leaf_s {
 } DMLEAF;
 
 typedef struct dm_obj_s {
-	/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker(11)*/
+	/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker, container_leaf, addressed_only(13)*/
 	char *obj;
 	struct dm_permession_s *permission;
 	int (*addobj)(char *refparam, struct dmctx *ctx, void *data, char **instance);
@@ -142,6 +142,20 @@ typedef struct dm_obj_s {
 	struct dm_obj_s *nextobj;
 	struct dm_leaf_s *leaf;
 	int (*get_linker)(char *refparam, struct dmctx *dmctx, void *data, char *instance, char **linker);
+	/* Leaves of a multi-instance object's CONTAINER, next to its instances:
+	 * "Obj.Leaf" beside "Obj.{i}.".  Not TR-098, but vendor shell data models
+	 * publish such paths (Layer3Forwarding.Forwarding.Enable) and an ACS
+	 * addresses them.  "leaf" above belongs to every instance; this list
+	 * belongs to the container node itself and is browsed there, before the
+	 * instances.  Last member on purpose: every existing positional
+	 * initializer leaves it NULL. */
+	struct dm_leaf_s *container_leaf;
+	/* Browsed only when the request addresses this object or something
+	 * below it (in_param starts with its path).  The easycwmp root entry is
+	 * a "case" on the requested path: SelfTestDiagnostics., WiFi., BulkData.
+	 * ... answer only when asked by name and are absent from a whole-tree
+	 * GetParameterNames/Values, from inform and from notifications. */
+	unsigned char addressed_only;
 } DMOBJ;
 
 #ifdef UPNP_TR064
