@@ -20,8 +20,8 @@
 #include "xml.h"
 #include "log.h"
 #ifdef TR098
-#include <icwmp_dm/wepkey.h>
-#include <icwmp_dm/dmentry.h>
+#include <libtr098/wepkey.h>
+#include <libtr098/dmentry.h>
 #include "icwmp_dm.h"
 #else
 #include <libbbfdm/wepkey.h>
@@ -359,18 +359,11 @@ ubus_init(struct cwmp *cwmp)
 		}
 	}
 	ctx = ubus_connect(cwmp->conf.ubus_socket);
-	if (!ctx) {
-		icwmp_boot_trace("ubus_connect(%s) failed: no tr069 ubus object", cwmp->conf.ubus_socket ? cwmp->conf.ubus_socket : "default");
-		return -1;
-	}
+	if (!ctx) return -1;
 
 	ubus_add_uloop(ctx);
 
-	if (ubus_add_object(ctx, &main_object)) {
-		icwmp_boot_trace("ubus_add_object(tr069) failed: no tr069 ubus object");
-		return -1;
-	}
-	icwmp_boot_trace("ubus object tr069 registered");
+	if (ubus_add_object(ctx, &main_object)) return -1;
 	/* bdk: CMS messages from tr69_md (ACS config changed, active
 	 * notification, WAN up) are served from this thread, next to ubus and
 	 * netlink; uci/mtk: nothing */

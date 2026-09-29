@@ -26,8 +26,8 @@
 #include "diagnostic.h"
 #include "config.h"
 #ifdef TR098
-#include <icwmp_dm/dmentry.h>
-#include <icwmp_dm/dmcommon.h>
+#include <libtr098/dmentry.h>
+#include <libtr098/dmcommon.h>
 #else
 #include <libbbfdm/dmentry.h>
 #include <libbbfdm/dmdiagnostics.h>

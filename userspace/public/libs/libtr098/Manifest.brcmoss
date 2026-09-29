@@ -1,0 +1,7 @@
+OSS_REFERENCE_Name: libtr098
+OSS_REFERENCE_BinaryName: libtr098.so
+OSS_REFERENCE_Version: iopsys bbf/tr-098 master dca7ba5ef0c5829ab0f450893cdd7aa077ccc2a8 (2020-05-31) + Marusys BDK platform layer (see libtr098/BDK-CHANGES.md)
+OSS_REFERENCE_License: GPL-2.0 (see libtr098/LICENSE)
+OSS_REFERENCE_DownloadURL: https://dev.iopsys.eu/bbf/tr-098
+OSS_REFERENCE_BroadcomURL: 
+OSS_Broadcom_RelativePath: ./libtr098

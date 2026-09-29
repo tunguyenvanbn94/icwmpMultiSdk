@@ -54,7 +54,7 @@
 #include "sdk/sdk.h"
 
 /* libtr098 BDK helpers (single MDM set with proper type lookup) */
-#include <icwmp_dm/dmbdk.h>
+#include <libtr098/dmbdk.h>
 
 #define BDK_LOCK_TIMEOUT_MS   (6 * 1000)   /* TR69C_LOCK_TIMEOUT */
 #define BDK_BOOT_WAIT_SEC     20           /* tr69c: wait for sysmgmt when boot launched */

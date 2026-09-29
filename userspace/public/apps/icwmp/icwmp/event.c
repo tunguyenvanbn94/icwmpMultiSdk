@@ -25,11 +25,11 @@
 #include "external.h"
 #include "config.h"
 #ifdef TR098
-#include <icwmp_dm/dmtr098.h>
-#include <icwmp_dm/dmcommon.h>
-#include <icwmp_dm/dmentry.h>
-#include <icwmp_dm/deviceinfo.h>
-#include <icwmp_dm/dmjson.h>
+#include <libtr098/dmtr098.h>
+#include <libtr098/dmcommon.h>
+#include <libtr098/dmentry.h>
+#include <libtr098/deviceinfo.h>
+#include <libtr098/dmjson.h>
 #else
 #include <libbbfdm/dmentry.h>
 #include <libbbfdm/deviceinfo.h>
@@ -297,10 +297,8 @@ void cwmp_add_notification_min(void) {
 	cwmp_dm_ctx_init(&cwmp_main, &dmctx);
 
 	fp = fopen(DM_ENABLED_NOTIFY, "r");
-	if (fp == NULL) {
-		cwmp_dm_ctx_clean(cwmp, &dmctx);
+	if (fp == NULL)
 		return;
-	}
 
 	while (fgets(buf, 512, fp) != NULL) {
 		dm_ctx_init_sub(&dmctx, DM_CWMP, cwmp_main.conf.amd_version, cwmp_main.conf.instance_mode);
@@ -378,15 +376,8 @@ void cwmp_add_notification(void)
 	cwmp_dm_ctx_init(&cwmp_main, &dmctx);
 
 	fp = fopen(DM_ENABLED_NOTIFY, "r");
-	if (fp == NULL) {
-		/* upstream returned here with mutex_session_send still held: the
-		 * next notify (value_monitoring, every 30 s), the session thread and
-		 * "ubus call tr069 dm" all blocked on it for good (HP2236B board,
-		 * 2026-09-27: every thread in futex_wait, no session after the first) */
-		cwmp_dm_ctx_clean(cwmp, &dmctx);
-		pthread_mutex_unlock(&(cwmp->mutex_session_send));
+	if (fp == NULL)
 		return;
-	}
 
 	while (fgets(buf, 512, fp) != NULL) {
 		dm_ctx_init_sub(&dmctx, DM_CWMP, cwmp_main.conf.amd_version, cwmp_main.conf.instance_mode);

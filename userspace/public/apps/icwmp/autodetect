@@ -1,2 +1,2 @@
 condition: ifneq ($(strip $(BUILD_ICWMP)),)
-dependson: public/libs/microxml public/libs/uci public/libs/libicwmp_dm public/libs/ubus public/libs/libubox public/libs/jsonc public/libs/curl public/libs/openssl public/libs/zlib private/libs/cms_qdm_sentinel private/libs/mdm_cbk_tr69
+dependson: public/libs/microxml public/libs/uci public/libs/libtr098 public/libs/ubus public/libs/libubox public/libs/jsonc public/libs/curl public/libs/openssl public/libs/zlib private/libs/cms_qdm_sentinel private/libs/mdm_cbk_tr69

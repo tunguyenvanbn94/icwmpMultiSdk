@@ -1,11 +1,4 @@
 # SDK "bdk" -- automake fragment, included from bin/Makefile.am.
-# bin/Makefile.am defines icwmp_tr098d_* only inside "if ICWMP_TR098", so every
-# "+=" here has to sit under that same condition.  automake checks this
-# statically over EVERY combination of conditions, not just the one configure
-# actually selects:
-#   error: cannot apply '+=' because 'icwmp_tr098d_SOURCES' is not defined
-#          in the following conditions: ICWMP_SDK_<X> and !ICWMP_TR098
-if ICWMP_TR098
 if ICWMP_SDK_BDK
 # C glue instead of the /usr/sbin/icwmp shell backend
 icwmp_tr098d_SOURCES +=	\
@@ -26,5 +19,4 @@ icwmp_tr098d_CFLAGS += -I../sdk/bdk -g
 # can name the functions of the executable, -g: addr2line on the build binary
 icwmp_tr098d_LDFLAGS += -rdynamic
 icwmp_tr098d_LDADD += $(BDK_LIBS)
-endif
 endif

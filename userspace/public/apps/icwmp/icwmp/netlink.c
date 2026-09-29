@@ -244,7 +244,7 @@ int netlink_init_v6(void)
 
 	addr.nl_family = AF_NETLINK;
 	addr.nl_groups = RTMGRP_IPV6_IFADDR;
-	if ((bind(sock[0], (struct sockaddr *)&addr, sizeof(addr))) == -1) {
+	if ((bind(sock[0], (struct sockaddr_in6 *)&addr, sizeof(addr))) == -1) {
 		CWMP_LOG(ERROR,"couldn't bind netlink socket");
 		return -1;
 	}

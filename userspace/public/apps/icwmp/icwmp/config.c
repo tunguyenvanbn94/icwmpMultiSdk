@@ -19,15 +19,14 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <errno.h>
 #include <getopt.h>
 #include "cwmp.h"
 #include "backupSession.h"
 #include "xml.h"
 #include "log.h"
 #ifdef TR098
-#include <icwmp_dm/dmentry.h>
-#include <icwmp_dm/deviceinfo.h>
+#include <libtr098/dmentry.h>
+#include <libtr098/deviceinfo.h>
 #else
 #include <libbbfdm/dmentry.h>
 #include <libbbfdm/dmbbfcommon.h>
@@ -1206,17 +1205,12 @@ int save_acs_bkp_config(struct cwmp *cwmp)
 
 int cwmp_get_deviceid(struct cwmp *cwmp) {
 	struct dmctx dmctx = {0};
-	icwmp_boot_trace("deviceid: dm ctx init ...");
 	cwmp_dm_ctx_init(cwmp, &dmctx);
-	icwmp_boot_trace("deviceid: reading identity from the data model ...");
 	cwmp->deviceid.manufacturer = strdup(get_deviceid_manufacturer()); //TODO free
 	cwmp->deviceid.serialnumber = strdup(get_deviceid_serialnumber());
 	cwmp->deviceid.productclass = strdup(get_deviceid_productclass());
 	cwmp->deviceid.oui = strdup(get_deviceid_manufactureroui());
 	cwmp->deviceid.softwareversion = strdup(get_softwareversion());
-	icwmp_boot_trace("deviceid: manufacturer '%s' oui '%s' class '%s' serial '%s' sw '%s'",
-			 cwmp->deviceid.manufacturer, cwmp->deviceid.oui, cwmp->deviceid.productclass,
-			 cwmp->deviceid.serialnumber, cwmp->deviceid.softwareversion);
 	cwmp_dm_ctx_clean(cwmp, &dmctx);
 	return CWMP_OK;
 }
@@ -1230,13 +1224,10 @@ int cwmp_init(int argc, char** argv,struct cwmp *cwmp)
     memset(&env,0,sizeof(struct env));
     if(error = global_env_init (argc, argv, &env))
     {
-        icwmp_boot_trace("global_env_init failed, error %d", error);
         return error;
     }
     /* Only One instance should run*/
     cwmp->pid_file = open("/var/run/icwmpd.pid", O_CREAT | O_RDWR, 0666);
-    if (cwmp->pid_file < 0)
-        icwmp_boot_trace("open /var/run/icwmpd.pid: %s", strerror(errno));
     fcntl(cwmp->pid_file, F_SETFD, fcntl(cwmp->pid_file, F_GETFD) | FD_CLOEXEC);
     int rc = flock(cwmp->pid_file, LOCK_EX | LOCK_NB);
     if(rc) {
@@ -1245,17 +1236,10 @@ int cwmp_init(int argc, char** argv,struct cwmp *cwmp)
         	char *piderr = "PID file creation failed: Quit the daemon!";
         	fprintf(stderr, "%s\n", piderr);
         	CWMP_LOG(ERROR, "%s",piderr);
-        	icwmp_boot_trace("flock /var/run/icwmpd.pid: %s: EXIT 1", strerror(errno));
         	exit(EXIT_FAILURE);
         }
-        else {
-        	/* silent in upstream: another process holds the lock (an
-        	 * icwmpd still running, or a child that inherited the fd) */
-        	icwmp_boot_trace("/var/run/icwmpd.pid is locked by another process: EXIT 0");
-        	exit(EXIT_SUCCESS);
-        }
+        else exit(EXIT_SUCCESS);
     }
-    icwmp_boot_trace("pid lock taken");
 
     pthread_mutex_init(&cwmp->mutex_periodic, NULL);
     pthread_mutex_init(&cwmp->mutex_session_queue, NULL);
@@ -1269,20 +1253,14 @@ int cwmp_init(int argc, char** argv,struct cwmp *cwmp)
     if (icwmp_platform_init() != 0)
     {
         CWMP_LOG(ERROR, "platform init failed, exiting");
-        icwmp_boot_trace("icwmp_platform_init failed: EXIT 1");
         exit(EXIT_FAILURE);
     }
-    icwmp_boot_trace("platform init ok");
     if(error = global_conf_init(&(cwmp->conf)))
     {
-        icwmp_boot_trace("global_conf_init failed, error %d (uci cwmp.acs / cwmp.cpe)", error);
         return error;
     }
-    icwmp_boot_trace("global_conf_init ok, amd %d, instance mode %d", (int)cwmp->conf.amd_version, (int)cwmp->conf.instance_mode);
     cwmp_get_deviceid(cwmp);
-    icwmp_boot_trace("dm_entry_load_enabled_notify ...");
     dm_entry_load_enabled_notify(DM_CWMP, cwmp->conf.amd_version, cwmp->conf.instance_mode, add_list_value_change, send_active_value_change);
-    icwmp_boot_trace("dm_entry_load_enabled_notify done");
     return CWMP_OK;
 }
 

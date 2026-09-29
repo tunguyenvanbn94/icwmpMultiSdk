@@ -174,14 +174,10 @@ int icwmp_mtk_sync_easycwmp_to_cwmp(void)
 			continue;
 		if (uci_set_str(c, m->cwmp, v) == 0) {
 			changed = 1;
-			/* Braces are load-bearing: inc/log.h defines CWMP_LOG with a
-			 * trailing ";", so an unbraced branch leaves a null statement
-			 * between the if and the else ("expected '}' before 'else'"). */
-			if (is_secret(m->cwmp)) {
+			if (is_secret(m->cwmp))
 				CWMP_LOG(INFO, "sync easycwmp->cwmp %s (masked)", m->cwmp);
-			} else {
+			else
 				CWMP_LOG(INFO, "sync easycwmp->cwmp %s=%s", m->cwmp, v);
-			}
 		}
 	}
 	if (changed)
@@ -236,24 +232,8 @@ int icwmp_platform_init(void)
 	struct stat st;
 
 	/* backup session file and boot flag live here (bin/Makefile.am CWMP_BKP_FILE) */
-	if (stat(ICWMP_MTK_STATE_DIR, &st) != 0 && mkdir(ICWMP_MTK_STATE_DIR, 0755) != 0) {
+	if (stat(ICWMP_MTK_STATE_DIR, &st) != 0 && mkdir(ICWMP_MTK_STATE_DIR, 0755) != 0)
 		CWMP_LOG(ERROR, "cannot create %s: %s", ICWMP_MTK_STATE_DIR, strerror(errno));
-	}
-	/* the directory of libtr098's DM_ENABLED_NOTIFY (/etc/tr098): nothing on
-	 * this product creates it, so the enabled-notify file could never be
-	 * written and value change notification never worked */
-	{
-		char dir[128], *slash;
-
-		snprintf(dir, sizeof(dir), "%s", DM_ENABLED_NOTIFY);
-		slash = strrchr(dir, '/');
-		if (slash && slash != dir) {
-			*slash = '\0';
-			if (stat(dir, &st) != 0 && mkdir(dir, 0755) != 0) {
-				CWMP_LOG(ERROR, "cannot create %s: %s", dir, strerror(errno));
-			}
-		}
-	}
 	icwmp_mtk_sync_easycwmp_to_cwmp();
 	return 0;
 }
