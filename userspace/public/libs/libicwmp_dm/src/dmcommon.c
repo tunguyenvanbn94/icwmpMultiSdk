@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <spawn.h>
 #include <uci.h>
 #include <ctype.h>
 #include <netdb.h>
@@ -371,6 +372,8 @@ int set_interface_firewall_enabled(char *iface, char *refparam, struct dmctx *ct
 	return 0;
 }
 
+extern char **environ;
+
 int dmcmd(char *cmd, int n, ...)
 {
 	va_list arg;
@@ -392,22 +395,27 @@ int dmcmd(char *cmd, int n, ...)
 	if (pipe(dmcmd_pfds) < 0)
 		return -1;
 
-	if ((pid = fork()) == -1)
-		return -1;
+	/* posix_spawn instead of fork: every "ubus call" a getter makes comes
+	 * through here, and fork() copied the page tables of the whole
+	 * multi-threaded agent each time (vfork semantics in glibc and musl).
+	 * A command that cannot be started reads as empty output, like the
+	 * exec failure of the forked child did. */
+	{
+		posix_spawn_file_actions_t fa;
+		pid_t spid;
+		int rc;
 
-	if (pid == 0) {
-		/* child */
-		close(dmcmd_pfds[0]);
-		dup2(dmcmd_pfds[1], 1);
+		posix_spawn_file_actions_init(&fa);
+		posix_spawn_file_actions_addclose(&fa, dmcmd_pfds[0]);
+		posix_spawn_file_actions_adddup2(&fa, dmcmd_pfds[1], 1);
+		posix_spawn_file_actions_addclose(&fa, dmcmd_pfds[1]);
+		rc = posix_spawnp(&spid, argv[0], &fa, NULL, (char **) argv, environ);
+		posix_spawn_file_actions_destroy(&fa);
 		close(dmcmd_pfds[1]);
-
-		execvp(argv[0], (char **) argv);
-		exit(ESRCH);
-	} else if (pid < 0)
-		return -1;
-
-	/* parent */
-	close(dmcmd_pfds[1]);
+		if (rc != 0)
+			return dmcmd_pfds[0];
+		pid = spid;
+	}
 
 	int status;
 	while (waitpid(pid, &status, 0) != pid)
@@ -439,31 +447,41 @@ int dmcmd_no_wait(char *cmd, int n, ...)
 
 	argv[n+1] = NULL;
 
-	if ((pid = fork()) == -1)
-		return -1;
+	/* not waited for: the uloop thread of the agent reaps it (SIGCHLD) */
+	{
+		pid_t spid;
 
-	if (pid == 0) {
-		execvp(argv[0], (char **) argv);
-		exit(ESRCH);
-	} else if (pid < 0)
-		return -1;
+		if (posix_spawnp(&spid, argv[0], NULL, NULL, (char **) argv, environ) != 0)
+			return -1;
+	}
+	(void)pid;
 	return 0;
 }
 
 void dmcmd_read_alloc(int pipe, char **value)
 {
-	char *c = NULL;
-	char buffer[64];
+	char buffer[4096];
 	ssize_t rxed;
-	int t, len = 1;
+	size_t len = 0, cap = 0;
 
+	/* 4 KB reads into a buffer that doubles: the JSON of a "ubus call"
+	 * used to be grown 63 bytes at a time, one realloc + copy each */
 	*value = NULL;
-	while ((rxed = read(pipe, buffer, sizeof(buffer) - 1)) > 0) {
-		t = len;
-		len += rxed;
-		*value = dmrealloc(*value, len);
-		memcpy(*value + t - 1, buffer, rxed);
-		*(*value + len -1) = '\0';
+	while ((rxed = read(pipe, buffer, sizeof(buffer))) > 0) {
+		if (len + (size_t)rxed + 1 > cap) {
+			char *nv;
+
+			cap = cap ? cap * 2 : sizeof(buffer);
+			while (len + (size_t)rxed + 1 > cap)
+				cap *= 2;
+			nv = dmrealloc(*value, cap);
+			if (!nv)
+				break;
+			*value = nv;
+		}
+		memcpy(*value + len, buffer, (size_t)rxed);
+		len += (size_t)rxed;
+		(*value)[len] = '\0';
 	}
 	if (*value == NULL)
 		*value = dmstrdup("");

@@ -3,9 +3,9 @@
 # the DM_ENABLED_NOTIFY diff, event.c cwmp_add_notification).  Same loop as
 # easycwmp's valuemonitoring.sh; one instance only.
 kill -9 `ps | grep "value_monitoring" | grep -v grep | grep -v "$$" | awk '{ print $1 }'` 2>/dev/null
+# one ubus process per round: a call to a missing tr069 object just fails,
+# the "ubus list" check in front of it was a second process for nothing
 while true; do
-	if ubus list tr069 >/dev/null 2>&1; then
-		ubus call tr069 notify >/dev/null 2>&1
-	fi
+	ubus call tr069 notify >/dev/null 2>&1
 	sleep ${1:-30}
 done
