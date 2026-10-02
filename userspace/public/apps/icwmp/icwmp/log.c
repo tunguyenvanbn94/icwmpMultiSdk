@@ -140,15 +140,16 @@ void puts_log(int severity, const char *fmt, ...)
         }
     }
     va_start(args, fmt);
-    i += vsprintf(buf+i, fmt, args);
-    if(enable_log_file)
+    /* bounded: a long URL or curl error used to run vsprintf() past the
+     * 1 KB stack buffer; a longer line is cut, not overflowed */
+    vsnprintf(buf+i, sizeof(buf)-i, fmt, args);
+    if(enable_log_file && pLog)	/* fopen() fails on a full /var: no log line, no crash */
     {
-        strcpy(buf_file,buf);
-        strcat(buf_file,"\n");
+        snprintf(buf_file, sizeof(buf_file), "%s\n", buf);
         fputs (buf_file, pLog);
     }
     va_end(args);
-    if(enable_log_file)
+    if(pLog)
     {
         fclose(pLog);
     }
@@ -223,13 +224,16 @@ void puts_log_xmlmsg(int severity, char *msg, int msgtype)
         {
             pLog = fopen(log_file_name,"a+");
         }
-        fputs (buf, pLog);
-        fputs(description, pLog);
-        fputs(separator, pLog);
-        fputs (msg, pLog);
-        fputs ("\n", pLog);
-        fputs(separator, pLog);
-        fclose(pLog);
+        if (pLog)
+        {
+            fputs (buf, pLog);
+            fputs(description, pLog);
+            fputs(separator, pLog);
+            fputs (msg, pLog);
+            fputs ("\n", pLog);
+            fputs(separator, pLog);
+            fclose(pLog);
+        }
         
     }
     if(enable_log_stdout)
