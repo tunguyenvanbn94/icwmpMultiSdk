@@ -969,13 +969,14 @@ int get_lwn_config(struct config *conf)
     }
     if((error = uci_get_value(LW_NOTIFICATION_HOSTNAME,&value)) == CWMP_OK)
     {
+        /* replaced on every config reload: free the previous one */
+        FREE(conf->lw_notification_hostname);
         if(value != NULL)
         {
-            conf->lw_notification_hostname = strdup(value);
-            free(value);
+            conf->lw_notification_hostname = value;
             value = NULL;
         }
-        else
+        else if (conf->acsurl)
         {
             conf->lw_notification_hostname = strdup(conf->acsurl);
         }
@@ -1290,9 +1291,41 @@ int cwmp_config_reload(struct cwmp *cwmp)
 {
     int error;
 	struct config   *conf;
+    /* The memset below dropped every string the old config held (ACS URL
+     * and credentials, interface, CA path, ...): a few hundred bytes lost
+     * per reload, and an ACS that writes ManagementServer.* reloads at the
+     * end of every session.  They are not freed right away: the uloop
+     * thread (ubus "status", netlink) reads some of them without a lock, so
+     * this reload's strings are freed by the next reload, by when nobody
+     * can still be holding one.  The addresses belong to the netlink
+     * thread: kept (zeroing them also lost the CPE address until the next
+     * netlink event). */
+    static char *retired[11];
+    char *ip, *ipv6;
+    size_t i;
+
     conf = &(cwmp->conf);
     memset(&cwmp->env,0,sizeof(struct env));
-    memset(&cwmp->conf,0,sizeof(struct config));
+    pthread_mutex_lock(&mutex_config_load);
+    for (i = 0; i < sizeof(retired) / sizeof(retired[0]); i++)
+        FREE(retired[i]);
+    retired[0] = conf->acsurl;
+    retired[1] = conf->acs_userid;
+    retired[2] = conf->acs_passwd;
+    retired[3] = conf->acs_ssl_capath;
+    retired[4] = conf->acs_ssl_version;
+    retired[5] = conf->https_ssl_capath;
+    retired[6] = conf->cpe_userid;
+    retired[7] = conf->cpe_passwd;
+    retired[8] = conf->interface;
+    retired[9] = conf->ubus_socket;
+    retired[10] = conf->lw_notification_hostname;
+    ip = conf->ip;
+    ipv6 = conf->ipv6;
+    memset(conf,0,sizeof(struct config));
+    conf->ip = ip;
+    conf->ipv6 = ipv6;
+    pthread_mutex_unlock(&mutex_config_load);
     /* mtk: pull the easycwmp config of record into the cwmp config first */
     icwmp_platform_config_reload();
     if(error = global_conf_init(&(cwmp->conf)))

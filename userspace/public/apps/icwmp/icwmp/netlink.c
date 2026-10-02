@@ -111,7 +111,8 @@ static void freecwmp_netlink_interface(struct nlmsghdr *nlh)
 			}
 
 			if_indextoname(ifa->ifa_index, if_name);
-			if (itfcmp(cwmp_main.conf.interface, if_name)) {
+			/* NULL while a config reload rebuilds conf (memset) */
+			if (!cwmp_main.conf.interface || itfcmp(cwmp_main.conf.interface, if_name)) {
 				rth = RTA_NEXT(rth, rtl);
 				continue;
 			}
@@ -136,7 +137,7 @@ static void freecwmp_netlink_interface(struct nlmsghdr *nlh)
 			}
 			inet_ntop(AF_INET6, RTA_DATA(rth), pradd_v6, sizeof(pradd_v6));
 			if_indextoname(ifa->ifa_index, if_name);
-			if (strncmp(cwmp_main.conf.interface, if_name, IFNAMSIZ)) {
+			if (!cwmp_main.conf.interface || strncmp(cwmp_main.conf.interface, if_name, IFNAMSIZ)) {
 				rth = RTA_NEXT(rth, rtl);
 				continue;
 			}

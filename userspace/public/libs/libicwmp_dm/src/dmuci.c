@@ -355,17 +355,18 @@ int dmuci_commit(void)
 	for (p = configs; *p; p++) {
 		dmuci_commit_package(*p);
 	}
-	if(uci_ctx_tr098)
-	{
-		if ((uci_list_configs(uci_ctx_tr098, &tr098_configs) != UCI_OK) || !tr098_configs) {
-			return -1;
-		}
+	free(configs);
+	/* /etc/tr098 usually holds no UCI file at all (MTK): the listing then
+	 * fails, which is "nothing to commit", not an error.  It used to return
+	 * here before free(configs) -- one leak per data model call, so per
+	 * GPV/SPV/notify, for the life of icwmpd. */
+	if (uci_ctx_tr098 &&
+	    uci_list_configs(uci_ctx_tr098, &tr098_configs) == UCI_OK && tr098_configs) {
 		for (p = tr098_configs; *p; p++) {
 			DMUCI_COMMIT_PACKAGE(tr098, *p);
 		}
+		free(tr098_configs);
 	}
-	free(configs);
-	free(tr098_configs);
 	return 0;
 }
 
@@ -395,6 +396,7 @@ int dmuci_revert(void)
 	for (p = configs; *p; p++) {
 		dmuci_revert_package(*p);
 	}
+	free(configs);
 	return 0;
 }
 
@@ -413,8 +415,9 @@ int dmuci_change_packages(struct list_head *clist)
 		}
 		if (uci_list_empty(&ptr.p->delta))
 			continue;
-		add_list_package_change(clist, *p);
+		add_list_package_change(clist, *p);	/* keeps a copy */
 	}
+	free(configs);
 	return 0;
 }
 

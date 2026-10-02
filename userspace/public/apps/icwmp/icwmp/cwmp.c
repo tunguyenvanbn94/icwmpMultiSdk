@@ -377,8 +377,11 @@ void cwmp_schedule_session (struct cwmp *cwmp)
     	if (access(fc_cookies, F_OK) != -1)
     		remove(fc_cookies);
         CWMP_LOG (INFO,"Start session");
+        /* one string per session, and no option at all is not "1" (the
+         * strcmp() of a NULL here crashed icwmpd) */
+        FREE(exec_download);
         uci_get_value(UCI_CPE_EXEC_DOWNLOAD, &exec_download);
-        if(strcmp(exec_download, "1") == 0){
+        if(exec_download && strcmp(exec_download, "1") == 0){
         	CWMP_LOG(INFO, "Firmware downloaded and applied successfully");
         	uci_set_value("cwmp.cpe.exec_download=0");
         }

@@ -304,7 +304,24 @@ http_send_message(struct cwmp *cwmp, char *msg_out, int msg_out_len,char **msg_i
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, false);
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
 	}
-	uci_get_value(UCI_CPE_INTERFACE_PATH, &(cwmp->conf.interface));
+	/* re-read on every message (the WAN may have moved).  The previous
+	 * string used to be overwritten: one leak per SOAP message.  Replace it
+	 * only when it changed, and free the one before it (the netlink
+	 * handler of the uloop thread reads it without a lock). */
+	{
+		static char *retired_itf;
+		char *itf = NULL;
+
+		if (uci_get_value(UCI_CPE_INTERFACE_PATH, &itf) == CWMP_OK && itf) {
+			if (cwmp->conf.interface && strcmp(cwmp->conf.interface, itf) == 0) {
+				free(itf);
+			} else {
+				FREE(retired_itf);
+				retired_itf = cwmp->conf.interface;
+				cwmp->conf.interface = itf;
+			}
+		}
+	}
 	curl_easy_setopt(curl, CURLOPT_INTERFACE, cwmp->conf.interface);
 	*msg_in = (char *) calloc (1, sizeof(char));
 
@@ -438,6 +455,7 @@ void http_success_cr()
  *  - no credentials configured -> 503 (upstream), instead of answering 200 */
 #define CR_SOCKET_TIMEOUT_SEC 10
 
+/* client: the accepted socket, closed here on every path */
 static void http_cr_new_client(int client, bool service_available)
 {
 	FILE *fp;
@@ -456,6 +474,7 @@ static void http_cr_new_client(int client, bool service_available)
 	fp = fdopen(client, "r+");
 	if (fp == NULL) {
 		CWMP_LOG (ERROR,"Connection Request: fdopen failed, errno %d", errno);
+		close(client);
 		pthread_mutex_unlock (&mutex_config_load);
 		return;
 	}
@@ -554,14 +573,23 @@ static void http_server_nonce_key(void)
 void http_server_init(void)
 {
 	struct sockaddr_in6 server = {0};
+	struct sockaddr_in server4 = {0};
 	unsigned short cr_port;
+	int family = AF_INET6;
 
 	http_server_nonce_key();
 	for(;;) {
 		cr_port =  (unsigned short) (cwmp_main.conf.connection_request_port);
 		unsigned short i = (DEFAULT_CONNECTION_REQUEST_PORT == cr_port)? 1 : 0;
 		//Create socket
-		cwmp_main.cr_socket_desc = socket(AF_INET6 , SOCK_STREAM , 0);
+		cwmp_main.cr_socket_desc = socket(family , SOCK_STREAM , 0);
+		if (cwmp_main.cr_socket_desc == -1 && family == AF_INET6 && errno == EAFNOSUPPORT)
+		{
+			/* kernel without IPv6: retrying AF_INET6 can never succeed */
+			CWMP_LOG (WARNING,"No IPv6 in this kernel, Connection Request server on IPv4 only");
+			family = AF_INET;
+			continue;
+		}
 		if (cwmp_main.cr_socket_desc == -1)
 		{
 			CWMP_LOG (ERROR,"Could not open server socket for Connection Requests, Error no is : %d, Error description is : %s", errno, strerror(errno));
@@ -580,11 +608,20 @@ void http_server_init(void)
 		//Prepare the sockaddr_in structure
 		server.sin6_family = AF_INET6;
 		server.sin6_addr=in6addr_any;
+		server4.sin_family = AF_INET;
+		server4.sin_addr.s_addr = htonl(INADDR_ANY);
 		
 		for(;;i++) {
+			int r;
+
 			server.sin6_port = htons(cr_port);
+			server4.sin_port = htons(cr_port);
 			//Bind
-			if( bind(cwmp_main.cr_socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0)
+			if (family == AF_INET6)
+				r = bind(cwmp_main.cr_socket_desc,(struct sockaddr *)&server , sizeof(server));
+			else
+				r = bind(cwmp_main.cr_socket_desc,(struct sockaddr *)&server4 , sizeof(server4));
+			if (r < 0)
 			{
 				//print the error message
 				CWMP_LOG (ERROR,"Could not bind server socket on the port %d, Error no is : %d, Error description is : %s", cr_port, errno, strerror(errno));
@@ -610,21 +647,39 @@ void http_server_listen(void)
 	static time_t restrict_start_time = 0;
 	time_t current_time;
 	bool service_available;
-	struct sockaddr_in6 client;
+	struct sockaddr_storage client;
 
 	//Listen
 	listen(cwmp_main.cr_socket_desc , 3);
 
 	//Accept and incoming connection
-	c = sizeof(client);          /* sockaddr_in6: sizeof(sockaddr_in) truncated the peer address */
-	while( (client_sock = accept(cwmp_main.cr_socket_desc, (struct sockaddr *)&client, (socklen_t*)&c)) )
+	for (;;)
 	{
 		char peer[INET6_ADDRSTRLEN] = "?";
 
-		/* who is knocking: proves the ACS (or a NAT port forward) reaches us */
-		inet_ntop(AF_INET6, &client.sin6_addr, peer, sizeof(peer));
-		CWMP_LOG(INFO, "Connection Request from %s", peer);
+		/* sockaddr_storage: an IPv6 peer used to be truncated */
 		c = sizeof(client);
+		client_sock = accept(cwmp_main.cr_socket_desc, (struct sockaddr *)&client, (socklen_t*)&c);
+		/* "while (client_sock = accept(...))" took -1 for a client: an
+		 * interrupted or failed accept() went on with a garbage peer and
+		 * fd -1, and a lasting error (EMFILE) spun this thread at 100% CPU */
+		if (client_sock < 0)
+		{
+			if (errno == EINTR || errno == ECONNABORTED || errno == EAGAIN)
+				continue;
+			if (errno == EBADF || errno == EINVAL || errno == ENOTSOCK)
+				break;			/* listener closed (exit / restart) */
+			CWMP_LOG(ERROR,"Connection Request: accept failed, errno %d (%s)", errno, strerror(errno));
+			sleep(1);			/* out of fds or memory: retry, slowly */
+			continue;
+		}
+
+		/* who is knocking: proves the ACS (or a NAT port forward) reaches us */
+		if (client.ss_family == AF_INET6)
+			inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&client)->sin6_addr, peer, sizeof(peer));
+		else if (client.ss_family == AF_INET)
+			inet_ntop(AF_INET, &((struct sockaddr_in *)&client)->sin_addr, peer, sizeof(peer));
+		CWMP_LOG(INFO, "Connection Request from %s", peer);
 		current_time = time(NULL);
 		service_available = true;
 		if ((restrict_start_time==0) ||
@@ -642,13 +697,10 @@ void http_server_listen(void)
 				service_available = false;
 			}
 		}
+		/* takes the socket: fclose() of its stream closes it.  A close()
+		 * here as well closed the same number a second time -- by then
+		 * possibly a socket or file another thread had just opened. */
 		http_cr_new_client(client_sock, service_available);
-		close(client_sock);
 	}
-
-	if (client_sock < 0)
-	{
-		CWMP_LOG(ERROR,"Could not accept connections for Connection Requests!");
-		return;
-	}
+	CWMP_LOG(ERROR,"Could not accept connections for Connection Requests!");
 }

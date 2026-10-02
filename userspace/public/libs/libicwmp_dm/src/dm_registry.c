@@ -75,6 +75,47 @@ void dm_registry_add(const struct dm_module *mod)
 /* merge                                                               */
 /* ------------------------------------------------------------------ */
 
+/* Arrays the merge allocated (module tables are static).  A merge that
+ * returns a new array makes its first input garbage when that input was
+ * one of these: free it.  Without this every intermediate root of the
+ * module-by-module merge stayed allocated, ~36 KB per process for the MTK
+ * tree.  Only touched from build(), under registry_lock. */
+static void **merged;
+static int nmerged, capmerged;
+
+static void *merged_alloc(size_t n, size_t size)
+{
+	void *p;
+
+	if (nmerged == capmerged) {
+		int cap = capmerged ? capmerged * 2 : 64;
+		void **nm = realloc(merged, cap * sizeof(*nm));
+
+		if (!nm)
+			return NULL;
+		merged = nm;
+		capmerged = cap;
+	}
+	p = calloc(n, size);
+	if (p)
+		merged[nmerged++] = p;
+	return p;
+}
+
+/* free p when the merge allocated it, no-op for a module table */
+static void merged_release(void *p)
+{
+	int i;
+
+	for (i = 0; i < nmerged; i++) {
+		if (merged[i] == p) {
+			merged[i] = merged[--nmerged];
+			free(p);
+			return;
+		}
+	}
+}
+
 static int count_obj(DMOBJ *t)
 {
 	int n = 0;
@@ -107,7 +148,7 @@ static DMLEAF *merge_leaf(DMLEAF *a, DMLEAF *b)
 	if (!nb)
 		return a;
 
-	out = calloc(na + nb + 1, sizeof(DMLEAF));
+	out = merged_alloc(na + nb + 1, sizeof(DMLEAF));
 	if (!out)
 		return a;
 	for (i = 0; i < na; i++)
@@ -123,6 +164,7 @@ static DMLEAF *merge_leaf(DMLEAF *a, DMLEAF *b)
 			out[n++] = b[j];
 	}
 	memset(&out[n], 0, sizeof(DMLEAF));
+	merged_release(a);	/* its entries live on in out */
 	return out;
 }
 
@@ -163,7 +205,7 @@ static DMOBJ *merge_obj(DMOBJ *a, DMOBJ *b)
 	if (!nb)
 		return a;
 
-	out = calloc(na + nb + 1, sizeof(DMOBJ));
+	out = merged_alloc(na + nb + 1, sizeof(DMOBJ));
 	if (!out)
 		return a;
 	for (i = 0; i < na; i++)
@@ -179,6 +221,9 @@ static DMOBJ *merge_obj(DMOBJ *a, DMOBJ *b)
 			out[n++] = b[j];
 	}
 	memset(&out[n], 0, sizeof(DMOBJ));
+	merged_release(a);	/* its entries live on in out; a nested array
+				 * merge_entry() replaced was released by that
+				 * merge already */
 	return out;
 }
 
