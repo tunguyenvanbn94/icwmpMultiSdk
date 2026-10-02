@@ -224,9 +224,14 @@ void external_exit()
 
 	json_object_put(json_obj_out);
 
-	while (wait(&status) != pid) {
-		DD(DEBUG, "waiting for child to exit");
-	}
+	/* this child only: wait() took any child and looped until it saw this
+	 * one, but the uloop thread (libubox SIGCHLD handling) reaps every child
+	 * of the process with waitpid(-1, WNOHANG) as soon as it wakes up.  When
+	 * it got there first, wait() then blocked on the data model shell, which
+	 * never exits, or returned -1 forever without one: the session thread
+	 * hung, or spun at 100% CPU.  ECHILD = already reaped, nothing to wait for. */
+	while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+		;
 
 	close(pfds_in[0]);
     close(pfds_out[1]);

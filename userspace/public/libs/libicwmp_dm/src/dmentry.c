@@ -20,6 +20,7 @@
 #include "wepkey.h"
 #include <unistd.h>
 #include <sys/wait.h>
+#include <errno.h>
 #include <ctype.h>
 #include "dmcommon.h"
 #include "dmtr098.h"
@@ -1167,8 +1168,12 @@ static int dmentry_external_cmd(char **argv)
 	} else if (pid < 0)
 		return -1;
 
+	/* this child only, and stop when it is gone (ECHILD): the uloop thread
+	 * of icwmpd reaps any child with waitpid(-1); wait() for "any child
+	 * until it is this one" then blocks or spins forever */
 	int status;
-	while (wait(&status) != pid);
+	while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+		;
 
 	return 0;
 }
