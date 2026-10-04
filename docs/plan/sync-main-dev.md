@@ -99,6 +99,9 @@ và các crash do RPC (0077). `dev` trội hơn hẳn `main` về độ đúng r
 | **K11** | quy trình → **sửa** | Commit docs `f410de4` sửa `README.md` (thuộc bundle) mà không cập nhật `SHA256SUMS`/`MANIFEST.json`: `sha256sum -c` FAIL, `apply` có thể từ chối | `sha256sum -c` báo `README.md: FAILED` | `docs/issue/update-sums.py` (`--check` là cổng PR, `--staged` dùng trước commit) | xong |
 | K12 | thấp | Thread Download/Upload chờ `mutex_session_send`; khi các phiên nối tiếp nhau (ACS gửi CR liên tục) transfer chỉ chạy khi có khoảng trống giữa hai phiên | host valgrind: 4 Download chạy cùng lúc sau phiên cuối, giống nhau trên build trước 0078 và sau 0079 | hành vi upstream; xem lại khi làm regression RPC ở PH5 | PH5 |
 | K9 | đa SDK | `check-c-sanity` cho lib BDK/UCI có nhiễu (thiếu header vendor, danh sách libc chưa đủ); BDK chưa build với 0067–0077 | chạy 2026-10-04: lib/bdk 4, lib/uci 3 "vấn đề" đều là cảnh báo giả | PH0.1 build BDK thật; cổng tĩnh chỉ tính lib/mtk + app×3 | PH0.1 |
+| **K13** | cao | 0078 bỏ một phần validation/side effect của shell sản phẩm: URL không kiểm scheme và không ghi `/usr/share/easycwmp/defaults` (shell `management_server:69,75`), STUNServerAddress không qua `is_valid_domain`/`is_valid_ip` (`:114`) | đọc shell SDK so với `managementserver_mtk.c`; chưa chạy board | test SPV URL không scheme, STUN address sai, GPV sau phiên/reboot; quyết định sản phẩm giữ hay bỏ từng side effect | PH0 |
+| **K14** | trung bình | PeriodicInformTime chỉ kiểm hình dạng: `ms_valid_datetime` không kiểm lịch/timezone, `config.c` `periodic_time_value` không kiểm ngày của tháng, giờ, suffix | source | thống nhất validation với parser; test leap day, ngày không tồn tại, giờ ≥24, timezone sai; fault 9007 không đổi mốc Inform | PH0 |
+| **K15** | trung bình | Agent/AP sau controller: `icwmpd.init:125` không chạy khi `opermode=auto`, `:139-140` network mặc định `if0`, `:167` không có IP thì chỉ chờ. `stuncd.init:26` (vendor) có cổng opmode riêng, biến không nháy: opmode rỗng → busybox `[ != auto ]` exit 2 → icwmpd chạy còn stuncd không | source icwmpd.init + stuncd.init + busybox 1.33.1 `test.c` | đổi cổng ở cả hai script cùng lúc, bọc nháy; chọn network theo opmode hay cấu hình; CR qua STUN (G7) hoặc port-forward + `cr_host` | PH0 quyết định sản phẩm, board |
 
 ### 3.1 K1: cơ chế và bảng config of record
 
@@ -312,6 +315,6 @@ nào có hành vi bị đổi. Một lỗi đã sửa thì phải có test host 
 1. ~~Merge kế hoạch vào `dev`~~ (xong). Xóa `claude/ecstatic-carson-*` và `claude/sync-main-dev-*`.
 2. **PH0.1:** build SDK MTK và BDK tại HEAD `dev` (0034–0079). Đạt thì fast-forward `main`.
 3. ~~PH0.2: K1 + K2~~ (0078), ~~K10~~ (0079), ~~PH0.3: K3, K6~~: xong trên host.
-4. **PH0.4–0.5:** gate board G1–G9, tag baseline, cập nhật JSON. G6 kiểm thêm PeriodicInformTime
+4. **PH0.4–0.5:** chốt K13/K14 (có test host) và quyết định sản phẩm cho K15, rồi gate board G1–G9, tag baseline, cập nhật JSON. G6 kiểm thêm PeriodicInformTime
    (đặt một mốc, xem giờ phiên định kỳ); G7 xác nhận ai đọc `/tmp/stunclient_reload_needed`.
 5. Sau đó mới bắt đầu PH1 (resolver), PH2 (provider/routing), PH3 (service ManagementServer).
