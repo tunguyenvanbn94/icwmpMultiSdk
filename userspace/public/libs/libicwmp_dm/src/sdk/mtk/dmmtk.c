@@ -474,6 +474,27 @@ int mtk_apply_service(const char *cmd)
 	return 0;
 }
 
+int mtk_apply_service_once(const char *cmd)
+{
+	char line[512];
+	FILE *f;
+
+	if (!cmd || !*cmd)
+		return -1;
+	f = fopen(APPLY_SERVICE_FILE, "r");
+	if (f) {
+		while (fgets(line, sizeof(line), f)) {
+			line[strcspn(line, "\r\n")] = '\0';
+			if (strcmp(line, cmd) == 0) {
+				fclose(f);
+				return 0;
+			}
+		}
+		fclose(f);
+	}
+	return mtk_apply_service(cmd);
+}
+
 void mtk_run_apply_service(void)
 {
 	char line[512];

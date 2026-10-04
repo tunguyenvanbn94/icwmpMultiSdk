@@ -46,13 +46,14 @@
  *	                                         static tree changed + script
  *	                                         "apply_service" (ucitrack restarts)
  *
- *	ManagementServer.* is served by the script (easycwmp.@acs[0]/@local[0]
- *	UCI, STUN leaves of the stunclient app included): the easycwmp config
- *	stays the config of record of the product (WebUI, DHCP option 43 parser,
- *	stuncd).  icwmpd mirrors it into its own cwmp UCI config at start / reload
- *	/ end of session (icwmp mtk/icwmp_mtk.c).  A SPV that touches
- *	ManagementServer.* or DeviceInfo.ProvisioningCode therefore ends the
- *	session with END_SESSION_RELOAD.
+ *	ManagementServer.* is native C (dm098/managementserver_mtk.c over the
+ *	portable tr098/managementserver.c), and still reads and writes the
+ *	product's stores: easycwmp.@acs[0]/@local[0] stays the config of record
+ *	(WebUI, DHCP option 43 parser, stuncd), STUN is stun.@stun[0].  icwmpd
+ *	mirrors easycwmp into its own cwmp UCI config at start / reload / end of
+ *	session (icwmp sdk/mtk/icwmp_mtk.c), so a native setter of an easycwmp
+ *	leaf ends the session with END_SESSION_RELOAD, and so does a script SPV
+ *	under ManagementServer.* or of DeviceInfo.ProvisioningCode (below).
  *
  *	NOT BUILD-TESTED YET.
  */

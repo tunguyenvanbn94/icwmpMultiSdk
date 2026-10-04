@@ -51,6 +51,9 @@ char *mtk_exec_line(char *const argv[]);
  * /tmp/.easycwmp_apply_service, run by sdk/mtk/compat/icwmp_dm.sh
  * "apply_service" from dm_platform_restart_services(). */
 int mtk_apply_service(const char *cmd);
+/* Same, unless that exact line is already queued: one service reload per
+ * session however many leaves of the service an RPC sets. */
+int mtk_apply_service_once(const char *cmd);
 /* Run everything queued there and empty the file.  Called at the end of a
  * session by dm_platform_restart_services() when the shell fallback is not
  * compiled in (--disable-dm-script-compat). */
