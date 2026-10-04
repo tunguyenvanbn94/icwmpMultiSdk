@@ -406,7 +406,7 @@
     "userspace/public/libs/libicwmp_dm/src/configure.ac": "a4b6b5fcbf24ad44ff110edacaa1bfbb2353fb8cb9baac9c504609b7d5389000",
     "userspace/public/libs/libicwmp_dm/src/dm_registry.c": "8587dda7b16840eca4aaa8089281d958fdc890556d4349af405c2af2abf38e89",
     "userspace/public/libs/libicwmp_dm/src/dm_registry.h": "311e0bbfbf6cbd3cecf548cbc6f315ac9877302777829e98895b00aba7e1ae95",
-    "userspace/public/libs/libicwmp_dm/src/dmcommon.c": "7a593b0f05b04247a04ec8b50b8b08115d621259e9a051b86258330c7af5d4d8",
+    "userspace/public/libs/libicwmp_dm/src/dmcommon.c": "298ed3d888b256cd2a317c58d1e0d39064a06f328494ea814ab4c9441a4e5403",
     "userspace/public/libs/libicwmp_dm/src/dmcommon.h": "30a771ae074dddafb5d6ac0dfdaa21e5e75d21a234cb8b42cfdd6f2430419491",
     "userspace/public/libs/libicwmp_dm/src/dmentry.c": "e9089ec318f1361c7c61ebe68ddc9ff9c5c627e57c56c0078e9a4b151efabd80",
     "userspace/public/libs/libicwmp_dm/src/dmentry.h": "eba6ff489a44ab7a16140ff0c0893924a7695ca8cb73f105a502c25e10161a3e",

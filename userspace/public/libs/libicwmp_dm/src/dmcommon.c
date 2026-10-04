@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <spawn.h>
+#include <fcntl.h>
 #include <uci.h>
 #include <ctype.h>
 #include <netdb.h>
@@ -374,12 +375,61 @@ int set_interface_firewall_enabled(char *iface, char *refparam, struct dmctx *ct
 
 extern char **environ;
 
+/* Most a command may print into a data model value: past it the rest is
+ * dropped and the command gets SIGPIPE, instead of growing without bound. */
+#define DMCMD_MAX_OUTPUT	(1024 * 1024)
+/* Up to this much goes back through a pipe, which takes it without
+ * blocking (a pipe holds 64 KB, 4 KB at the least); more through a file. */
+#define DMCMD_PIPE_OUTPUT	4096
+
+/* A readable fd holding exactly buf[0..len), positioned at its start. */
+static int dmcmd_output_fd(const char *buf, size_t len)
+{
+	int pfd[2];
+	FILE *t;
+	int fd;
+
+	if (len <= DMCMD_PIPE_OUTPUT && pipe(pfd) == 0) {
+		if (len && write(pfd[1], buf, len) != (ssize_t)len) {
+			close(pfd[0]);
+			close(pfd[1]);
+			return -1;
+		}
+		close(pfd[1]);
+		return pfd[0];
+	}
+	t = tmpfile();		/* unlinked already, gone with its last fd */
+	if (!t)
+		return -1;
+	fd = -1;
+	if (fwrite(buf, 1, len, t) == len && fflush(t) == 0) {
+		fd = dup(fileno(t));
+		if (fd >= 0)
+			lseek(fd, 0, SEEK_SET);
+	}
+	fclose(t);
+	return fd;
+}
+
+/* Run cmd, return a fd to read its stdout from (the caller closes it), -1
+ * when not even that could be set up.
+ *
+ * The output is collected while the command runs.  This used to wait for
+ * the command first and leave the pipe to the caller: a command that
+ * printed more than the pipe holds (64 KB -- a "ubus call" listing a few
+ * hundred stations) blocked on its write while we blocked in waitpid(),
+ * and the session thread with it, for good. */
 int dmcmd(char *cmd, int n, ...)
 {
 	va_list arg;
 	int i, pid;
-	static int dmcmd_pfds[2];
+	int pfd[2];
 	char *argv[n+2];
+	char chunk[4096];
+	char *out = NULL;
+	size_t len = 0, cap = 0;
+	ssize_t r;
+	int fd;
 
 	argv[0] = cmd;
 
@@ -392,7 +442,7 @@ int dmcmd(char *cmd, int n, ...)
 
 	argv[n+1] = NULL;
 
-	if (pipe(dmcmd_pfds) < 0)
+	if (pipe(pfd) < 0)
 		return -1;
 
 	/* posix_spawn instead of fork: every "ubus call" a getter makes comes
@@ -406,27 +456,49 @@ int dmcmd(char *cmd, int n, ...)
 		int rc;
 
 		posix_spawn_file_actions_init(&fa);
-		posix_spawn_file_actions_addclose(&fa, dmcmd_pfds[0]);
-		posix_spawn_file_actions_adddup2(&fa, dmcmd_pfds[1], 1);
-		posix_spawn_file_actions_addclose(&fa, dmcmd_pfds[1]);
+		posix_spawn_file_actions_addclose(&fa, pfd[0]);
+		posix_spawn_file_actions_adddup2(&fa, pfd[1], 1);
+		posix_spawn_file_actions_addclose(&fa, pfd[1]);
 		rc = posix_spawnp(&spid, argv[0], &fa, NULL, (char **) argv, environ);
 		posix_spawn_file_actions_destroy(&fa);
-		close(dmcmd_pfds[1]);
+		close(pfd[1]);
 		if (rc != 0)
-			return dmcmd_pfds[0];
+			return pfd[0];
 		pid = spid;
 	}
 
-	int status;
-	while (waitpid(pid, &status, 0) != pid)
-	{
-		kill(pid, 0);
-		if (errno == ESRCH) {
-			return dmcmd_pfds[0];
-		}
-	}
+	for (;;) {
+		r = read(pfd[0], chunk, sizeof(chunk));
+		if (r < 0 && errno == EINTR)
+			continue;
+		if (r <= 0)
+			break;
+		if (len + (size_t)r > cap) {
+			size_t ncap = cap ? cap * 2 : sizeof(chunk);
+			char *nout;
 
-	return dmcmd_pfds[0];
+			while (ncap < len + (size_t)r)
+				ncap *= 2;
+			if (ncap > DMCMD_MAX_OUTPUT)
+				break;
+			nout = realloc(out, ncap);
+			if (!nout)
+				break;
+			out = nout;
+			cap = ncap;
+		}
+		memcpy(out + len, chunk, (size_t)r);
+		len += (size_t)r;
+	}
+	close(pfd[0]);		/* the rest, if any, ends with SIGPIPE */
+
+	/* this child only; ECHILD: the uloop thread of the agent reaped it */
+	while (waitpid(pid, NULL, 0) < 0 && errno == EINTR)
+		;
+
+	fd = dmcmd_output_fd(out ? out : "", len);
+	free(out);
+	return fd;
 }
 
 int dmcmd_no_wait(char *cmd, int n, ...)
