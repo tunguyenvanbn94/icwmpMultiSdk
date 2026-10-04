@@ -268,7 +268,7 @@
       "status": "FIXED",
       "phase": "sync",
       "title": "Script kiểm tĩnh trỏ workspace cũ, chạy trong repo không kiểm gì",
-      "evidence": "trước: [lib/mtk] 0 file kiểm; sau: 41 file kiểm, 0 vấn đề"
+      "evidence": "trước: [lib/mtk] 0 file kiểm; sau: 41 file kiểm, 0 vấn đề. Còn lại: tests/verify-apply.py dựng fixture từ cây SDK thật của workspace cũ (ROOT.parents[4]/projects/...), không chạy được trong repo này mà không có hai cây SDK"
     },
     {
       "id": "K5",
