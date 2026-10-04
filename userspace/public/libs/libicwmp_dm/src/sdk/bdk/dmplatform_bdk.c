@@ -768,3 +768,16 @@ int bdk_map_set(char *refparam, struct dmctx *ctx, void *data, char *instance, c
 	}
 	return 0;
 }
+
+/* sdk/sdk.h dm_platform_prefetch_values(): a GET_VALUE here is one MDM read
+ * already, nothing to fetch ahead */
+int dm_platform_prefetch_values(char **params, int n)
+{
+	(void)params;
+	(void)n;
+	return 0;
+}
+
+void dm_platform_prefetch_drop(void)
+{
+}

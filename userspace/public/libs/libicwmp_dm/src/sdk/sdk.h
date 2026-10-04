@@ -117,4 +117,15 @@ int dm_platform_enabled_notify(struct dmctx *ctx);
  * ctx->send_active_value_change callbacks). */
 int dm_platform_enabled_notify_check_value_change(struct dmctx *ctx);
 
+/* dm_entry_prefetch_values(): the agent is about to ask GET_VALUE of each
+ * of these leaves in turn (the value-change check of DM_ENABLED_NOTIFY).
+ * A platform that pays per request may fetch them in one go now and answer
+ * the GET_VALUE of exactly one of them from that until
+ * dm_platform_prefetch_drop().  Callers are serialised by the agent
+ * (mutex_session_send).  Returns how many it fetched.
+ *   uci, bdk: 0, nothing kept.
+ *   mtk: one get_value_list of the script for the paths it serves. */
+int dm_platform_prefetch_values(char **params, int n);
+void dm_platform_prefetch_drop(void);
+
 #endif

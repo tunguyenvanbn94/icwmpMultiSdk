@@ -13,6 +13,8 @@
 # Requests (all values are strings):
 #   {"cmd":"get_value","param":P}                 GetParameterValues
 #   {"cmd":"get_name","param":P,"next_level":"0|1"} GetParameterNames
+#   {"cmd":"get_value_list","params":[P,...]}      get_value of each P, one reply
+#   {"cmd":"get_name_list","params":[P,...],"next_level":"0|1"}  same for get_name
 #   {"cmd":"set_check","param":P,"value":V}       SPV phase 1: validate + queue
 #   {"cmd":"set_apply","key":K}                   SPV phase 2: run the queued setters, uci commit
 #   {"cmd":"set_abort"}                           drop the queue (another parameter failed)
@@ -311,7 +313,7 @@ dm_inform() {
 
 # --- main loop -------------------------------------------------------------
 handle_request() {
-	local cmd param value key nl
+	local cmd param value key nl params k p
 	json_init
 	json_load "$1" || { common_json_output_fault "" "9003"; return; }
 	json_get_var cmd cmd
@@ -319,12 +321,26 @@ handle_request() {
 	json_get_var value value
 	json_get_var key key
 	json_get_var nl next_level
+	# the *_list commands: one request, one prompt for many paths (each
+	# request costs a json_load, a subshell and a round trip of its own).
+	# TR-098 paths hold no white space.
+	params=""
+	if json_select params 2>/dev/null; then
+		json_get_keys k
+		for k in $k; do
+			json_get_var p "$k"
+			[ -n "$p" ] && params="$params $p"
+		done
+		json_select ..
+	fi
 	# every handler runs in a subshell: the library calls "exit" from some of
 	# its get/set/add paths (e.g. common_get_name_inparam_isparam_check_param)
 	# and that must not end this loop
 	case "$cmd" in
 		get_value)     (dm_get_value "$param") ;;
 		get_name)      (dm_get_name "$param" "$nl") ;;
+		get_value_list) for p in $params; do (dm_get_value "$p"); done ;;
+		get_name_list)  for p in $params; do (dm_get_name "$p" "$nl"); done ;;
 		set_check)     (dm_set_check "$param" "$value") ;;
 		set_apply)     (dm_set_apply "$key") ;;
 		set_abort)     dm_set_abort ;;

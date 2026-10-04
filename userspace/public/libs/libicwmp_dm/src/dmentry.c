@@ -837,6 +837,18 @@ int dm_entry_restart_services(void)
 	return dm_platform_restart_services();
 }
 
+int dm_entry_prefetch_values(char **params, int n)
+{
+	if (!params || n <= 0)
+		return 0;
+	return dm_platform_prefetch_values(params, n);
+}
+
+void dm_entry_prefetch_drop(void)
+{
+	dm_platform_prefetch_drop();
+}
+
 void dm_apply_config(void)
 {
 	apply_end_session();

@@ -82,3 +82,15 @@ int dm_platform_enabled_notify_check_value_change(struct dmctx *ctx)
 	(void)ctx;
 	return 0;
 }
+
+/* GET_VALUE is in-process here: nothing to fetch ahead */
+int dm_platform_prefetch_values(char **params, int n)
+{
+	(void)params;
+	(void)n;
+	return 0;
+}
+
+void dm_platform_prefetch_drop(void)
+{
+}

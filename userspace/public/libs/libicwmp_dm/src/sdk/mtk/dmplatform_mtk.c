@@ -337,6 +337,26 @@ struct mtk_children {
 	int oom;
 };
 
+static void mtk_children_add(struct mtk_children *c, const char *name)
+{
+	if (c->n == c->cap) {
+		int cap = c->cap ? c->cap * 2 : 16;
+		char **nn = realloc(c->names, cap * sizeof(*nn));
+
+		if (!nn) {
+			c->oom = 1;
+			return;
+		}
+		c->names = nn;
+		c->cap = cap;
+	}
+	if ((c->names[c->n] = strdup(name)) == NULL) {
+		c->oom = 1;
+		return;
+	}
+	c->n++;
+}
+
 static int mtk_child_cb(json_object *line, void *priv)
 {
 	struct mtk_children *c = priv;
@@ -354,22 +374,7 @@ static int mtk_child_cb(json_object *line, void *priv)
 		return 0;
 	if (mtk_is_native(param))
 		return 0;
-	if (c->n == c->cap) {
-		int cap = c->cap ? c->cap * 2 : 16;
-		char **nn = realloc(c->names, cap * sizeof(*nn));
-
-		if (!nn) {
-			c->oom = 1;
-			return 0;
-		}
-		c->names = nn;
-		c->cap = cap;
-	}
-	if ((c->names[c->n] = strdup(param)) == NULL) {
-		c->oom = 1;
-		return 0;
-	}
-	c->n++;
+	mtk_children_add(c, param);
 	return 0;
 }
 
@@ -387,7 +392,276 @@ static void mtk_children_free(struct mtk_children *c)
 /* get_value of path into r (any kind that takes value lines: list, fp or
  * single_value).  Same return as dmscript_request(); an unknown path leaves
  * its fault in r->fault like a plain get_value does. */
+/* paths per get_name_list / get_value_list request */
+#define MTK_LIST_MAX 64
+
+/* Does the driver know the *_list commands?  -1 not asked yet.  An older
+ * icwmp_dm.sh answers an unknown command with fault 9000 and nothing else. */
+static int mtk_list_ok = -1;
+
+static int mtk_list_probe_cb(json_object *line, void *priv)
+{
+	if (jstr(line, "fault_code"))
+		*(int *)priv = 0;
+	return 0;
+}
+
+/* {"cmd":cmd,"params":[paths[0..n)],"next_level":nl} */
+static int mtk_list_request(const char *cmd, char **paths, int n, const char *nl,
+			    dmscript_line_cb cb, void *priv)
+{
+	json_object *req = json_object_new_object();
+	json_object *arr = json_object_new_array();
+	int i, rc;
+
+	if (!req || !arr) {
+		if (req) json_object_put(req);
+		if (arr) json_object_put(arr);
+		return -1;
+	}
+	json_object_object_add(req, "cmd", json_object_new_string(cmd));
+	for (i = 0; i < n; i++)
+		json_object_array_add(arr, json_object_new_string(paths[i]));
+	json_object_object_add(req, "params", arr);
+	if (nl)
+		json_object_object_add(req, "next_level", json_object_new_string(nl));
+	rc = dmscript_call(req, cb, priv);
+	json_object_put(req);
+	return rc;
+}
+
+static int mtk_list_supported(void)
+{
+	if (mtk_list_ok < 0) {
+		int ok = 1;
+
+		if (mtk_list_request("get_value_list", NULL, 0, NULL, mtk_list_probe_cb, &ok) != 0)
+			return 0;		/* ask again next time */
+		mtk_list_ok = ok;
+	}
+	return mtk_list_ok;
+}
+
+/* name is strictly below one of the objects in level */
+static int mtk_below_one_of(const char *name, struct mtk_children *level)
+{
+	int i;
+
+	for (i = 0; i < level->n; i++) {
+		size_t l = strlen(level->names[i]);
+
+		if (strncmp(name, level->names[i], l) == 0 && name[l])
+			return 1;
+	}
+	return 0;
+}
+
+static int mtk_script_values_walk(struct mtk_reply *r, const char *path, int depth);
+
+/* The walk of mtk_script_values_walk(), one level of the tree at a time:
+ * one get_name_list for all the objects of a level, one get_value_list for
+ * all the leaves and plain objects it turned up.  A request costs the
+ * script a json_load, a subshell and a round trip whatever it carries; the
+ * walk of InternetGatewayDevice. took ~70 of them, a few per level now. */
+static int mtk_script_values_levels(struct mtk_reply *r, const char *path, int depth)
+{
+	struct mtk_children level, kids, next, leaves;
+	int i, d, rc = 0;
+
+	memset(&level, 0, sizeof(level));
+	mtk_children_add(&level, path);
+	for (d = depth; level.n && rc == 0; d++) {
+		if (level.oom) {
+			rc = -1;
+			break;
+		}
+		if (d >= MTK_PRUNE_DEPTH) {
+			/* deeper than the tree: the whole subtrees */
+			for (i = 0; i < level.n && rc == 0; i += MTK_LIST_MAX)
+				rc = mtk_list_request("get_value_list", level.names + i,
+						      level.n - i < MTK_LIST_MAX ? level.n - i : MTK_LIST_MAX,
+						      NULL, mtk_line_cb, r);
+			break;
+		}
+		memset(&kids, 0, sizeof(kids));
+		kids.parent = "";
+		for (i = 0; i < level.n && rc == 0; i += MTK_LIST_MAX)
+			rc = mtk_list_request("get_name_list", level.names + i,
+					      level.n - i < MTK_LIST_MAX ? level.n - i : MTK_LIST_MAX,
+					      "1", mtk_child_cb, &kids);
+		if (rc == 0 && kids.oom)
+			rc = -1;
+		if (d == depth && kids.fault && !kids.n && !r->fault)
+			r->fault = kids.fault;	/* unknown to the script, like get_value */
+
+		memset(&next, 0, sizeof(next));
+		memset(&leaves, 0, sizeof(leaves));
+		for (i = 0; rc == 0 && i < kids.n; i++) {
+			const char *k = kids.names[i];
+
+			if (!mtk_below_one_of(k, &level))
+				continue;	/* the object itself, or a stray line */
+			if (mtk_is_object(k) && mtk_covers_native(k))
+				mtk_children_add(&next, k);
+			else
+				mtk_children_add(&leaves, k);
+		}
+		if (rc == 0 && (next.oom || leaves.oom))
+			rc = -1;
+		for (i = 0; rc == 0 && i < leaves.n; i += MTK_LIST_MAX)
+			rc = mtk_list_request("get_value_list", leaves.names + i,
+					      leaves.n - i < MTK_LIST_MAX ? leaves.n - i : MTK_LIST_MAX,
+					      NULL, mtk_line_cb, r);
+		mtk_children_free(&kids);
+		mtk_children_free(&leaves);
+		mtk_children_free(&level);
+		level = next;
+	}
+	mtk_children_free(&level);
+	return rc;
+}
+
+/* ------------------------------------------------------------------------ */
+/* prefetch (sdk/sdk.h dm_platform_prefetch_values)                          */
+/* ------------------------------------------------------------------------ */
+
+/* The value-change check asks GET_VALUE of every DM_ENABLED_NOTIFY entry in
+ * turn, at the start of every session and on every "ubus call tr069
+ * notify" (value_monitoring, 30 s): with an ACS notification on an object
+ * of the script, a hundred requests each time.  The values are fetched with
+ * get_value_list beforehand and the GET_VALUE of one of them is answered
+ * from here.  Plain malloc: outlives the dmctx of the caller. */
+struct mtk_prefetch {
+	char **name, **value, **type;
+	int n, cap;
+	int active;
+};
+static struct mtk_prefetch mtk_pf;
+
+static int mtk_prefetch_cb(json_object *line, void *priv)
+{
+	struct mtk_prefetch *pf = priv;
+	const char *param = jstr(line, "parameter");
+	const char *value = jstr(line, "value");
+	const char *type = jstr(line, "type");
+
+	if (jstr(line, "fault_code") || !param || !param[0] || mtk_is_object(param) || mtk_is_native(param))
+		return 0;
+	if (pf->n == pf->cap) {
+		int cap = pf->cap ? pf->cap * 2 : 32;
+		char **nn = realloc(pf->name, cap * sizeof(char *));
+		char **nv, **nt;
+
+		if (!nn)
+			return 0;
+		pf->name = nn;
+		nv = realloc(pf->value, cap * sizeof(char *));
+		if (!nv)
+			return 0;
+		pf->value = nv;
+		nt = realloc(pf->type, cap * sizeof(char *));
+		if (!nt)
+			return 0;
+		pf->type = nt;
+		pf->cap = cap;
+	}
+	pf->name[pf->n] = strdup(param);
+	pf->value[pf->n] = strdup(value ? value : "");
+	pf->type[pf->n] = strdup(type ? type : "");
+	if (!pf->name[pf->n] || !pf->value[pf->n] || !pf->type[pf->n]) {
+		free(pf->name[pf->n]);
+		free(pf->value[pf->n]);
+		free(pf->type[pf->n]);
+		return 0;
+	}
+	pf->n++;
+	return 0;
+}
+
+static void mtk_prefetch_clear(void)
+{
+	int i;
+
+	for (i = 0; i < mtk_pf.n; i++) {
+		free(mtk_pf.name[i]);
+		free(mtk_pf.value[i]);
+		free(mtk_pf.type[i]);
+	}
+	free(mtk_pf.name);
+	free(mtk_pf.value);
+	free(mtk_pf.type);
+	memset(&mtk_pf, 0, sizeof(mtk_pf));
+}
+
+static int mtk_prefetch(char **params, int n)
+{
+	char **want;
+	int i, m = 0, rc = 0;
+
+	mtk_prefetch_clear();
+	if (!mtk_list_supported())
+		return 0;
+	want = malloc(n * sizeof(char *));
+	if (!want)
+		return 0;
+	for (i = 0; i < n; i++) {
+		/* leaves the script serves; objects and native ones go the usual way */
+		if (params[i] && params[i][0] && !mtk_is_object(params[i]) && !mtk_is_native(params[i]))
+			want[m++] = params[i];
+	}
+	for (i = 0; i < m && rc == 0; i += MTK_LIST_MAX)
+		rc = mtk_list_request("get_value_list", want + i, m - i < MTK_LIST_MAX ? m - i : MTK_LIST_MAX,
+				      NULL, mtk_prefetch_cb, &mtk_pf);
+	free(want);
+	if (rc != 0) {
+		mtk_prefetch_clear();	/* half a prefetch: ask one by one */
+		return 0;
+	}
+	mtk_pf.active = 1;
+	return mtk_pf.n;
+}
+
+/* the prefetched value of path, NULL when it was not prefetched */
+static const char *mtk_prefetch_value(const char *path)
+{
+	int i;
+
+	if (!mtk_pf.active)
+		return NULL;
+	for (i = 0; i < mtk_pf.n; i++)
+		if (strcmp(mtk_pf.name[i], path) == 0)
+			return mtk_pf.value[i];
+	return NULL;
+}
+
+/* the prefetched value of path into ctx; 0 when it was not prefetched */
+static int mtk_prefetch_get(struct dmctx *ctx, const char *path)
+{
+	int i;
+
+	if (!mtk_pf.active)
+		return 0;
+	for (i = 0; i < mtk_pf.n; i++) {
+		if (strcmp(mtk_pf.name[i], path) == 0) {
+			add_list_paramameter(ctx, dmstrdup(mtk_pf.name[i]), dmstrdup(mtk_pf.value[i]),
+					     mtk_xsd_type(mtk_pf.type[i]), NULL, 0);
+			return 1;
+		}
+	}
+	return 0;
+}
+
 static int mtk_script_values(struct mtk_reply *r, const char *path, int depth)
+{
+	if (!mtk_is_object(path) || !mtk_covers_native(path) || depth >= MTK_PRUNE_DEPTH)
+		return dmscript_request(mtk_line_cb, r, "get_value", "param", path, NULL);
+	if (mtk_list_supported())
+		return mtk_script_values_levels(r, path, depth);
+	return mtk_script_values_walk(r, path, depth);
+}
+
+/* one get_name per object, recursively: drivers without the *_list commands */
+static int mtk_script_values_walk(struct mtk_reply *r, const char *path, int depth)
 {
 	struct mtk_children c;
 	int i, rc = 0;
@@ -408,8 +682,12 @@ static int mtk_script_values(struct mtk_reply *r, const char *path, int depth)
 	}
 	if (c.fault && !c.n && !r->fault)
 		r->fault = c.fault;
-	for (i = 0; i < c.n && rc == 0; i++)
-		rc = mtk_script_values(r, c.names[i], depth + 1);
+	for (i = 0; i < c.n && rc == 0; i++) {
+		if (!mtk_is_object(c.names[i]) || !mtk_covers_native(c.names[i]) || depth + 1 >= MTK_PRUNE_DEPTH)
+			rc = dmscript_request(mtk_line_cb, r, "get_value", "param", c.names[i], NULL);
+		else
+			rc = mtk_script_values_walk(r, c.names[i], depth + 1);
+	}
 	mtk_children_free(&c);
 	return rc;
 }
@@ -429,6 +707,8 @@ static int mtk_get_value(struct dmctx *ctx, const char *path)
 {
 	struct mtk_reply r;
 
+	if (path && path[0] && !mtk_is_object(path) && mtk_prefetch_get(ctx, path))
+		return 0;
 	mtk_reply_init(&r, ctx, MTK_KIND_VALUE);
 	if (mtk_script_values(&r, mtk_script_path(path), 0) != 0)
 		return mtk_transport_fault("get_value", path);
@@ -811,6 +1091,24 @@ int dm_platform_restart_services(void)
 	return 0;
 }
 
+int dm_platform_prefetch_values(char **params, int n)
+{
+#ifdef DM_MTK_SCRIPT_COMPAT
+	return mtk_prefetch(params, n);
+#else
+	(void)params;
+	(void)n;
+	return 0;		/* all C: a GET_VALUE is in-process */
+#endif
+}
+
+void dm_platform_prefetch_drop(void)
+{
+#ifdef DM_MTK_SCRIPT_COMPAT
+	mtk_prefetch_clear();
+#endif
+}
+
 const char *dm_platform_name(void)
 {
 #ifdef DM_MTK_SCRIPT_COMPAT
@@ -1004,12 +1302,44 @@ int dm_platform_enabled_notify_check_value_change(struct dmctx *ctx)
 	FILE *fp;
 	char buf[512];
 	char *jval, *parameter, *value, *notification, *type;
+	char **names = NULL;
+	int nn = 0, cap = 0;
 
 	fp = fopen(DM_ENABLED_NOTIFY, "r");
 	if (fp == NULL)
 		return 0;
+	/* first pass: the script's entries, fetched in one go */
+	while (fgets(buf, sizeof(buf), fp) != NULL) {
+		int len = strlen(buf);
+
+		if (len)
+			buf[len - 1] = '\0';
+		dmjson_parse_init(buf);
+		dmjson_get_var("parameter", &jval);
+		if (jval[0] && !mtk_is_native(jval) && !mtk_is_object(jval)) {
+			if (nn == cap) {
+				char **n2 = realloc(names, (cap ? cap * 2 : 32) * sizeof(char *));
+
+				if (n2) {
+					names = n2;
+					cap = cap ? cap * 2 : 32;
+				}
+			}
+			if (nn < cap && (names[nn] = strdup(jval)) != NULL)
+				nn++;
+		}
+		dmjson_parse_fini();
+	}
+	if (nn)
+		mtk_prefetch(names, nn);
+	while (nn)
+		free(names[--nn]);
+	free(names);
+	rewind(fp);
+
 	while (fgets(buf, sizeof(buf), fp) != NULL) {
 		struct mtk_reply r;
+		const char *pv;
 		int len = strlen(buf);
 
 		if (len)
@@ -1028,8 +1358,14 @@ int dm_platform_enabled_notify_check_value_change(struct dmctx *ctx)
 		if (mtk_is_native(parameter) || mtk_is_object(parameter))
 			continue;
 		mtk_reply_init(&r, ctx, MTK_KIND_VALUE);
-		r.single_value = strdup("");
-		if (dmscript_request(mtk_line_cb, &r, "get_value", "param", parameter, NULL) != 0 || r.count == 0) {
+		if ((pv = mtk_prefetch_value(parameter)) != NULL) {
+			r.single_value = strdup(pv);
+			r.count = 1;
+		} else {
+			r.single_value = strdup("");
+		}
+		if (!r.count &&
+		    (dmscript_request(mtk_line_cb, &r, "get_value", "param", parameter, NULL) != 0 || r.count == 0)) {
 			free(r.single_value);
 			continue;
 		}
@@ -1042,6 +1378,7 @@ int dm_platform_enabled_notify_check_value_change(struct dmctx *ctx)
 		free(r.single_value);
 	}
 	fclose(fp);
+	mtk_prefetch_clear();
 	return 0;
 #endif
 }

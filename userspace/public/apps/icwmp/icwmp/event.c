@@ -284,6 +284,246 @@ void cwmp_lwnotification()
 	FREE(msg_out);
 }
 
+#ifdef TR098
+/* One line of DM_ENABLED_NOTIFY. */
+struct notify_entry {
+	char *parameter, *notification, *value, *type;
+};
+
+static void notify_entries_free(struct notify_entry *e, int n)
+{
+	int i;
+
+	for (i = 0; i < n; i++) {
+		free(e[i].parameter);
+		free(e[i].notification);
+		free(e[i].value);
+		free(e[i].type);
+	}
+	free(e);
+}
+
+/* The whole DM_ENABLED_NOTIFY in memory; -1 when there is none.
+ *
+ * The value-change checks used to fgets() the file and, for every value
+ * that changed, rewrite it on the spot (dm_update_file_enabled_notify +
+ * copy_temporary_file_to_original_file, which fopen(.., "w")s the very
+ * file being read).  After a change of length the next fgets() started
+ * mid-line: entries were skipped or parsed as garbage.  And n changes
+ * meant n rewrites of the whole file. */
+static int notify_entries_load(struct notify_entry **out)
+{
+	FILE *fp;
+	char buf[512], *jval;
+	struct notify_entry *e = NULL;
+	int n = 0, cap = 0;
+
+	*out = NULL;
+	fp = fopen(DM_ENABLED_NOTIFY, "r");
+	if (fp == NULL)
+		return -1;
+	while (fgets(buf, sizeof(buf), fp) != NULL) {
+		size_t len = strlen(buf);
+
+		if (len && buf[len - 1] == '\n')
+			buf[--len] = '\0';
+		if (!len)
+			continue;
+		if (n == cap) {
+			int ncap = cap ? cap * 2 : 32;
+			struct notify_entry *ne = realloc(e, ncap * sizeof(*e));
+
+			if (!ne)
+				break;
+			e = ne;
+			cap = ncap;
+		}
+		dmjson_parse_init(buf);
+		dmjson_get_var("parameter", &jval);
+		e[n].parameter = strdup(jval);
+		dmjson_get_var("notification", &jval);
+		e[n].notification = strdup(jval);
+		dmjson_get_var("value", &jval);
+		e[n].value = strdup(jval);
+		dmjson_get_var("type", &jval);
+		e[n].type = strdup(jval);
+		dmjson_parse_fini();
+		if (!e[n].parameter || !e[n].notification || !e[n].value || !e[n].type) {
+			n++;
+			break;
+		}
+		n++;
+	}
+	fclose(fp);
+	*out = e;
+	return n;
+}
+
+/* DM_ENABLED_NOTIFY rewritten once, same line format as the engine's */
+static void notify_entries_save(struct notify_entry *e, int n)
+{
+	FILE *ftmp;
+	int i;
+
+	ftmp = fopen(DM_ENABLED_NOTIFY_TEMPORARY, "w");
+	if (ftmp == NULL)
+		return;
+	for (i = 0; i < n; i++) {
+		if (!e[i].parameter || !e[i].notification || !e[i].value || !e[i].type)
+			continue;
+		dmjson_fprintf(ftmp, 4, DMJSON_ARGS{{"parameter", e[i].parameter}, {"notification", e[i].notification},
+						    {"value", e[i].value}, {"type", e[i].type}});
+	}
+	fclose(ftmp);
+	if (copy_temporary_file_to_original_file(DM_ENABLED_NOTIFY, DM_ENABLED_NOTIFY_TEMPORARY))
+		remove(DM_ENABLED_NOTIFY_TEMPORARY);
+}
+
+/* the platform may fetch all of them in one go (mtk: one script request
+ * instead of one per entry) */
+static void notify_entries_prefetch(struct notify_entry *e, int n)
+{
+	char **names = malloc(n * sizeof(char *));
+	int i, m = 0;
+
+	if (!names)
+		return;
+	for (i = 0; i < n; i++)
+		if (e[i].parameter)
+			names[m++] = e[i].parameter;
+	dm_entry_prefetch_values(names, m);
+	free(names);
+}
+
+/* current value of e->parameter, or NULL; valid until dm_ctx_clean_sub() */
+static struct dm_parameter *notify_entry_current(struct dmctx *dmctx, struct notify_entry *e)
+{
+	if (!e->parameter || !e->notification || !e->value)
+		return NULL;
+	if (dm_entry_param_method(dmctx, CMD_GET_VALUE, e->parameter, NULL, NULL))
+		return NULL;
+	if (dmctx->list_parameter.next == &dmctx->list_parameter)
+		return NULL;
+	return list_entry(dmctx->list_parameter.next, struct dm_parameter, list);
+}
+
+static int notify_entry_set_value(struct notify_entry *e, const char *value)
+{
+	char *v = strdup(value);
+
+	if (!v)
+		return 0;
+	free(e->value);
+	e->value = v;
+	return 1;
+}
+
+/* start of a session: passive (1) notifications only */
+void cwmp_add_notification_min(void) {
+	struct cwmp   *cwmp = &cwmp_main;
+	struct dm_parameter *dm_parameter;
+	struct dmctx dmctx = {0};
+	struct notify_entry *e;
+	int i, n, changed = 0;
+
+	cwmp_dm_ctx_init(&cwmp_main, &dmctx);
+	n = notify_entries_load(&e);
+	if (n > 0)
+		notify_entries_prefetch(e, n);
+	for (i = 0; i < n; i++) {
+		dm_ctx_init_sub(&dmctx, DM_CWMP, cwmp_main.conf.amd_version, cwmp_main.conf.instance_mode);
+		dm_parameter = notify_entry_current(&dmctx, &e[i]);
+		if (dm_parameter && strcmp(dm_parameter->data, e[i].value) != 0 && e[i].notification[0] == '1') {
+			add_list_value_change(e[i].parameter, dm_parameter->data, dm_parameter->type);
+			changed |= notify_entry_set_value(&e[i], dm_parameter->data);
+		}
+		dm_ctx_clean_sub(&dmctx);
+	}
+	if (n > 0)
+		dm_entry_prefetch_drop();
+	if (changed)
+		notify_entries_save(e, n);
+	notify_entries_free(e, n > 0 ? n : 0);
+
+	cwmp_dm_ctx_clean(cwmp, &dmctx);
+}
+
+void cwmp_add_notification(void)
+{
+	struct cwmp   *cwmp = &cwmp_main;
+	struct dm_enabled_notify *p;
+	struct dm_parameter *dm_parameter;
+	struct dmctx dmctx = {0};
+	struct config   *conf;
+	struct notify_entry *e;
+	int i, n, changed = 0;
+	bool isactive = false;
+	bool lw_isactive = false;
+
+	conf = &(cwmp->conf);
+	pthread_mutex_lock(&(cwmp->mutex_session_send));
+	pthread_mutex_lock(&(cwmp->mutex_handle_notify));
+	cwmp->count_handle_notify = 0;
+	pthread_mutex_unlock(&(cwmp->mutex_handle_notify));
+	cwmp_dm_ctx_init(&cwmp_main, &dmctx);
+
+	n = notify_entries_load(&e);
+	if (n < 0) {
+		/* upstream returned here with mutex_session_send still held: the
+		 * next notify (value_monitoring, every 30 s), the session thread and
+		 * "ubus call tr069 dm" all blocked on it for good (HP2236B board,
+		 * 2026-09-27: every thread in futex_wait, no session after the first) */
+		cwmp_dm_ctx_clean(cwmp, &dmctx);
+		pthread_mutex_unlock(&(cwmp->mutex_session_send));
+		return;
+	}
+	if (n > 0)
+		notify_entries_prefetch(e, n);
+	for (i = 0; i < n; i++) {
+		char nt;
+
+		dm_ctx_init_sub(&dmctx, DM_CWMP, cwmp_main.conf.amd_version, cwmp_main.conf.instance_mode);
+		dm_parameter = notify_entry_current(&dmctx, &e[i]);
+		if (dm_parameter && strcmp(dm_parameter->data, e[i].value) != 0) {
+			nt = e[i].notification[0];
+			if (nt == '1' || nt == '2' || nt == '4' || nt == '6')
+				add_list_value_change(e[i].parameter, dm_parameter->data, dm_parameter->type);
+			if (nt == '2')
+				isactive = true;
+			changed |= notify_entry_set_value(&e[i], dm_parameter->data);
+		}
+		dm_ctx_clean_sub(&dmctx);
+	}
+	if (n > 0)
+		dm_entry_prefetch_drop();
+	if (changed)
+		notify_entries_save(e, n);
+	notify_entries_free(e, n);
+
+	list_for_each_entry(p, &list_enabled_lw_notify, list) {
+		if (!conf->lw_notification_enable)
+			break;
+		dm_ctx_init_sub(&dmctx, DM_CWMP, cwmp_main.conf.amd_version, cwmp_main.conf.instance_mode);
+		if (dm_entry_param_method(&dmctx, CMD_GET_VALUE, p->name, NULL, NULL) == 0 &&
+		    dmctx.list_parameter.next != &dmctx.list_parameter) {
+			dm_parameter = list_entry(dmctx.list_parameter.next, struct dm_parameter, list);
+			if (strcmp(dm_parameter->data, p->value) != 0) {
+				dm_update_enabled_notify(p, dm_parameter->data);
+				if (p->notification[0] >= '3' ) add_lw_list_value_change(p->name, dm_parameter->data, dm_parameter->type);
+				if (p->notification[0] == '5' || p->notification[0] == '6') lw_isactive = true;
+			}
+		}
+		dm_ctx_clean_sub(&dmctx);
+	}
+	cwmp_dm_ctx_clean(cwmp, &dmctx);
+	if (lw_isactive) {
+		cwmp_lwnotification();
+	}
+	pthread_mutex_unlock(&(cwmp->mutex_session_send));
+	if (isactive)
+		send_active_value_change();
+}
+#else /* !TR098 */
 void cwmp_add_notification_min(void) {
 	int fault, iscopy;
 	FILE *fp;
@@ -468,6 +708,8 @@ void cwmp_add_notification(void)
 	if (isactive)
 		send_active_value_change();
 }
+
+#endif /* TR098 */
 
 void cwmp_root_cause_event_ipdiagnostic(void)
 {
