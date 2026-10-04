@@ -418,6 +418,13 @@ static int mtk_script_values(struct mtk_reply *r, const char *path, int depth)
 /* commands                                                                  */
 /* ------------------------------------------------------------------------ */
 
+/* A set, add or delete went through the script since its last
+ * "apply_service": only then has the script packages of its own to restart
+ * (its changed-packages file).  Otherwise the end of the session runs the
+ * queued commands in C and leaves the script alone.  Callers are serialised
+ * by icwmpd's mutex_session_send. */
+static int mtk_script_changed;
+
 static int mtk_get_value(struct dmctx *ctx, const char *path)
 {
 	struct mtk_reply r;
@@ -477,6 +484,7 @@ static int mtk_set_value(struct dmctx *ctx, const char *inparam)
 	if (ctx->setaction == VALUESET)
 		return 0;                                  /* queued in the shell at VALUECHECK */
 	mtk_reply_init(&r, ctx, MTK_KIND_STATUS);
+	mtk_script_changed = 1;
 	if (dmscript_request(mtk_line_cb, &r, "set_check", "param", inparam, "value", ctx->in_value, NULL) != 0)
 		return mtk_transport_fault("set_check", inparam);
 	if (r.fault)
@@ -521,6 +529,7 @@ static int mtk_add_object(struct dmctx *ctx, const char *inparam, const char *ke
 	if (!inparam || !inparam[0] || !mtk_is_object(inparam))
 		return FAULT_9005;
 	mtk_reply_init(&r, ctx, MTK_KIND_STATUS);
+	mtk_script_changed = 1;
 	if (dmscript_request(mtk_line_cb, &r, "add", "param", inparam, "key", key ? key : "", NULL) != 0)
 		return mtk_transport_fault("add", inparam);
 	if (r.fault)
@@ -540,6 +549,7 @@ static int mtk_del_object(struct dmctx *ctx, const char *inparam, const char *ke
 	if (!inparam || !inparam[0] || !mtk_is_object(inparam))
 		return FAULT_9005;
 	mtk_reply_init(&r, ctx, MTK_KIND_STATUS);
+	mtk_script_changed = 1;
 	if (dmscript_request(mtk_line_cb, &r, "delete", "param", inparam, "key", key ? key : "", NULL) != 0)
 		return mtk_transport_fault("delete", inparam);
 	if (r.fault)
@@ -784,8 +794,17 @@ int dm_platform_restart_services(void)
 	 * restarts for the packages the setters changed + the delayed commands
 	 * they queued (mtk_apply_service() / the shell equivalent) */
 #ifdef DM_MTK_SCRIPT_COMPAT
-	mtk_reply_init(&r, NULL, MTK_KIND_STATUS);
-	(void)dmscript_request(mtk_line_cb, &r, "apply_service", NULL);
+	/* the script's "apply_service" = ucitrack restarts of the packages its
+	 * setters changed + the queued commands.  Nothing of the first kind
+	 * without a script set/add/delete: run the queue here, one shell round
+	 * trip less at the end of every session. */
+	if (mtk_script_changed) {
+		mtk_reply_init(&r, NULL, MTK_KIND_STATUS);
+		(void)dmscript_request(mtk_line_cb, &r, "apply_service", NULL);
+		mtk_script_changed = 0;
+	} else {
+		mtk_run_apply_service();
+	}
 #else
 	mtk_run_apply_service();
 #endif
