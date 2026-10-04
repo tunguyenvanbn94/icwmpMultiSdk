@@ -36,6 +36,9 @@ static int jshn_message_parse(char **policy, int size, char **tb, char *msg)
 	if (jshn_obj == NULL || is_error(jshn_obj) ||
 		json_object_get_type(jshn_obj) != json_type_object)
 	{
+		/* a valid JSON that is not an object was dropped unreleased */
+		if (jshn_obj)
+			json_object_put(jshn_obj);
 		jshn_obj = NULL;
 		return -1;
 	}
@@ -54,6 +57,7 @@ static inline void jshn_message_delete()
 {
 	if(jshn_obj != NULL)
 		json_object_put(jshn_obj);
+	jshn_obj = NULL;
 }
 enum download_fault {
 	DOWNLOAD_FAULT,

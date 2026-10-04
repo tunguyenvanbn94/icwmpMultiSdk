@@ -107,36 +107,81 @@ void external_fetch_du_change_stateFaultResp(char **fault, char **version, char 
 	*env = external_MethodENV;
 	external_MethodENV = NULL;
 }
+/* bytes the script sent after the prompt that ended the last reply */
+static char *ext_pending;
+static size_t ext_pending_len;
+
+/* Hand every line of the script's reply to external_handler, up to the
+ * prompt line.  It used to read one byte per read() and asprintf() the
+ * whole line again for every byte: quadratic in the line length, a
+ * syscall and an allocation per byte. */
 static void external_read_pipe_input(int (*external_handler)(char *msg))
 {
-    char buf[1], *value = NULL, *c = NULL;
-    int i=0, len;
+	char chunk[1024];
+	char *line = NULL, *data;
+	size_t len = 0, cap = 0, n, i;
+	ssize_t r;
+	int owned, done = 0;
 	struct pollfd fd = {
 		.fd	= pfds_in[0],
 		.events	= POLLIN
 	};
-    while(1) {
-    	poll(&fd, 1, 500000);
-    	if (!(fd.revents & POLLIN)) break;
-    	if (read(pfds_in[0], buf, sizeof(buf))<=0) break;
-        if (buf[0]!='\n') {
-			if (value)
-				asprintf(&c,"%s%c",value,buf[0]);
-			else
-				asprintf(&c,"%c",buf[0]);
 
-			FREE(value);
-			value = c;
-        } else {
-        	if (!value) continue;
-        	if (strcmp(value, ICWMP_PROMPT)==0) {
-        	    FREE(value);
-        	    break;
-        	}
-        	if(external_handler) external_handler(value);
-            FREE(value);
-        }
-    }
+	while (!done) {
+		if (ext_pending_len) {
+			data = ext_pending;
+			n = ext_pending_len;
+			ext_pending = NULL;
+			ext_pending_len = 0;
+			owned = 1;
+		} else {
+			poll(&fd, 1, 500000);
+			if (!(fd.revents & POLLIN))
+				break;
+			r = read(pfds_in[0], chunk, sizeof(chunk));
+			if (r <= 0)
+				break;
+			data = chunk;
+			n = (size_t)r;
+			owned = 0;
+		}
+		for (i = 0; i < n; i++) {
+			if (data[i] != '\n') {
+				if (len + 2 > cap) {
+					size_t ncap = cap ? cap * 2 : 256;
+					char *nl = realloc(line, ncap);
+
+					if (!nl)
+						continue;	/* drop the byte, keep the line */
+					line = nl;
+					cap = ncap;
+				}
+				line[len++] = data[i];
+				continue;
+			}
+			if (!len)
+				continue;
+			line[len] = '\0';
+			len = 0;
+			if (strcmp(line, ICWMP_PROMPT) == 0) {
+				/* keep what followed the prompt for the next reply */
+				if (i + 1 < n) {
+					ext_pending = malloc(n - i - 1);
+					if (ext_pending) {
+						memcpy(ext_pending, data + i + 1, n - i - 1);
+						ext_pending_len = n - i - 1;
+					}
+				}
+				done = 1;
+				break;
+			}
+			if (external_handler)
+				external_handler(line);
+		}
+		if (owned)
+			free(data);
+	}
+	free(line);
 }
 
 static void external_write_pipe_output(const char *msg)
@@ -161,6 +206,10 @@ static void json_obj_out_add(json_object *json_obj_out, char *name, char *val)
 
 void external_init()
 {
+	/* a new script: nothing pending from the previous one */
+	FREE(ext_pending);
+	ext_pending_len = 0;
+
 	if (pipe(pfds_in) < 0)
 			return;
 
