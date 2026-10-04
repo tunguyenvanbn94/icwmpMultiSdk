@@ -4,7 +4,15 @@ Repo này chứa source dùng chung cho Broadcom BDK và MTK OpenWrt. `userspace
 source áp vào SDK, `feeds/` là hai package MTK, `apply` kiểm bundle và cài vào
 SDK đích. Lệnh sử dụng và build ở [README repo](../README.md).
 
-## Kiến trúc và flow
+## Kế hoạch hiện hành
+
+- [Đồng bộ main/dev và thiết kế v2](plan/sync-main-dev.md): kết luận, khoảng hở so với code, known
+  issue K1–K9, lộ trình PH0–PH8, quy ước branch, commit, cổng PR và nguồn sự thật
+- Kiến trúc đích v2 (rà soát 2026-09-30 trên `main`/0066, đọc kèm §2 của file trên):
+  [multi-SDK](plan/v2/icwmp_multisdk_design_v2.md), [MTK/OpenWrt](plan/v2/icwmp_mtk_openwrt_design_v2.md),
+  [các phase](plan/v2/icwmp_next_phases_plan_v2.md), [audit code/thiết kế](plan/v2/icwmp_code_design_audit_status_2026-09-30.md)
+
+## Kiến trúc và flow (lịch sử, 2026-09-29)
 
 - [Thiết kế đa platform và hai data model](mtk/icwmp_multiplatform_tr098_design.md)
 - [Flow app, domain, SDK và TR-098](mtk/icwmp_multiplatform_tr098_flow.md)
@@ -14,8 +22,9 @@ SDK đích. Lệnh sử dụng và build ở [README repo](../README.md).
 
 ## Trạng thái và việc tiếp theo
 
-- [Kế hoạch phase port C](issue/tr098_c_port_phases.md)
-- [Trạng thái có cấu trúc](issue/implementation-status.json) và [công cụ xem tiến độ](issue/progress.py)
+- [Trạng thái có cấu trúc](issue/implementation-status.json) (nguồn duy nhất: phase, lộ trình,
+  known issue, validation) và [công cụ xem tiến độ](issue/progress.py)
+- [Kế hoạch phase port C](issue/tr098_c_port_phases.md) (lịch sử; trạng thái phase xem JSON)
 - [Phân tích và bằng chứng](issue/analysis.md), [ma trận coverage](issue/tr098_coverage_matrix.tsv)
 - [Lệnh build](issue/build-commands.md), [lệnh debug](issue/debug-commands.md)
 
@@ -29,9 +38,14 @@ data model, không mở rộng coverage. Bản SDK đã build được xác minh
 chưa có kết quả build/board-test đầy đủ cho HEAD repo này. 0067–0077 đã kiểm
 bằng agent thật chạy trên host: [tests/host](../tests/host/README.md).
 
+Các script kiểm tĩnh trong `issue/` (`check-c-sanity.py`, `verify-dm-paths.py`,
+`check-automake-conds.py`, `check-pkg-deps.py`) giờ kiểm cây `userspace/` của chính repo này.
+Đặt `ICWMP_USERSPACE` để kiểm một cây khác. Danh sách lệnh của cổng PR nằm ở
+[sync-main-dev.md §6.3](plan/sync-main-dev.md#63-cổng-của-mỗi-pr-vào-dev).
+
 Xem lịch sử từng patch trong repo:
 
 ```sh
-git log --reverse --oneline main
+git log --reverse --oneline dev
 git show --stat <commit>
 ```

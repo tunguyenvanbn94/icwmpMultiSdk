@@ -26,6 +26,16 @@ def display(state, as_json):
         print("{:<7} {:<19} {}".format(phase["id"], phase["status"], phase["title"]))
         if phase.get("note"):
             print(" " * 9 + phase["note"])
+    if state.get("roadmap"):
+        print("\n{:<7} {:<19} {}".format("PH", "Trạng thái", "Lộ trình"))
+        for phase in state["roadmap"]:
+            print("{:<7} {:<19} {}".format(phase["id"], phase["status"], phase["title"]))
+            if phase.get("note"):
+                print(" " * 9 + phase["note"])
+    if state.get("known_issues"):
+        print("\nKnown issues:")
+        for issue in state["known_issues"]:
+            print("  {:<4} {:<9} {:<16} {}".format(issue["id"], issue["severity"], issue["status"], issue["title"]))
     print("\nValidation:")
     for name, result in state["validation"].items():
         print("  {}: {}".format(name, result))

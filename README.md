@@ -6,6 +6,8 @@ và P6–P8 còn trong kế hoạch; A3 mới làm một phần. Xem [trạng th
 **Đã kiểm source và apply; các bản sửa 0056–0077 chưa được build bằng SDK/board-test như một bộ hoàn chỉnh.**
 0067–0077 (treo sau phiên đầu, leak, crash do RPC của ACS, tải shell data model) đã chạy thật trên host:
 `tests/host/run.sh all` PASS, valgrind 0 leak — xem [tests/host](tests/host/README.md).
+Kế hoạch hiện hành, known issue (K1: ACS ghi `ManagementServer.*` bị đảo cuối phiên trên MTK) và
+quy ước phát triển: [docs/plan/sync-main-dev.md](docs/plan/sync-main-dev.md).
 
 ## Giải nén và apply
 
