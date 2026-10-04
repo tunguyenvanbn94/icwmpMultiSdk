@@ -3,7 +3,9 @@
 Source: A1 model-neutral layout `libicwmp_dm/src`, ABI/package vẫn `libtr098`.
 TR-098 P1–P5 có 458 param C; các nhánh chưa port vẫn dùng compat. A2, A4, A6
 và P6–P8 còn trong kế hoạch; A3 mới làm một phần. Xem [trạng thái và kế hoạch](docs/README.md).
-**Đã kiểm source và apply; các bản sửa 0056–0066 chưa được build/board-test như một bộ hoàn chỉnh.**
+**Đã kiểm source và apply; các bản sửa 0056–0077 chưa được build bằng SDK/board-test như một bộ hoàn chỉnh.**
+0067–0077 (treo sau phiên đầu, leak, crash do RPC của ACS, tải shell data model) đã chạy thật trên host:
+`tests/host/run.sh all` PASS, valgrind 0 leak — xem [tests/host](tests/host/README.md).
 
 ## Giải nén và apply
 
@@ -80,7 +82,8 @@ Request, GPN/GPV P1 và reload/WebUI/STUN, BDK kiểm cả model 098/181 hiện 
 
 `MANIFEST.json` ghi baseline và ánh xạ commit gốc sang từng commit trong repo này.
 Commit nền dựng lại trạng thái trước 0034; 33 commit tiếp theo tương ứng từng patch
-0034–0066. Patch files đã xóa sau khi ghi commit, xem phần sửa bằng Git:
+0034–0066. Từ 0067 các bản sửa được commit thẳng trong repo này (branch `dev`), không
+có commit overlay gốc tương ứng. Patch files đã xóa sau khi ghi commit, xem phần sửa bằng Git:
 
 ```sh
 sha256sum -c SHA256SUMS

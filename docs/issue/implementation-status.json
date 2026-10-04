@@ -1,9 +1,9 @@
 {
-  "updated_at": "2026-09-25T15:50:00+07:00",
-  "execution": "PHASE 5 ĐÓNG 83/83. 0061: hợp đồng input của shell (is_safe_input + kiểm kiểu shell) trước mọi setter C — lỗ hổng xuyên suốt P1-P5 đã vá. 0056 sửa lỗi chạy thật trong bản đã build -> PHẢI build lại trước board. Data model C 458/783 (458/778 tới được)",
+  "updated_at": "2026-10-04T12:00:00+07:00",
+  "execution": "0067-0077 + tests/host: chạy icwmp_tr098d + libtr098 thật trên host (test ACS, shell DM giả, script external thật). Sửa: treo vĩnh viễn sau phiên đầu (uloop reap con của external_exit, 0069), dmcmd treo khi output > 64 KB (0073), leak theo phiên/message/lời gọi DM (0070), crash do ACS gửi Download/Upload/ScheduleDownload (0077), notify mất thay đổi khi giá trị đổi độ dài (0076), lệch reply shell con (0067). Giảm tải shell: GPV root 1 walk 1935 getter -> 417, notify 1 request thay 100 (0068, 0076). Data model C vẫn 458/783.",
   "baseline": "overlay cd93685595d4a52302d5b14adc9cbf38ac82553c",
-  "current": "overlay 1cde441, patch 0034-0061. Data model C 458/783 (P1 65 + P2 70 + P3 67 + P4 173 + P5 83). Bundle 33477b15bf88, 412 file, apply --dry-run exit 0 trên 1_src và 2_src",
-  "next": "Build lại với 33477b15bf88 (0056-0061). Gate board 1 + thử hợp đồng input (analysis §37.5). Code: P6 Firewall/UI/root còn lại (97), P7 79, P8 144 — object ẩn của root dùng DMOBJ.addressed_only (root_hidden_mtk.c)",
+  "current": "repo dev 0034-0077. Data model C 458/783 (P1 65 + P2 70 + P3 67 + P4 173 + P5 83). tests/host/run.sh all PASS; valgrind 0 leak 0 lỗi; soak 300 phiên RSS phẳng.",
+  "next": "Build SDK MTK + BDK với 0067-0077 (BDK dùng chung external.c, http.c, config.c, log.c, event.c, xml.c, dmuci.c, dmcommon.c). Board: phiên thứ 2+ chạy, VmRSS sau 24 h, ScheduleDownload 1 window, notify. Code: P6 Firewall/UI/root (97), P7 79, P8 144 -- cần thư viện hàm easycwmp của sản phẩm để port đúng giá trị.",
   "phases": [
     {
       "id": "A0",
@@ -100,16 +100,23 @@
       "status": "STATIC_VERIFIED",
       "title": "Hợp đồng input của shell trước mọi setter C",
       "note": "0061: input_contract_mtk.c (is_safe_input + kiểm theo kiểu shell) + shelltypes_mtk.h sinh từ ma trận (186 dòng); dm_platform_param_method ở VALUECHECK. dateTime không mô phỏng. Chưa build/board"
+    },
+    {
+      "id": "R9",
+      "status": "HOST_VERIFIED",
+      "title": "Runtime: treo, leak, crash từ ACS, tải shell",
+      "note": "0067-0077 (repo dev). tests/host/run.sh all PASS, valgrind 0 leak. Chưa build SDK/board"
     }
   ],
   "validation": {
     "static": "PASS — check-cc-syntax.py: lib 41/0, app 17/0 (+ all-C variant of the hook). check-c-sanity 8 lớp: lib/mtk 41/0, app 17/0 x 3 SDK. verify-dm-paths phase 1-5 thiếu 0, phase 5 83/83 dôi 0, 5 không tới được; 126 claim, 21 module, 0 cặp chồng. check-automake-conds OK",
     "patch": "PASS — 0034-0061 xuất từ commit sạch (git format-patch)",
     "bundle": "PASS — sha256 33477b15bf88, SHA256SUMS 412 file, apply --dry-run exit 0 trên 1_src và 2_src",
-    "sdk_build": "PASS đến P4f (25/09). 0056-0061 CHƯA build bằng SDK, nhưng mọi file đã qua cross-gcc của chính SDK đó (check-cc-syntax.py)",
+    "sdk_build": "PASS đến P4f (25/09). 0056-0061 CHƯA build bằng SDK, nhưng mọi file đã qua cross-gcc của chính SDK đó (check-cc-syntax.py). 0062-0077 CHƯA build bằng SDK; host build (gcc 13, --with-sdk=mtk) sạch",
     "board": "NOT_RUN",
     "release": "NOT_READY — A2–A6 chưa implement, P2–P8 còn shell compat",
     "docs": "PASS — check-docs, local links, scoped diff check",
-    "cleanup": "DONE — không tạo temp root ngoài scratchpad phiên. ĐÃ XÓA build dir 17 GB do cp -fpR /. sinh ra trên cây user: build_dir/target-aarch64_cortex-a53_musl/linux-airoha_an7583/icwmp_tr098"
+    "cleanup": "DONE — không tạo temp root ngoài scratchpad phiên. ĐÃ XÓA build dir 17 GB do cp -fpR /. sinh ra trên cây user: build_dir/target-aarch64_cortex-a53_musl/linux-airoha_an7583/icwmp_tr098",
+    "host": "PASS — tests/host/run.sh all trên HEAD dev: unit (pruned walk có/không *_list, Inform cache, dmcmd 0 B..3 MB), smoke, notify 100/100, rpc 5/5, valgrind 0 B lost 0 lỗi. Bản trước 0069 (chỉ thêm sửa wait): rpc 0/5 (crash), notify 98/100."
   }
 }
