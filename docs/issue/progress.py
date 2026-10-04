@@ -35,7 +35,7 @@ def display(state, as_json):
     if state.get("known_issues"):
         print("\nKnown issues:")
         for issue in state["known_issues"]:
-            print("  {:<4} {:<9} {:<16} {}".format(issue["id"], issue["severity"], issue["status"], issue["title"]))
+            print("  {:<4} {:<9} {:<19} {}".format(issue["id"], issue["severity"], issue["status"], issue["title"]))
     print("\nValidation:")
     for name, result in state["validation"].items():
         print("  {}: {}".format(name, result))

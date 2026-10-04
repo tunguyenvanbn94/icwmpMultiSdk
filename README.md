@@ -3,11 +3,11 @@
 Source: A1 model-neutral layout `libicwmp_dm/src`, ABI/package vẫn `libtr098`.
 TR-098 P1–P5 có 458 param C; các nhánh chưa port vẫn dùng compat. A2, A4, A6
 và P6–P8 còn trong kế hoạch; A3 mới làm một phần. Xem [trạng thái và kế hoạch](docs/README.md).
-**Đã kiểm source và apply; các bản sửa 0056–0077 chưa được build bằng SDK/board-test như một bộ hoàn chỉnh.**
-0067–0077 (treo sau phiên đầu, leak, crash do RPC của ACS, tải shell data model) đã chạy thật trên host:
+**Đã kiểm source và apply; các bản sửa 0056–0079 chưa được build bằng SDK/board-test như một bộ hoàn chỉnh.**
+0067–0079 (treo sau phiên đầu, leak, crash do RPC của ACS, tải shell data model, ACS ghi
+`ManagementServer.*`/STUN/PeriodicInformTime trên MTK) đã chạy thật trên host:
 `tests/host/run.sh all` PASS, valgrind 0 leak — xem [tests/host](tests/host/README.md).
-Kế hoạch hiện hành, known issue (K1: ACS ghi `ManagementServer.*` bị đảo cuối phiên trên MTK) và
-quy ước phát triển: [docs/plan/sync-main-dev.md](docs/plan/sync-main-dev.md).
+Kế hoạch hiện hành, known issue và quy ước phát triển: [docs/plan/sync-main-dev.md](docs/plan/sync-main-dev.md).
 
 ## Giải nén và apply
 

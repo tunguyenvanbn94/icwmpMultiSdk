@@ -31,11 +31,11 @@ SDK đích. Lệnh sử dụng và build ở [README repo](../README.md).
 Các file trong `issue/`, `mtk/` và `bdk/` là bản sao từ workspace
 ngày 2026-09-29. Chúng giữ mốc commit và đường dẫn gốc để truy vết, vì vậy vài
 liên kết tương đối và trạng thái trong file cũ không phản ánh repo này. Mốc mới
-nhất trong source là patch 0077. Trạng thái phase có cấu trúc cập nhật lần cuối
+nhất trong source là patch 0079. Trạng thái phase có cấu trúc cập nhật lần cuối
 ngày 2026-10-04: 458/783 parameter TR-098 bằng C, P1–P5 đã port, P6–P8 còn kế
-hoạch. Các patch 0062–0077 sửa init, debug, apply, lỗi runtime và tải của shell
-data model, không mở rộng coverage. Bản SDK đã build được xác minh tới P4c–P4f;
-chưa có kết quả build/board-test đầy đủ cho HEAD repo này. 0067–0077 đã kiểm
+hoạch. Các patch 0062–0079 sửa init, debug, apply, lỗi runtime, tải của shell
+data model và nơi ghi config của ManagementServer, không mở rộng coverage. Bản SDK đã build được xác minh tới P4c–P4f;
+chưa có kết quả build/board-test đầy đủ cho HEAD repo này. 0067–0079 đã kiểm
 bằng agent thật chạy trên host: [tests/host](../tests/host/README.md).
 
 Các script kiểm tĩnh trong `issue/` (`check-c-sanity.py`, `verify-dm-paths.py`,
