@@ -20,8 +20,8 @@ busybox valgrind libjson-c-dev libcurl4-openssl-dev libssl-dev zlib1g-dev`.
 
 ```sh
 tests/host/build.sh            # deps (pinned libubox/uci/ubus), microxml, libtr098, icwmp_tr098d
-sudo tests/host/setup.sh --yes # fake CPE: UCI config, ubusd, data model shell, external script
-tests/host/run.sh all          # unit smoke notify rpc valgrind, exit 1 on any FAIL
+sudo tests/host/setup.sh --yes # fake CPE: UCI config (cwmp, easycwmp, stun), ubusd, stuncd stand-in, data model shell, external script
+tests/host/run.sh all          # unit smoke notify rpc msrv stun ptime valgrind, exit 1 on any FAIL
 ```
 
 Work files go to `$ICWMP_HOST_WORK` (default `/tmp/icwmp-host`); `build.sh`
@@ -36,7 +36,9 @@ again after editing the sources rebuilds what changed.
 | `rpc` | Download/Upload/ScheduleDownload with empty FileType, 3 time windows, a valid single window: faults where due, agent alive |
 | `valgrind [N]` | memcheck over N sessions with Download and ubus load (`notify`, `dm`, `status`): 0 bytes definitely/indirectly lost, 0 errors |
 | `soak [N]` | N sessions with ubus load, RSS / fd / thread / process samples every 30 s |
-| `msrv` | the ACS sets `ManagementServer.PeriodicInformInterval`: the value must still be in `cwmp` and `easycwmp` (the product's config of record) after the session. FAILS up to 0077 (known issue K1, [docs/plan/sync-main-dev.md](../../docs/plan/sync-main-dev.md) §3.1); not part of `all` until the fix |
+| `msrv` | the ACS sets URL, Username, PeriodicInformInterval/Time, CWMPRetryMinimumWaitInterval, ConnectionRequestUsername: the values must be in `easycwmp` (the product's config of record) and in icwmpd's mirror `cwmp` after the session; PeriodicInformInterval=0 faults. Known issue K1, fixed by 0078 |
+| `stun` | the ACS sets the STUN leaves: they must land in `stun.@stun[0]`, raise `/tmp/stunclient_reload_needed` and run `/etc/init.d/stuncd reload` once; GPV of UDPConnectionRequestAddress/NATDetected reads `stun.@stun[0]`; STUNServerPort=70000 faults. K2, fixed by 0078 |
+| `ptime` | `easycwmp.@acs[0].periodic_time` as the product stores it (a dateTime): the next periodic Inform must fall on its minute and second. K10, fixed by 0079 |
 
 Logs: `$ICWMP_HOST_WORK/run/` (`acs.log`, `icwmpd.out`, `vg.log`,
 `fake_dm.cmds` = every request the data model shell got).

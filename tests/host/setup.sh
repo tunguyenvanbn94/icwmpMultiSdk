@@ -1,6 +1,7 @@
 #!/bin/sh
 # Prepare THIS machine as a fake CPE for the host test.  It overwrites system
-# files (/etc/config/cwmp, /etc/config/easycwmp, /usr/share/icwmp,
+# files (/etc/config/cwmp, /etc/config/easycwmp, /etc/config/stun,
+# /etc/init.d/stuncd, /usr/share/icwmp,
 # /usr/sbin/icwmp, /sbin/uci, /usr/bin/ubus, /usr/share/libubox/jshn.sh,
 # /lib/functions.sh) and starts ubusd: run it as root in a throwaway
 # container, never on a workstation or a board.
@@ -45,6 +46,23 @@ config device
 	option modelname 'Host'
 	option description ''
 EOC
+# the product's stunclient config (stun.@stun[0], what the STUN leaves read
+# and write) and a stand-in of its init script that only logs the call
+cat > /etc/config/stun <<'EOC'
+config stun
+	option stun_enable '0'
+	option serveraddress ''
+	option serverport '3478'
+	option username ''
+	option password ''
+	option min_keepalive '30'
+	option max_keepalive '60'
+	option natdetect '0'
+	option udpcontnreqaddr ''
+EOC
+mkdir -p /etc/init.d
+printf '#!/bin/sh\necho "$*" >> %s/stuncd.calls\n' "$RUN" > /etc/init.d/stuncd
+chmod +x /etc/init.d/stuncd
 ln -sf "$PREFIX/bin/uci" /sbin/uci
 ln -sf "$PREFIX/bin/ubus" /usr/bin/ubus
 ln -sf "$PREFIX/bin/jshn" /usr/bin/jshn

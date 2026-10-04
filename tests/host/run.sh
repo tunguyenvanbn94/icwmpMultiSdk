@@ -6,8 +6,10 @@
 #   run.sh rpc             malformed and valid transfer RPCs, the agent must survive
 #   run.sh valgrind [N]    memcheck over N sessions with downloads and ubus load
 #   run.sh soak [N]        N sessions (default 300), RSS/fd/thread samples
-#   run.sh msrv            ACS write of ManagementServer.* survives the session (K1, not in all)
-#   run.sh all             unit smoke notify rpc valgrind
+#   run.sh msrv            ACS writes of ManagementServer.* land in easycwmp and cwmp (K1)
+#   run.sh stun            STUN leaves on stun.@stun[0], reload flag, stuncd reload (K2)
+#   run.sh ptime           PeriodicInformTime dateTime aligns the periodic Inform (K10)
+#   run.sh all             unit smoke notify rpc msrv stun ptime valgrind
 # Needs build.sh, then setup.sh --yes (root, throwaway container).
 . "$(dirname "$0")/env.sh"
 
@@ -153,25 +155,125 @@ do_valgrind() {
 	fi
 }
 
-# The ACS writes ManagementServer.PeriodicInformInterval: libtr098 writes
-# cwmp.acs.*, the value must survive the end of the session and reach
-# easycwmp, the product's config of record (WebUI, next boot).  FAILS up to
-# 0077: icwmp_platform_end_session() mirrors easycwmp -> cwmp and puts the old
-# value back (known issue K1, docs/plan/sync-main-dev.md).  Joins "all" with
-# the fix.
+# value of one leaf as "ubus call tr069 dm get" returns it
+dm_value() {
+	$UBUS call tr069 dm "{\"cmd\":\"get\",\"path\":\"$1\"}" 2>/dev/null | python3 -c "
+import json, sys
+try: print(json.load(sys.stdin)['parameters'][0]['value'])
+except Exception: print('<none>')"
+}
+
+# expect <what> <got> <want>: one line per mismatch, sets bad_n
+expect() {
+	if [ "$2" != "$3" ]; then echo "  $1: '$2', want '$3'"; bad_n=$((bad_n+1)); fi
+}
+
+save_cfg() { for c in "$@"; do cp "/etc/config/$c" "$RUN/$c.saved"; done; }
+restore_cfg() { for c in "$@"; do cp "$RUN/$c.saved" "/etc/config/$c"; done; }
+
+# The ACS writes ManagementServer.*: the values must land in easycwmp, the
+# product's config of record (WebUI, next boot), and icwmpd's mirror cwmp
+# must carry them after the session.  Up to 0077 libtr098 wrote cwmp only
+# and the end-of-session mirror easycwmp -> cwmp put the old values back
+# (known issue K1, docs/plan/sync-main-dev.md).
 do_msrv() {
-	start 1 "--set InternetGatewayDevice.ManagementServer.PeriodicInformInterval=3600"
+	save_cfg easycwmp cwmp
+	start 1 "--set InternetGatewayDevice.ManagementServer.URL=http://127.0.0.1:18080/acs-msrv
+		--set InternetGatewayDevice.ManagementServer.Username=acs-msrv
+		--set InternetGatewayDevice.ManagementServer.PeriodicInformInterval=3600
+		--set InternetGatewayDevice.ManagementServer.PeriodicInformTime=2026-01-01T00:17:00Z
+		--set InternetGatewayDevice.ManagementServer.CWMPRetryMinimumWaitInterval=7
+		--set InternetGatewayDevice.ManagementServer.ConnectionRequestUsername=cr-msrv"
 	wait_done 60; sleep 2
-	c=$(uci -q get cwmp.acs.periodic_inform_interval)
-	e=$(uci -q get easycwmp.@acs[0].periodic_interval)
-	if alive && [ "$c" = 3600 ] && [ "$e" = 3600 ]; then
-		pass "msrv: PeriodicInformInterval=3600 kept in cwmp and easycwmp"
-	else
-		bad "msrv: ACS set PeriodicInformInterval=3600, after the session cwmp=$c easycwmp=$e"
-	fi
+	bad_n=0
+	expect "easycwmp url" "$(uci -q get easycwmp.@acs[0].url)" "http://127.0.0.1:18080/acs-msrv"
+	expect "easycwmp username" "$(uci -q get easycwmp.@acs[0].username)" "acs-msrv"
+	expect "easycwmp periodic_interval" "$(uci -q get easycwmp.@acs[0].periodic_interval)" "3600"
+	expect "easycwmp periodic_time" "$(uci -q get easycwmp.@acs[0].periodic_time)" "2026-01-01T00:17:00Z"
+	expect "easycwmp cwmpretryinterval" "$(uci -q get easycwmp.@acs[0].cwmpretryinterval)" "7"
+	expect "easycwmp local username" "$(uci -q get easycwmp.@local[0].username)" "cr-msrv"
+	expect "cwmp url" "$(uci -q get cwmp.acs.url)" "http://127.0.0.1:18080/acs-msrv"
+	expect "cwmp userid" "$(uci -q get cwmp.acs.userid)" "acs-msrv"
+	expect "cwmp periodic_inform_interval" "$(uci -q get cwmp.acs.periodic_inform_interval)" "3600"
+	expect "cwmp retry_min_wait_interval" "$(uci -q get cwmp.acs.retry_min_wait_interval)" "7"
+	expect "cwmp cpe userid" "$(uci -q get cwmp.cpe.userid)" "cr-msrv"
+	expect "GPV URL" "$(dm_value InternetGatewayDevice.ManagementServer.URL)" "http://127.0.0.1:18080/acs-msrv"
+	expect "GPV PeriodicInformTime" "$(dm_value InternetGatewayDevice.ManagementServer.PeriodicInformTime)" "2026-01-01T00:17:00Z"
+	alive || expect "agent" "dead" "alive"
 	stop
-	uci set cwmp.acs.periodic_inform_interval=86400; uci commit cwmp
-	uci set easycwmp.@acs[0].periodic_interval=86400; uci commit easycwmp
+	restore_cfg easycwmp cwmp
+	start 1 "--set InternetGatewayDevice.ManagementServer.PeriodicInformInterval=0"
+	wait_done 30; sleep 1
+	expect "PeriodicInformInterval=0 faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+	expect "easycwmp periodic_interval after a fault" "$(uci -q get easycwmp.@acs[0].periodic_interval)" "86400"
+	stop
+	restore_cfg easycwmp cwmp
+	if [ $bad_n = 0 ]; then pass "msrv: ACS writes of ManagementServer.* kept in easycwmp and cwmp, range fault"; else bad "msrv: $bad_n mismatches above"; fi
+}
+
+# STUN leaves are the product's stunclient: stun.@stun[0], the reload flag
+# of the shell setter and one stuncd reload at the end of the session (K2).
+do_stun() {
+	save_cfg stun
+	rm -f /tmp/stunclient_reload_needed "$RUN/stuncd.calls"
+	uci set stun.@stun[0].udpcontnreqaddr=192.0.2.7:3479; uci set stun.@stun[0].natdetect=1; uci commit stun
+	start 1 "--set InternetGatewayDevice.ManagementServer.STUNEnable=1
+		--set InternetGatewayDevice.ManagementServer.STUNServerAddress=stun.example.net
+		--set InternetGatewayDevice.ManagementServer.STUNServerPort=3479
+		--set InternetGatewayDevice.ManagementServer.STUNUsername=su
+		--set InternetGatewayDevice.ManagementServer.STUNPassword=sp
+		--set InternetGatewayDevice.ManagementServer.STUNMinimumKeepAlivePeriod=20
+		--set InternetGatewayDevice.ManagementServer.STUNMaximumKeepAlivePeriod=-1"
+	wait_done 60; sleep 2
+	bad_n=0
+	expect "stun_enable" "$(uci -q get stun.@stun[0].stun_enable)" "1"
+	expect "serveraddress" "$(uci -q get stun.@stun[0].serveraddress)" "stun.example.net"
+	expect "serverport" "$(uci -q get stun.@stun[0].serverport)" "3479"
+	expect "username" "$(uci -q get stun.@stun[0].username)" "su"
+	expect "password" "$(uci -q get stun.@stun[0].password)" "sp"
+	expect "min_keepalive" "$(uci -q get stun.@stun[0].min_keepalive)" "20"
+	expect "max_keepalive" "$(uci -q get stun.@stun[0].max_keepalive)" "-1"
+	expect "reload flag" "$([ -f /tmp/stunclient_reload_needed ] && echo yes)" "yes"
+	expect "stuncd calls" "$(cat "$RUN/stuncd.calls" 2>/dev/null | tr '\n' ' ')" "reload "
+	expect "GPV UDPConnectionRequestAddress" "$(dm_value InternetGatewayDevice.ManagementServer.UDPConnectionRequestAddress)" "192.0.2.7:3479"
+	expect "GPV NATDetected" "$(dm_value InternetGatewayDevice.ManagementServer.NATDetected)" "1"
+	expect "GPV STUNPassword" "$(dm_value InternetGatewayDevice.ManagementServer.STUNPassword)" ""
+	expect "GPV STUNServerPort" "$(dm_value InternetGatewayDevice.ManagementServer.STUNServerPort)" "3479"
+	expect "cwmp_stun untouched" "$(uci -q get cwmp_stun.stun.server_address)" ""
+	alive || expect "agent" "dead" "alive"
+	stop
+	start 1 "--set InternetGatewayDevice.ManagementServer.STUNServerPort=70000"
+	wait_done 30; sleep 1
+	expect "STUNServerPort=70000 faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+	expect "serverport after a fault" "$(uci -q get stun.@stun[0].serverport)" "3479"
+	stop
+	restore_cfg stun
+	if [ $bad_n = 0 ]; then pass "stun: STUN leaves on stun.@stun[0], reload flag, one stuncd reload, range fault"; else bad "stun: $bad_n mismatches above"; fi
+}
+
+# PeriodicInformTime as easycwmp stores it (a dateTime) must align the
+# periodic Inform on that instant.  Up to 0078 config.c read it with atol():
+# "2026-01-01T00:17:00Z" -> 2026 s, Informs at hh:33:46 (K10).
+do_ptime() {
+	save_cfg easycwmp cwmp
+	uci set easycwmp.@acs[0].periodic_enable=1
+	uci set easycwmp.@acs[0].periodic_interval=3600
+	uci set easycwmp.@acs[0].periodic_time=2026-01-01T00:17:00Z
+	uci commit easycwmp
+	start 1 "--readonly"
+	wait_done 60; sleep 2
+	next=$($UBUS call tr069 status 2>/dev/null | python3 -c "
+import json, sys
+try: print(json.load(sys.stdin)['next_session']['start_time'])
+except Exception: print('')")
+	off=$(date +%z)
+	stop
+	restore_cfg easycwmp cwmp
+	# minutes:seconds of the next Inform; the zone of the host shifts whole
+	# hours in the usual case, check it is one
+	case "$off" in *00) ;; *) bad "ptime: host zone $off is not whole hours, cannot check"; return ;; esac
+	ms=$(echo "$next" | cut -c15-19)
+	if [ "$ms" = "17:00" ]; then pass "ptime: next periodic Inform $next (aligned on :17:00)"; else bad "ptime: next periodic Inform '$next', want minute:second 17:00"; fi
 }
 
 do_soak() {
@@ -197,7 +299,9 @@ case "$1" in
 	valgrind) do_valgrind "$2" ;;
 	soak) do_soak "$2" ;;
 	msrv) do_msrv ;;
-	all) do_unit; do_smoke; do_notify; do_rpc; do_valgrind ;;
-	*) sed -n '2,10p' "$0"; exit 1 ;;
+	stun) do_stun ;;
+	ptime) do_ptime ;;
+	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_valgrind ;;
+	*) sed -n '2,/^# Needs/p' "$0"; exit 1 ;;
 esac
 exit $fail
