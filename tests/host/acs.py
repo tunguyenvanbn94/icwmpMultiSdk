@@ -2,7 +2,7 @@
 """Test ACS for the host test of icwmp_tr098d (tests/host).
 
 Answers Inform and TransferComplete, runs a fixed list of RPCs per session
-(PLAN, or one RPC of BAD with --plan), ends the session with 204 and sends
+(PLAN, one RPC of BAD with --plan, or one SPV with --set), ends the session with 204 and sends
 a Connection Request (digest cr/crpass) so the next session starts, until
 --sessions sessions.  One line per session on stdout, "DONE ..." at the end."""
 import argparse, re, sys, threading, time, urllib.request
@@ -126,6 +126,8 @@ class H(BaseHTTPRequestHandler):
                     k in r for k in ("SetParameterValues", "AddObject", "DeleteObject"))]
                 if args.plan:
                     state["queue"] = [BAD[args.plan]]
+                if args.set:
+                    state["queue"] = [spv("kset", *(tuple(a.split("=", 1)) for a in args.set))]
                 if args.download_every and state["sessions"] % args.download_every == 0:
                     state["queue"].append(DOWNLOAD)
                 ev = ",".join(re.findall(r"<EventCode>([^<]*)</EventCode>", body))
@@ -169,5 +171,7 @@ ap.add_argument("--gap", type=float, default=0.5)
 ap.add_argument("--download-every", type=int, default=0)
 ap.add_argument("--readonly", action="store_true", help="no SPV/AddObject/DeleteObject")
 ap.add_argument("--plan", default="", choices=[""] + sorted(BAD), help="only this one RPC per session")
+ap.add_argument("--set", action="append", metavar="NAME=VALUE",
+                help="only one SetParameterValues of these per session")
 args = ap.parse_args()
 ThreadingHTTPServer(("127.0.0.1", args.port), H).serve_forever()

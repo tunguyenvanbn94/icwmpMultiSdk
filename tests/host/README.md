@@ -36,6 +36,7 @@ again after editing the sources rebuilds what changed.
 | `rpc` | Download/Upload/ScheduleDownload with empty FileType, 3 time windows, a valid single window: faults where due, agent alive |
 | `valgrind [N]` | memcheck over N sessions with Download and ubus load (`notify`, `dm`, `status`): 0 bytes definitely/indirectly lost, 0 errors |
 | `soak [N]` | N sessions with ubus load, RSS / fd / thread / process samples every 30 s |
+| `msrv` | the ACS sets `ManagementServer.PeriodicInformInterval`: the value must still be in `cwmp` and `easycwmp` (the product's config of record) after the session. FAILS up to 0077 (known issue K1, [docs/plan/sync-main-dev.md](../../docs/plan/sync-main-dev.md) §3.1); not part of `all` until the fix |
 
 Logs: `$ICWMP_HOST_WORK/run/` (`acs.log`, `icwmpd.out`, `vg.log`,
 `fake_dm.cmds` = every request the data model shell got).

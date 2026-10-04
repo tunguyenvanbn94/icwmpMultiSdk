@@ -6,6 +6,7 @@
 #   run.sh rpc             malformed and valid transfer RPCs, the agent must survive
 #   run.sh valgrind [N]    memcheck over N sessions with downloads and ubus load
 #   run.sh soak [N]        N sessions (default 300), RSS/fd/thread samples
+#   run.sh msrv            ACS write of ManagementServer.* survives the session (K1, not in all)
 #   run.sh all             unit smoke notify rpc valgrind
 # Needs build.sh, then setup.sh --yes (root, throwaway container).
 . "$(dirname "$0")/env.sh"
@@ -152,6 +153,27 @@ do_valgrind() {
 	fi
 }
 
+# The ACS writes ManagementServer.PeriodicInformInterval: libtr098 writes
+# cwmp.acs.*, the value must survive the end of the session and reach
+# easycwmp, the product's config of record (WebUI, next boot).  FAILS up to
+# 0077: icwmp_platform_end_session() mirrors easycwmp -> cwmp and puts the old
+# value back (known issue K1, docs/plan/sync-main-dev.md).  Joins "all" with
+# the fix.
+do_msrv() {
+	start 1 "--set InternetGatewayDevice.ManagementServer.PeriodicInformInterval=3600"
+	wait_done 60; sleep 2
+	c=$(uci -q get cwmp.acs.periodic_inform_interval)
+	e=$(uci -q get easycwmp.@acs[0].periodic_interval)
+	if alive && [ "$c" = 3600 ] && [ "$e" = 3600 ]; then
+		pass "msrv: PeriodicInformInterval=3600 kept in cwmp and easycwmp"
+	else
+		bad "msrv: ACS set PeriodicInformInterval=3600, after the session cwmp=$c easycwmp=$e"
+	fi
+	stop
+	uci set cwmp.acs.periodic_inform_interval=86400; uci commit cwmp
+	uci set easycwmp.@acs[0].periodic_interval=86400; uci commit easycwmp
+}
+
 do_soak() {
 	start "${1:-300}" ""
 	touch "$RUN/load.on"; load 2
@@ -174,6 +196,7 @@ case "$1" in
 	rpc) do_rpc ;;
 	valgrind) do_valgrind "$2" ;;
 	soak) do_soak "$2" ;;
+	msrv) do_msrv ;;
 	all) do_unit; do_smoke; do_notify; do_rpc; do_valgrind ;;
 	*) sed -n '2,10p' "$0"; exit 1 ;;
 esac
