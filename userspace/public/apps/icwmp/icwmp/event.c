@@ -1059,7 +1059,9 @@ int cwmp_root_cause_event_periodic (struct cwmp *cwmp)
     static int      period = 0;
     static bool		periodic_enable = false;
     static time_t	periodic_time = 0;
-    char 			local_time[26] = {0};
+    /* "%FT%T%z" + the ':' put in below + NUL = 26 bytes; [26] was
+     * written past a 26 byte array */
+    char 			local_time[32] = {0};
     struct tm 		*t_tm;
     
     if (period==cwmp->conf.period && periodic_enable==cwmp->conf.periodic_enable && periodic_time==cwmp->conf.time)

@@ -40,47 +40,27 @@ static void netlink_new_msg_v6(struct uloop_fd *ufd, unsigned events);
 static struct uloop_fd netlink_event = { .cb = netlink_new_msg };
 static struct uloop_fd netlink_event_v6 = { .cb = netlink_new_msg };
 
+/* 0 when the netdev itf2 is the configured interface itf1: the same name,
+ * or the same device before a VLAN suffix ("eth0.2" / "eth0.3").
+ *
+ * The old version allocated one byte short and wrote the NUL past it, built
+ * the second name from itf1 again, and called every name without a dot a
+ * mismatch: with cwmp.cpe.interface = "pppoe-if0" (no dot) the IPv4 address
+ * of the CPE was never picked up -- no cwmp.cpe.ip, no Connection Request
+ * address value change. */
 static int itfcmp(char *itf1, char *itf2)
 {
-	int index = 0;
-	int status = 1;
-	char *str = NULL;
-	char *buf1 = NULL;
-	char *buf2 = NULL;
-	if(itf1[0] == '\0')
-		goto end;
-	str = strchr(itf1, '.');
-	if(str == NULL)
-	    goto end;
-	index = (int)(str - itf1);
-	if(!index)
-		goto end;
-	buf1 = malloc(index);
-	strncpy(buf1, itf1, index);
-	if(!buf1)
-		goto end;
-	buf1[index] = '\0';
-	if(itf2[0] == '\0')
-		goto end;
-	str = strchr(itf2, '.');
-	if(str == NULL)
-	    goto end;
-	index = (int)(str - itf2);
-	if(!index)
-		goto end;
-	buf2 = malloc(index);
-	if(!buf2)
-		goto end;
-	buf2[index] = '\0';
-	strncpy(buf2, itf1, index);
-	if(strcmp(buf1, buf2) == 0)
-		status = 0;
-end:
-	if(buf1)
-		free(buf1);
-	if(buf2)
-		free(buf2);
-	return status;
+	const char *d1, *d2;
+
+	if (!itf1 || !itf2 || !itf1[0] || !itf2[0])
+		return 1;
+	if (strcmp(itf1, itf2) == 0)
+		return 0;
+	d1 = strchr(itf1, '.');
+	d2 = strchr(itf2, '.');
+	if (!d1 || !d2 || d1 == itf1 || (d1 - itf1) != (d2 - itf2))
+		return 1;
+	return strncmp(itf1, itf2, (size_t)(d1 - itf1)) ? 1 : 0;
 }
 
 static void freecwmp_netlink_interface(struct nlmsghdr *nlh)

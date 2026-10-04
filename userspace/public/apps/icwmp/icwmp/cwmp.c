@@ -683,6 +683,7 @@ struct session *cwmp_add_queue_session (struct cwmp *cwmp)
     INIT_LIST_HEAD (&(session->head_rpc_cpe));
     if ((rpc_acs = cwmp_add_session_rpc_acs_head(session, RPC_ACS_INFORM)) == NULL)
     {
+    	list_del (&(session->list));	/* it was freed while still queued */
     	free (session);
         return NULL;
     }

@@ -1576,6 +1576,7 @@ int cwmp_handle_rpc_cpe_set_parameter_values(struct session *session, struct rpc
 			b->parent->type == MXML_ELEMENT &&
 			!strcmp(b->parent->value.element.name, "Value")) {
 			int whitespace = 0;
+			FREE(parameter_value);	/* a Value without its Name before it */
 			parameter_value = strdup((char *)mxmlGetOpaque(b));
 			n = b->parent;
 			while (b = mxmlWalkNext(b, n, MXML_DESCEND)) {
@@ -1591,6 +1592,7 @@ int cwmp_handle_rpc_cpe_set_parameter_values(struct session *session, struct rpc
 		if (b && b->type == MXML_ELEMENT &&
 			!strcmp(b->value.element.name, "Value") &&
 			!b->child) {
+			FREE(parameter_value);
 			parameter_value = strdup("");
 		}
 		if (parameter_name && parameter_value) {
@@ -4008,10 +4010,12 @@ int cwmp_handle_rpc_cpe_download(struct session *session, struct rpc *rpc)
 		b = mxmlWalkNext(b, n, MXML_DESCEND);
 	}
 
-	if(strcmp(file_type,"1 Firmware Upgrade Image") &&
+	/* an empty or missing FileType left file_type NULL: strcmp() crashed icwmpd */
+	if(!file_type ||
+		(strcmp(file_type,"1 Firmware Upgrade Image") &&
 		strcmp(file_type,"2 Web Content") &&
 		strcmp(file_type,"3 Vendor Configuration File") &&
-		strcmp(file_type,"6 CWMP CA SSL Certificate File"))
+		strcmp(file_type,"6 CWMP CA SSL Certificate File")))
 	{
 		error = FAULT_CPE_INVALID_ARGUMENTS;
 	}
@@ -4206,7 +4210,11 @@ int cwmp_handle_rpc_cpe_schedule_download(struct session *session, struct rpc *r
 		if (b && b->type == MXML_ELEMENT &&
 			!strcmp(b->parent->value.element.name, "TimeWindowList")) {
 			if (!t) return -1; //TO CHECK*/
-			t = mxmlWalkNext(t, b, MXML_DESCEND);
+			/* TR-069 allows two windows.  A third one was parsed too and
+			 * wrote past schedule_download_delay[4] (stack) and
+			 * timewindowstruct[2] (heap); it is counted, not stored, and
+			 * the RPC faulted below. */
+			t = (i < 2) ? mxmlWalkNext(t, b, MXML_DESCEND) : NULL;
 			while (t) {
 				if (t && t->type == MXML_OPAQUE &&
 					t->value.opaque &&
@@ -4276,20 +4284,24 @@ int cwmp_handle_rpc_cpe_schedule_download(struct session *session, struct rpc *r
 		}
 		b = mxmlWalkNext(b, n, MXML_DESCEND);
 	}
-	if(strcmp(file_type,"1 Firmware Upgrade Image") &&
+	/* FileType / WindowMode absent or empty: NULL.  strcmp() of them
+	 * crashed icwmpd -- and the second window is optional (TR-069 allows
+	 * one or two), so every valid single-window ScheduleDownload did. */
+	if(i > 2 || !file_type ||
+		(strcmp(file_type,"1 Firmware Upgrade Image") &&
 		strcmp(file_type,"2 Web Content") &&
 		strcmp(file_type,"3 Vendor Configuration File") &&
 		strcmp(file_type,"4 Tone File") &&
 		strcmp(file_type,"5 Ringer File") &&
-		strcmp(file_type,"6 CWMP CA SSL Certificate File"))
+		strcmp(file_type,"6 CWMP CA SSL Certificate File")))
 	{
 		error = FAULT_CPE_INVALID_ARGUMENTS;
 	}
-	else if((
+	else if(!windowmode0 || (
 		strcmp(windowmode0,"1 At Any Time") &&
 		strcmp(windowmode0,"2 Immediately") &&
 		strcmp(windowmode0,"3 When Idle")) || 
-		(
+		(windowmode1 &&
 		strcmp(windowmode1,"1 At Any Time") &&
 		strcmp(windowmode1,"2 Immediately") &&
 		strcmp(windowmode1,"3 When Idle")))
@@ -4314,7 +4326,10 @@ int cwmp_handle_rpc_cpe_schedule_download(struct session *session, struct rpc *r
 		error = FAULT_CPE_FILE_TRANSFER_UNSUPPORTED_PROTOCOL;
 	}
 	else {
-		for (j = 0; j<3; j++)
+		/* in order: start0 <= end0 [<= start1 <= end1].  All four were
+		 * compared, so a single window (start1 = end1 = 0) always
+		 * faulted 9003. */
+		for (j = 0; j < 2 * i - 1 && j < 3; j++)
 		{
 			if (schedule_download_delay[j] > schedule_download_delay[j+1])
 			{				
@@ -4461,10 +4476,11 @@ int cwmp_handle_rpc_cpe_upload(struct session *session, struct rpc *rpc)
 		}
 		b = mxmlWalkNext(b, n, MXML_DESCEND);
 	}
-	if(strncmp(file_type, "1 Vendor Configuration File", sizeof"1 Vendor Configuration File" -1) != 0 &&
+	if(!file_type ||	/* empty or missing FileType: strncmp(NULL) crashed icwmpd */
+		(strncmp(file_type, "1 Vendor Configuration File", sizeof"1 Vendor Configuration File" -1) != 0 &&
 		strncmp(file_type, "3 Vendor Configuration File", sizeof"3 Vendor Configuration File" -1) != 0 &&
 		strncmp(file_type, "2 Vendor Log File", sizeof"2 Vendor Log File" -1) != 0 &&
-		strncmp(file_type, "4 Vendor Log File", sizeof"4 Vendor Log File" -1) != 0)
+		strncmp(file_type, "4 Vendor Log File", sizeof"4 Vendor Log File" -1) != 0))
 	{
 		error = FAULT_CPE_REQUEST_DENIED;
 	}
