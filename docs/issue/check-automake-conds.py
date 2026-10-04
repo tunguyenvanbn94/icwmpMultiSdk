@@ -20,9 +20,11 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OVERLAY = os.path.normpath(os.path.join(
-    HERE, "..", "..", "..", "brcm_ap_wifi7_mvn", "issues",
-    "20260916_tr069_app_use_icwmp", "sdk-overlay", "userspace"))
+# Cây userspace/ của repo này.  ICWMP_USERSPACE trỏ sang cây khác (overlay của
+# workspace cũ: .../sdk-overlay/userspace) khi cần kiểm ở đó.
+USERSPACE = os.environ.get("ICWMP_USERSPACE") or os.path.normpath(
+    os.path.join(HERE, "..", "..", "userspace"))
+OVERLAY = USERSPACE
 TREES = (
     (os.path.join(OVERLAY, "public/apps/icwmp/icwmp/bin/Makefile.am"),
      os.path.join(OVERLAY, "public/apps/icwmp/icwmp/sdk")),

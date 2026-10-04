@@ -18,10 +18,11 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_SRC = os.path.normpath(os.path.join(
-    HERE, "..", "..", "..", "brcm_ap_wifi7_mvn", "issues",
-    "20260916_tr069_app_use_icwmp", "sdk-overlay", "userspace", "public",
-    "libs", "libicwmp_dm", "src"))
+# Cây userspace/ của repo này.  ICWMP_USERSPACE trỏ sang cây khác (overlay của
+# workspace cũ: .../sdk-overlay/userspace) khi cần kiểm ở đó.
+USERSPACE = os.environ.get("ICWMP_USERSPACE") or os.path.normpath(
+    os.path.join(HERE, "..", "..", "userspace"))
+DEFAULT_SRC = os.path.join(USERSPACE, "public", "libs", "libicwmp_dm", "src")
 DEFAULT_MATRIX = os.path.join(HERE, "tr098_coverage_matrix.tsv")
 
 TABLE_RE = re.compile(

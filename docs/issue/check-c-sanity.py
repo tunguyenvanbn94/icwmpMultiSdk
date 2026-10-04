@@ -39,15 +39,13 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_SRC = os.path.normpath(os.path.join(
-    HERE, "..", "..", "..", "brcm_ap_wifi7_mvn", "issues",
-    "20260916_tr069_app_use_icwmp", "sdk-overlay", "userspace", "public",
-    "libs", "libicwmp_dm", "src"))
+# Cây userspace/ của repo này.  ICWMP_USERSPACE trỏ sang cây khác (overlay của
+# workspace cũ: .../sdk-overlay/userspace) khi cần kiểm ở đó.
+USERSPACE = os.environ.get("ICWMP_USERSPACE") or os.path.normpath(
+    os.path.join(HERE, "..", "..", "userspace"))
+DEFAULT_SRC = os.path.join(USERSPACE, "public", "libs", "libicwmp_dm", "src")
 
-APP_SRC = os.path.normpath(os.path.join(
-    HERE, "..", "..", "..", "brcm_ap_wifi7_mvn", "issues",
-    "20260916_tr069_app_use_icwmp", "sdk-overlay", "userspace", "public",
-    "apps", "icwmp", "icwmp"))
+APP_SRC = os.path.join(USERSPACE, "public", "apps", "icwmp", "icwmp")
 
 # Gói app include header của thư viện bằng <icwmp_dm/dmtr098.h>; trên máy build
 # đó là bản đã install vào staging_dir, ở đây là chính cây nguồn libtr098.
@@ -710,6 +708,10 @@ def main():
               % (name, os.path.relpath(a, src_root), os.path.relpath(b, src_root)))
         bad += 1
     print("\n[%s/%s] %d file kiểm, %d vấn đề" % (tree, sdk, len(files), bad))
+    if not files:
+        # không thấy nguồn nào = cổng không kiểm gì, không được tính là PASS
+        print("LỖI: không có file nào để kiểm dưới %s" % src_root)
+        return 1
     return 1 if bad else 0
 
 

@@ -27,15 +27,17 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-APP = os.path.normpath(os.path.join(
-    HERE, "..", "..", "..", "brcm_ap_wifi7_mvn", "issues",
-    "20260916_tr069_app_use_icwmp", "sdk-overlay", "userspace", "public",
-    "apps", "icwmp", "icwmp"))
-FEED = os.path.normpath(os.path.join(
-    HERE, "..", "..", "..", "brcm_ap_wifi7_mvn", "issues",
-    "20260916_tr069_app_use_icwmp", "sdk-overlay", "userspace", "release",
-    "feeds", "icwmp_tr098", "Makefile"))
-SDK = os.path.normpath(os.path.join(HERE, "..", "..", "src", "2025q3"))
+# Cây userspace/ của repo này.  ICWMP_USERSPACE trỏ sang cây khác (overlay của
+# workspace cũ: .../sdk-overlay/userspace) khi cần kiểm ở đó.
+USERSPACE = os.environ.get("ICWMP_USERSPACE") or os.path.normpath(
+    os.path.join(HERE, "..", "..", "userspace"))
+APP = os.path.join(USERSPACE, "public", "apps", "icwmp", "icwmp")
+# feeds/ ở gốc repo; ICWMP_FEED_MAKEFILE cho cây khác
+FEED = os.environ.get("ICWMP_FEED_MAKEFILE") or os.path.normpath(
+    os.path.join(HERE, "..", "..", "feeds", "icwmp_tr098", "Makefile"))
+# cây SDK MTK (.../src/2025q3) để tra tên gói; không có thì chỉ in LDADD/DEPENDS
+SDK = os.environ.get("ICWMP_SDK_SRC") or os.path.normpath(
+    os.path.join(HERE, "..", "..", "src", "2025q3"))
 SDK_ROOTS = ("openwrt-21.02/openwrt-21.02.1_dev/package",
              "openwrt-21.02/openwrt-21.02.1_dev/feeds",
              "openwrt-21.02/openwrt-21.02.1_dev/include",
