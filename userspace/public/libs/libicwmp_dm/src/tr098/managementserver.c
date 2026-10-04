@@ -195,6 +195,9 @@ int get_management_server_periodic_inform_time(char *refparam, struct dmctx *ctx
 	time_t time_value;
 	
 	dmuci_get_option_value_string("cwmp", "acs", "periodic_inform_time", value);
+	/* an SDK that mirrors the product's config stores the dateTime itself */
+	if (strchr(*value, 'T'))
+		return 0;
 	if ((*value)[0] != '0' && (*value)[0] != '\0') {
 		time_value = atoi(*value);
 		char s_now[sizeof "AAAA-MM-JJTHH:MM:SS.000Z"];

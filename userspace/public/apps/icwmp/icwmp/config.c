@@ -414,6 +414,51 @@ static void uppercase ( char *sPtr )
 	}
 }
 
+static long days_from_civil(long y, long m, long d)
+{
+	long era, yoe, doy, doe;
+
+	y -= m <= 2;
+	era = (y >= 0 ? y : y - 399) / 400;
+	yoe = y - era * 400;
+	doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
+	doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+	return era * 146097 + doe - 719468;
+}
+
+/* cwmp.acs.periodic_inform_time holds seconds since the epoch when libtr098
+ * wrote it, but the xsd:dateTime itself when an SDK mirrors it from the
+ * product's config (MTK easycwmp.@acs[0].periodic_time, BDK MDM): atol()
+ * read "2026-01-01T00:17:00Z" as 2026 seconds and "0001-01-01T00:00:00Z"
+ * as 1, so the periodic Informs were aligned on the wrong instant.  A time
+ * without zone is UTC; the unknown time and anything before 1970 give 0
+ * (no alignment). */
+static time_t periodic_time_value(const char *v)
+{
+	int y, mo, d, h, mi, s, n = 0, oh, om;
+	const char *p;
+	long off = 0;
+	long long t;
+
+	if (!v || !*v)
+		return 0;
+	p = (*v == '-') ? v + 1 : v;
+	if (*p && strspn(p, "0123456789") == strlen(p))
+		return (time_t)atol(v);
+	if (sscanf(v, "%4d-%2d-%2dT%2d:%2d:%2d%n", &y, &mo, &d, &h, &mi, &s, &n) != 6 || n == 0)
+		return 0;
+	p = v + n;
+	if (*p == '.')
+		for (p++; *p >= '0' && *p <= '9'; p++)
+			;
+	if ((*p == '+' || *p == '-') && sscanf(p + 1, "%2d:%2d", &oh, &om) == 2)
+		off = (*p == '-' ? -1 : 1) * (oh * 3600L + om * 60L);
+	if (y < 1970 || mo < 1 || mo > 12 || d < 1 || d > 31)
+		return 0;
+	t = (long long)days_from_civil(y, mo, d) * 86400 + h * 3600L + mi * 60L + s - off;
+	return t > 0 ? (time_t)t : 0;
+}
+
 int get_global_config(struct config *conf)
 {
     int                     error, error2, error3;
@@ -793,11 +838,11 @@ int get_global_config(struct config *conf)
     }
      if((error = uci_get_value(UCI_PERIODIC_INFORM_TIME_PATH,&value)) == CWMP_OK)
     {
-        int a = 0;
+        time_t a = 0;
 
         if(value != NULL)
         {
-            a = atol(value);
+            a = periodic_time_value(value);
             free(value);
             value = NULL;
         }
