@@ -1067,6 +1067,15 @@ int dm_platform_restart_services(void)
 	list_for_each_entry(pc, &head_package_change, list) {
 		if (strcmp(pc->package, "cwmp") == 0)
 			continue;
+		/* easycwmp: dmuci_commit() has written it already, so the ubus
+		 * commit would only raise config.change -- and the reload trigger
+		 * of /etc/init.d/icwmpd on easycwmp then stops and restarts this
+		 * very daemon (tr069 absent from ubus for ~1 s, a new start with
+		 * -g) after every ManagementServer write.  The shell skipped the
+		 * package the same way (common_restart_services) and asked for a
+		 * config load instead: END_SESSION_RELOAD here. */
+		if (strcmp(pc->package, "easycwmp") == 0)
+			continue;
 		dmubus_call_set("uci", "commit", UBUS_ARGS{{"config", pc->package, String}}, 1);
 	}
 	free_all_list_package_change(&head_package_change);

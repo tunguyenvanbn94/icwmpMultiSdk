@@ -492,7 +492,7 @@
     "userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/x_ais_mesh_mtk.c": "8c638523048c9ce16b9823f108773e46c26c6444f3e4ebb67be2f454ef8d1842",
     "userspace/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.c": "4f6d939d74afb2335b22b210bb1cad87ba9cfa2c0b347e8ba8b58aa1692b6d20",
     "userspace/public/libs/libicwmp_dm/src/sdk/mtk/dmmtk.h": "31c76e88744a17756bcd1e4c08bf5532f55856fe2e98a2bb37427917a02d8fb9",
-    "userspace/public/libs/libicwmp_dm/src/sdk/mtk/dmplatform_mtk.c": "41ae138fd759a7acbfda25a3dfa6de474247ba5747fbc10302bd93add2c14d48",
+    "userspace/public/libs/libicwmp_dm/src/sdk/mtk/dmplatform_mtk.c": "ac37e4dc97110c8c7d1ec30a1265ac3978bba42304a383bb9a9f2ce7c5fce368",
     "userspace/public/libs/libicwmp_dm/src/sdk/mtk/input_contract_mtk.c": "07025c19a52ec994f74e26f8f4012b7bff1f4d06e78fb73f65f3ede1df00b177",
     "userspace/public/libs/libicwmp_dm/src/sdk/mtk/sdk.m4": "701d917cb1df2a82fdbf78f3a423b4859dcf6e79218f620053a1eb77766c3f5b",
     "userspace/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk": "3e1f3d0939f82993263a72f1de668d6118fb7062f084967728f6d7647b68bf08",
