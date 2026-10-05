@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-04T23:40:00+07:00",
+  "updated_at": "2026-10-05T09:30:00+07:00",
   "execution": "Đợt 2 trên dev: 0078 ManagementServer MTK đọc/ghi easycwmp và stun.@stun[0] (K1, K2), 0079 PeriodicInformTime dạng dateTime (K10), sửa checksum bundle (K11, update-sums.py). Test host mới msrv/stun/ptime: FAIL trước, PASS sau; run.sh all PASS. K3, K6: giữ nguyên.",
   "baseline": "overlay cd93685595d4a52302d5b14adc9cbf38ac82553c",
   "current": "repo dev 0034-0079. Data model C 458/783 (P1 65 + P2 70 + P3 67 + P4 173 + P5 83). HOST_VERIFIED trên HEAD; SDK build mới tới P4f; board G1 đạt trên 0065 (trước 0067/0069). PH0 còn: SDK build MTK+BDK, gate board G1-G9.",
@@ -356,7 +356,7 @@
       "status": "OPEN_SOURCE_VERIFIED",
       "phase": "PH0 product decision; board G-agent",
       "title": "Agent/AP sau controller: icwmpd.init lấy IP trên easycwmp.@local[0].network (mặc định if0) và không chạy khi clay.opermode.mode=auto; stuncd.init có cổng opmode riêng, không nháy biến",
-      "evidence": "sdk/mtk/files/icwmpd.init:125 [ \"$opmode\" = \"auto\" ] && return; :139-140 network rỗng thì if0; :167 không có IP → chỉ chạy wan_interface_up và chờ. SDK stunclient/files/stuncd.init:26 if [ $stun_enable == \"1\" ] && [ $opmode != \"auto\" ] không nháy: busybox 1.33.1 coreutils/test.c — [ != auto ] → primary() check_emptiness true, test_main còn đối số dư → \"auto: unknown operand\", exit 2 → opmode rỗng thì icwmpd chạy còn stuncd không. Inform ra qua NAT controller được khi network trỏ interface có IP (thường lan); Connection Request vào cần STUN (K2/G7) hoặc port-forward + cwmp.cpe.cr_host/cr_port. Sửa thì đổi cổng ở cả hai script cùng lúc; stuncd.init là file vendor, không nằm trong repo. Giá trị opermode thật trên agent: chưa established."
+      "evidence": "sdk/mtk/files/icwmpd.init:125 [ \"$opmode\" = \"auto\" ] && return; :139-140 network rỗng thì if0; :167 không có IP → chỉ chạy wan_interface_up và chờ. SDK stunclient/files/stuncd.init:26 if [ $stun_enable == \"1\" ] && [ $opmode != \"auto\" ] không nháy: busybox 1.33.1 coreutils/test.c — [ != auto ] → primary() check_emptiness true, test_main còn đối số dư → \"auto: unknown operand\", exit 2 → opmode rỗng thì icwmpd chạy còn stuncd không. Inform ra qua NAT controller được khi network trỏ interface có IP (thường lan); Connection Request vào cần STUN (K2/G7) hoặc port-forward + cwmp.cpe.cr_host/cr_port. Sửa thì đổi cổng ở cả hai script cùng lúc; stuncd.init là file vendor, không nằm trong repo. Giá trị opermode thật trên agent: chưa established. Board 2026-10-05 (agent HP2236B): clay.opermode.mode=ap → qua cả hai cổng opmode; easycwmp.@local[0].network=lan (192.168.1.104/24, gần chắc đặt tay — sản phẩm chỉ ghi if<id>/notused ở hal_gateway.c HalGateway_setInterfaceCwmp); stun_enable=0; stun.@stun[0].udpcontnreqaddr=192.168.1.104:3478 do stuncd.init:23 ghi trước cổng nên UDPConnectionRequestAddress báo IP LAN khi STUN tắt (giống shell cũ). Còn lại: network cho agent ap và G7 STUN trên agent."
     },
     {
       "id": "K16",
