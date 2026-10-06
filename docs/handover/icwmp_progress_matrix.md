@@ -83,6 +83,9 @@ flowchart LR
 | K14 | 0081 | PeriodicInformTime chỉ nhận thời điểm có thật | MTK SDK build; unit 31 case |
 | K13 | 0082 | URL và STUNServerAddress kiểm như shell | MTK SDK build; khớp hàm shell trên board 35/35 |
 | Apply một SDK | 0083 | `--sdk-only` | MTK SDK build |
+| Dọn cho bản giao MTK | 0084 | Bỏ ghi chú "NOT BUILD-TESTED YET" ở code đã chạy board, sửa hai mô tả đã cũ, generator `shelltypes_mtk.h` in đường dẫn repo | STATIC, cross-gcc |
+| Bản giao một SDK (K19) | 0085 | `export.py --sdk mtk` (HEAD, tái lập được, MANIFEST đúng commit); `--sdk-only` bỏ thêm 33 file `tr098/` chỉ SDK `uci` dùng; apply ghi commit thật vào `.icwmp-release.json` | MTK SDK build từ bundle export |
+| Code chết (K18 một phần) | 0086 | Gỡ 27 hàm `dmcommon.c` không ai tham chiếu (519 dòng) | STATIC, cross-gcc |
 | Công cụ kiểm | — | `check-c-sanity`, `check-cc-syntax` (cross-gcc SDK), `verify-dm-paths` (`--phase`, `--claims`), `check-automake-conds`, `update-sums`, `progress.py`, `tests/host` | — |
 
 ## 2. Trạng thái hiện tại
@@ -161,10 +164,10 @@ Chi tiết: [../plan/sync-main-dev.md §5](../plan/sync-main-dev.md#5-lộ-trìn
 | Việc | Vì sao | Khi nào |
 |---|---|---|
 | Tách `dmcommon.c` | 32/80 hàm public là helper schema UCI của OpenWrt, chỉ `tr098/` gọi; tên "common" gây hiểu nhầm | PH2 |
-| Xoá 34 hàm public của `dmcommon.c` không ai gọi trong lib | Code chết làm khó đọc; phải kiểm cả app trước khi xoá | PH2 |
+| ~~Xoá hàm không ai dùng trong `dmcommon.c`~~ | Đếm lại theo mọi lần xuất hiện của tên (kể cả con trỏ hàm), trên lib, app, tests, feeds: 27 hàm | **Xong 0086** |
 | **Không** đổi tên `dmuci_*` | UCI là kho thật trên cả ba SDK, ~2000 chỗ gọi, giữ tên upstream | — (xem kiến trúc §7) |
 | `tr098/managementserver.c:238` còn `#ifdef DM_PLATFORM_BDK` | Phạm quy tắc "file chung không nhắc tên SDK" | PH3 |
-| `.icwmp-release.json` ghi commit baseline `b01ec72` thay vì HEAD đã cài | Không truy được bản đang chạy trong cây SDK | PH8, hoặc sớm hơn |
+| ~~`.icwmp-release.json` ghi commit baseline~~ | — | **Xong 0085** |
 | Môi trường test host | Gate §6.3 bắt buộc `run.sh all` | Ngay (PH0 #8) |
 
 ---

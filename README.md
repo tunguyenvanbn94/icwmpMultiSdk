@@ -34,6 +34,22 @@ cài đủ mọi SDK như trước. Chuyển qua lại giữa hai cách chỉ c�
 ./apply --sdk mtk --sdk-only /path/to/2025q3
 ./apply --sdk bdk --sdk-only /path/to/bcm963xx
 ```
+
+`--sdk-only` cũng bỏ các source `tr098/` không còn ai dùng (ví dụ với MTK: 33 file chỉ SDK `uci` build).
+`.icwmp-release.json` ghi commit đang cài: `git HEAD` (thêm `-dirty` nếu có thay đổi chưa commit) khi chạy
+từ repo, hoặc commit trong `MANIFEST.json` khi chạy từ bundle export.
+
+## Xuất bản giao (release bundle)
+
+```sh
+./export.py --sdk mtk /tmp/icwmp_mtk.tar.gz     # chỉ MTK/OpenWrt
+./export.py /tmp/icwmp_all.tar.gz               # mọi SDK
+```
+
+Export lấy đúng HEAD đã commit (worktree phải sạch). Bundle một SDK chỉ còn code của SDK đó, bỏ thêm các
+thành phần chỉ SDK khác cần (với MTK: microxml, libuci, glue build BDK, `bdk-integration.json`, `docs/bdk`).
+`MANIFEST.json` ghi commit và danh sách SDK. Tarball tái lập được: cùng commit cho cùng sha256. Người nhận
+giải nén rồi chạy `./apply --sdk mtk /path/to/2025q3`; yêu cầu một SDK mà bundle không mang thì bị từ chối.
 Profile mặc định: BDK **MO77300EB**, MTK **HP2236B/config_7583**, đổi tên bằng `--profile NAME`
 nếu cùng layout/chipset. Không coi profile khác đã được board-verify.
 

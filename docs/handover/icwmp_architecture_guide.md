@@ -392,6 +392,11 @@ ubus call tr069 status
 4. Ghi có backup + journal ở `<SDK>/.icwmp-backups/<thời điểm>/`, lỗi thì rollback. Chạy lại khi không đổi
    gì thì báo "Already applied".
 
+Giao một bản chỉ một SDK, ví dụ chỉ MTK/OpenWrt: `./export.py --sdk mtk <ngoài repo>/icwmp_mtk.tar.gz` (0085). Bundle lấy
+từ HEAD đã commit, chỉ còn `sdk/mtk`, bỏ 33 file `tr098/` chỉ SDK `uci` dùng, bỏ microxml/libuci/glue BDK/docs BDK.
+`MANIFEST.json` ghi đúng commit. Tarball tái lập được (hai lần export cho cùng sha256). Người nhận giải nén rồi
+chạy `./apply --sdk mtk <2025q3>`; `--sdk bdk` bị từ chối.
+
 | SDK | Đích cài |
 |---|---|
 | MTK | `tclinux_phoenix/apps/hni/libicwmp_dm` ← `libicwmp_dm/src`; `.../icwmp_tr098` ← `apps/icwmp/icwmp`; hai feed Makefile; `config_7583` bật `libtr098`, `icwmp_tr098`, `libmicroxml`, tắt `cwmpclient` |
@@ -408,6 +413,35 @@ Feed MTK là `src-cpy`. Khi chỉ build gói lẻ, refresh **đúng hai** Makefi
 `feeds update airoha` (từng làm hỏng build image).
 
 ---
+
+## 7a. Bảng tên: một thứ, nhiều tên (MTK)
+
+Rà soát 2026-10-06. Tên cũ được giữ vì nó là **giao diện với sản phẩm**: package trong `config_7583`,
+đường dẫn WebUI/HAL đang gọi, SONAME. Đổi tên không mang lại gì khi chạy mà phải sửa cùng lúc feed,
+profile, init và mọi nơi sản phẩm gọi tới. Việc đó để cho PH8 (release/ABI).
+
+| Thứ | Trong source | Trên SDK MTK / board | Vì sao tên như vậy |
+|---|---|---|---|
+| Thư viện data model | `libs/libicwmp_dm/src` | gói `libtr098`, `/usr/lib/libtr098.so.3` | Source đổi tên ở A1 (0034) cho trung lập về model. Package và SONAME giữ tên cũ để không phải đổi profile và các thứ link vào |
+| Header của thư viện | `libicwmp_dm/src/*.h` | `<icwmp_dm/...>` trong staging; `<libtr098/...>` chỉ là header chuyển tiếp | `tools/install-headers.sh` |
+| Agent | `apps/icwmp/icwmp` | gói `icwmp_tr098`, binary `/usr/sbin/icwmp_tr098d` | Gói thay `cwmpclient` (`CONFLICTS:=cwmpclient`) |
+| Init | `sdk/mtk/files/icwmpd.init` | `/etc/init.d/icwmpd` | procd, `respawn 3 10 0` |
+| Shim cho sản phẩm | `sdk/mtk/files/easycwmpd` | `/etc/init.d/easycwmpd` → gọi `icwmpd` | WebUI, `hal_gateway`, `stuncd` vẫn gọi tên cũ |
+| Script hành động | `sdk/mtk/scripts/icwmp.sh` | `/usr/sbin/icwmp` | `external.c` gọi tên này (SDK `uci`, `mtk`); BDK làm hành động bằng C |
+| Compat shell | `sdk/mtk/compat/icwmp_dm.sh` | `/usr/share/icwmp/icwmp_dm.sh` | Mất đi khi build `--disable-dm-script-compat` (PH5) |
+| Config | `sdk/mtk/files/cwmp` | `/etc/config/cwmp` (của icwmpd) + `/etc/config/easycwmp` (config of record của sản phẩm) | Xem mirror ở phần 3.4 |
+| Object ubus | `ubus.c` | `tr069` | Giữ tên của cwmpclient cũ; `stun-client` (`tr069 inform`) và `value_monitoring` (`tr069 notify`) gọi tên này |
+
+**Tên file trong `sdk/mtk/`** theo một luật: `<object>_mtk.c` cho module data model (`wanip_mtk.c`,
+`wlansec_mtk.c`), `dmplatform_mtk.c` cho hook `dm_platform_*`, `dmmtk.c`/`dmmtk.h` cho helper dùng chung của
+backend, `input_contract_mtk.c` cho hợp đồng input, `compat/` cho phần sẽ bỏ. Riêng
+`managementserver_core_mtk.c` (29 dòng) chỉ đăng ký bảng lá ManagementServer dùng chung từ
+`tr098/managementserver.c`, để `managementserver_mtk.c` ghi đè các lá của sản phẩm; tên hơi tối nghĩa nhưng
+vai trò ghi rõ trong file.
+
+**Tiền tố hàm** phân lớp rõ: `cwmp_*` protocol core, `dm_entry_*`/`dm_ctx_*` API engine, `dm_registry_*`
+registry, `dm_platform_*` hook của lib, `icwmp_platform_*` hook của app, `mtk_*` helper của backend MTK,
+`dmuci_*`/`dmubus_*`/`dmjson_*` adapter kho dữ liệu (phần 7).
 
 ## 7. Quy ước tên: `dmuci_*`, `uci_foreach_element` có nên đổi không
 
@@ -439,8 +473,8 @@ Việc nên làm (đã đưa vào [progress](icwmp_progress_matrix.md), PH2):
 | Model do SDK quyết | `dm_platform_select_root()`: BDK đổi root sang `Device.` | PH1 resolver trung tâm |
 | Compat provider + prefetch nằm trong `dmplatform_mtk.c` (K7) | `sdk/mtk/dmplatform_mtk.c` | PH2 tách `sdk/mtk/compat/` sau interface provider |
 | Policy operator trong backend MTK | `x_ais_mesh_mtk.c`, prefix `X_HNI_` | PH4 lớp product |
-| `.icwmp-release.json` ghi commit của baseline cũ (`b01ec72` lấy từ `MANIFEST.json`), không ghi HEAD đã cài | `apply.py` / `MANIFEST.json` | Sửa ở PH8 (release) hoặc sớm hơn nếu cần truy vết |
-| `dmcommon.c` trộn helper | phần 7 | PH2 |
+| ~~`.icwmp-release.json` ghi commit của baseline cũ~~ | — | **Đã sửa ở 0085** (K19): apply ghi `git HEAD` khi chạy từ repo, ghi commit của export khi chạy từ bundle |
+| `dmcommon.c` trộn helper | phần 7 | 27 hàm không ai tham chiếu đã gỡ ở 0086; phần tách helper còn lại để PH2 |
 
 ---
 
