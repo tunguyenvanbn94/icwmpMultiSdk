@@ -88,6 +88,15 @@ flowchart LR
 | Code chết (K18 một phần) | 0086 | Gỡ 27 hàm `dmcommon.c` không ai tham chiếu (519 dòng) | STATIC, cross-gcc |
 | Công cụ kiểm | — | `check-c-sanity`, `check-cc-syntax` (cross-gcc SDK), `verify-dm-paths` (`--phase`, `--claims`), `check-automake-conds`, `update-sums`, `progress.py`, `tests/host` | — |
 
+### 1.1 Bản giao MTK/OpenWrt-only
+
+| | |
+|---|---|
+| Lệnh tạo | `./export.py --sdk mtk <ngoài repo>/icwmp_mtk.tar.gz` |
+| Bản đã tạo | commit `a7549e7`, 305 file, sha256 `39c8bded1a4e07c1fb1dc65d5d9c42e9412244f62519c092975d365ab579cbb5` (lưu ở `release/icwmp_mtk_a7549e7.tar.gz` của issue workspace) |
+| Đã kiểm | Giải nén, `apply --sdk mtk` (Python 3.6 OK, `--sdk bdk` bị từ chối), cây cài giống hệt bundle, `.icwmp-release.json` = `a7549e7`; build `libtr098` + `icwmp_tr098` + image rc 0 (06/10 08:42) |
+| Chưa kiểm | Nạp image của bundle này lên board. Board đang chạy 0083, khác 0086 ở 27 hàm không ai gọi; hành vi chạy không đổi |
+
 ## 2. Trạng thái hiện tại
 
 ### 2.1 Gate board PH0 trên MTK HP2236B
