@@ -53,12 +53,12 @@ flowchart LR
 |---|---|---|
 | Layout source multi-SDK, plugin `sdk/<tên>/`, apply có backup | Xong | MTK SDK build + board |
 | Data model TR-098 bằng C trên MTK | **458/783** param (P1–P5). P6–P8: 320 param còn qua shell compat | MTK board: GPV toàn cây 1768 dòng / 15–16 s |
-| Sửa lỗi runtime 0062–0080 (treo, leak, crash từ ACS, procd restart) | Xong | Board MTK (0080, K17 hết); host PASS tới 0079 |
+| Sửa lỗi runtime 0062–0080 (treo, leak, crash từ ACS, procd restart) | Xong | Board MTK (0080, K17 hết); host `run.sh all` PASS lại 06/10 tại 0086 |
 | K13, K14 (kiểm input ManagementServer) | Xong (0081, 0082) | **Board** (image 0083, 06/10, analysis §53) |
 | `apply --sdk-only` | Xong (0083) | MTK SDK build trên cây chỉ còn MTK |
 | BDK | Prototype có; user báo build OK trước 0067 | Chưa build lại với 0067–0083 |
-| Test host | Có harness | PASS tới 0079 ở môi trường cũ; máy build hiện tại không chạy được |
-| **PH0 (đóng băng baseline)** | **Đang làm** | Còn các gate cần ACS, G9 24 h, BDK, test host |
+| Test host | Chạy được trên máy build: container `ubuntu:24.04` (§55) | **`run.sh all` PASS 06/10** trên repo (code 0086) và từ chính bundle MTK `e273359` |
+| **PH0 (đóng băng baseline)** | **Đang làm** | Còn G9 24 h (07/10 08:15), xem WebUI (G6), BDK build (K9), K15, rồi PH0.5 |
 
 ---
 
@@ -85,7 +85,8 @@ flowchart LR
 | Apply một SDK | 0083 | `--sdk-only` | MTK SDK build |
 | Dọn cho bản giao MTK | 0084 | Bỏ ghi chú "NOT BUILD-TESTED YET" ở code đã chạy board, sửa hai mô tả đã cũ, generator `shelltypes_mtk.h` in đường dẫn repo | STATIC, cross-gcc |
 | Bản giao một SDK (K19) | 0085 | `export.py --sdk mtk` (HEAD, tái lập được, MANIFEST đúng commit); `--sdk-only` bỏ thêm 33 file `tr098/` chỉ SDK `uci` dùng; apply ghi commit thật vào `.icwmp-release.json` | MTK SDK build từ bundle export |
-| Code chết (K18 một phần) | 0086 | Gỡ 27 hàm `dmcommon.c` không ai tham chiếu (519 dòng) | STATIC, cross-gcc |
+| Code chết (K18 một phần) | 0086 | Gỡ 27 hàm `dmcommon.c` không ai tham chiếu (519 dòng) | STATIC, cross-gcc, MTK SDK build, host `run.sh all` |
+| Bản giao MTK test được trên host | 0087 | Bundle MTK giữ source microxml mà `tests/host/build.sh` build (bỏ glue BDK của nó); trước đó test host từ bundle dừng ở bước đầu | host `run.sh all` từ chính bundle |
 | Công cụ kiểm | — | `check-c-sanity`, `check-cc-syntax` (cross-gcc SDK), `verify-dm-paths` (`--phase`, `--claims`), `check-automake-conds`, `update-sums`, `progress.py`, `tests/host` | — |
 
 ### 1.1 Bản giao MTK/OpenWrt-only
@@ -93,9 +94,10 @@ flowchart LR
 | | |
 |---|---|
 | Lệnh tạo | `./export.py --sdk mtk <ngoài repo>/icwmp_mtk.tar.gz` |
-| Bản đã tạo | commit `a7549e7`, 305 file, sha256 `39c8bded1a4e07c1fb1dc65d5d9c42e9412244f62519c092975d365ab579cbb5` (lưu ở `release/icwmp_mtk_a7549e7.tar.gz` của issue workspace) |
-| Đã kiểm | Giải nén, `apply --sdk mtk` (Python 3.6 OK, `--sdk bdk` bị từ chối), cây cài giống hệt bundle, `.icwmp-release.json` = `a7549e7`; build `libtr098` + `icwmp_tr098` + image rc 0 (06/10 08:42) |
-| Chưa kiểm | Nạp image của bundle này lên board. Board đang chạy 0083, khác 0086 ở 27 hàm không ai gọi; hành vi chạy không đổi |
+| Bản giao hiện hành | `release/icwmp_mtk_<commit>.tar.gz` của issue workspace, xuất từ commit tài liệu ngay sau 0087 để tài liệu bên trong là bản mới. Commit và sha256 ghi trong file `.sha256` đi kèm và ở commit tài liệu kế tiếp |
+| Đã kiểm (code 0087, bundle `e273359`, sha256 `e693ae29…`, 327 file) | Export hai lần cùng sha256; `apply --sdk mtk --dry-run` trên `1_src` OK; source lib/app/feed trùng byte với bản `a7549e7` đã apply và build `libtr098` + `icwmp_tr098` + image rc 0 (06/10 08:42); giải nén, `sha256sum -c`, rồi `tests/host` build + setup + `run.sh all` PASS ngay trong bundle (analysis §55) |
+| Chưa kiểm | Nạp image lên board. Board đang chạy 0083, khác 0086 ở 27 hàm không ai gọi; hành vi chạy không đổi |
+| Bản cũ `a7549e7` | sha256 `39c8bded…`, 305 file. Apply và build SDK vẫn đúng, nhưng `tests/host/build.sh` dừng vì thiếu source microxml (0087 sửa). Dùng bản `e273359` |
 
 ## 2. Trạng thái hiện tại
 
@@ -149,7 +151,7 @@ Bảng đầy đủ: `python3 docs/issue/progress.py` hoặc JSON.
 | 5 | G7: UDP CR từ ACS | — | Topology hiện tại ACS tới thẳng board bằng HTTP CR; chỉ cần nếu sản phẩm thật nằm sau NAT. Xem thêm `NATDetected` = 0 (§54) |
 | 6 | G9: soak 24 h trên **image cuối của PH0** (0083) | dev | Đang chạy từ 06/10 07:58; chu kỳ Inform 12 h nên đường session ít được thử |
 | 7 | BDK: apply + build tại HEAD, chạy runbook §0.2 | người có cây BDK | K9 |
-| 8 | Test host: dựng container Ubuntu mới (json-c ≥ 0.15, Python ≥ 3.10) có mạng tới GitHub, chạy `tests/host/run.sh all` | dev | Máy build hiện tại không vào GitHub/Docker Hub (analysis §52) |
+| 8 | ~~Test host: `tests/host/run.sh all`~~ | — | **Xong 06/10** trong container `ubuntu:24.04` trên máy build, cả repo lẫn bundle MTK (§55). Ghi chú cũ "không vào GitHub/Docker Hub" là sai |
 | 9 | K15: quyết định sản phẩm cho agent sau controller | product | — |
 | 10 | PH0.5: tag `baseline/ph0-mtk-tr098-<ngày>` trên `dev`, fast-forward `main`, JSON PH0 = DONE | sau khi 1–8 đạt, cần người duyệt | — |
 
@@ -177,7 +179,7 @@ Chi tiết: [../plan/sync-main-dev.md §5](../plan/sync-main-dev.md#5-lộ-trìn
 | **Không** đổi tên `dmuci_*` | UCI là kho thật trên cả ba SDK, ~2000 chỗ gọi, giữ tên upstream | — (xem kiến trúc §7) |
 | `tr098/managementserver.c:238` còn `#ifdef DM_PLATFORM_BDK` | Phạm quy tắc "file chung không nhắc tên SDK" | PH3 |
 | ~~`.icwmp-release.json` ghi commit baseline~~ | — | **Xong 0085** |
-| Môi trường test host | Gate §6.3 bắt buộc `run.sh all` | Ngay (PH0 #8) |
+| ~~Môi trường test host~~ | Gate §6.3 bắt buộc `run.sh all` | **Xong 06/10** (§55) |
 
 ---
 

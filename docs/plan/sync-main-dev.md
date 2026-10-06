@@ -158,12 +158,12 @@ Repo này không chứa thư viện đó.
 Mức trạng thái của một hạng mục **không được cao hơn bằng chứng thấp nhất trên commit HEAD**, và
 mỗi mức phải ghi rõ commit hoặc bundle tương ứng.
 
-| Mức | Nghĩa | Công cụ | Kết quả trên HEAD branch này (2026-10-04) |
+| Mức | Nghĩa | Công cụ | Kết quả gần nhất |
 |---|---|---|---|
-| `STATIC_VERIFIED` | nguồn, path và claim đúng; không có compiler của SDK | `check-c-sanity.py --tree lib/app --sdk ...`, `verify-dm-paths.py --phase 1..5` và `--claims`, `check-automake-conds.py`, `update-sums.py --check` | lib/mtk 41 file/0, app mtk/bdk/uci 17/0; phase 1–5 thiếu 0, dôi 11 (K3); claim 126/0 chồng; automake 0; sums OK |
-| `HOST_VERIFIED` | agent và lib thật trên Linux host, ACS test | `tests/host/run.sh all` (+ `soak`) | sau 0079, `all` PASS: unit 3/3, smoke 5 phiên, notify 100/100, rpc 5/5, msrv, stun, ptime, valgrind 0 lost 0 error |
-| `SDK_BUILD_PASS` | build bằng SDK thật (MTK, BDK) | `apply` + build `libtr098`/`icwmp_tr098` | MTK đạt tới P4f (25/09); 0056–0077 chưa; BDK chưa build với 0067–0077 |
-| `BOARD_GATE_n` | gate board theo §5 PH0.4 | board HP2236B | G1 đạt trên 0065 (trước 0067/0069); G2–G9 chưa |
+| `STATIC_VERIFIED` | nguồn, path và claim đúng; không có compiler của SDK | `check-c-sanity.py --tree lib/app --sdk ...`, `verify-dm-paths.py --phase 1..5` và `--claims`, `check-automake-conds.py`, `update-sums.py --check` | 06/10 tại 0087: lib/mtk 41 file/0, app mtk/bdk/uci 17/0; phase 1–5 thiếu 0, dôi 11 (K3); claim 126/0 chồng; automake 0; sums OK |
+| `HOST_VERIFIED` | agent và lib thật trên Linux host, ACS test | `tests/host/run.sh all` (+ `soak`) | 06/10 tại 0086, container `ubuntu:24.04`: `all` PASS: unit 3/3, smoke 5 phiên, notify 100/100, rpc 5/5, msrv, stun, ptime 2/2, valgrind 0 lost 0 error; cũng PASS từ bundle MTK `e273359` (analysis §55) |
+| `SDK_BUILD_PASS` | build bằng SDK thật (MTK, BDK) | `apply` + build `libtr098`/`icwmp_tr098` | MTK đạt tới 0086 (06/10, gói + image, cả từ bundle export); BDK chưa build với 0067+ (K9) |
+| `BOARD_GATE_n` | gate board theo §5 PH0.4 | board HP2236B | Image 0083 (06/10): G1–G7 phía router PASS, G4/G6 qua GenieACS NBI; G8 bỏ; G9 24 h tới 07/10 08:15 (analysis §48–§54) |
 | `SOAK` | 24 h, RSS/fd/thread phẳng | `run.sh soak` trên board/host | host: `dev` báo 300 phiên RSS phẳng; board chưa |
 | `RELEASE` | baseline đóng băng, có tag | §6.1 | chưa |
 

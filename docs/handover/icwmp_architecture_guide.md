@@ -87,7 +87,7 @@ Ba câu cần nhớ:
 | Một CWMP core bằng C cho mọi SDK | Cùng `apps/icwmp/icwmp` build cho MTK, BDK, OpenWrt chuẩn | Đạt về source. MTK build và chạy board; BDK đã từng build (user báo), chưa build lại với 0067+ |
 | Giữ nguyên cây tham số ACS đã provision | 783 param / 184 object của sản phẩm (ma trận `docs/issue/tr098_coverage_matrix.tsv`) | 458/783 bằng C, phần còn lại qua compat shell, không mất path nào (`verify-dm-paths.py`: thiếu 0) |
 | Chuyển dần shell sang C, không phải chuyển một lần | Path nào có module C thì C trả lời, còn lại thì shell trả lời | Đạt (router native/compat của MTK) |
-| Test được không cần board | `tests/host/run.sh all`: agent thật + ACS giả trên Linux host | Có, nhưng chưa chạy được trên máy build hiện tại (xem progress) |
+| Test được không cần board | `tests/host/run.sh all`: agent thật + ACS giả trên Linux host | Đạt: PASS 06/10 trong container `ubuntu:24.04` trên máy build |
 | Thêm SDK mới không đụng code chung | Thêm `sdk/<tên>/` ở lib và app, chạy `tools/sdk-scan.sh` | Đạt về cấu trúc: `--sdk-only` xoá SDK khác mà vẫn build (0083) |
 | Sau này hỗ trợ TR-181 | Model là chiều riêng, không gắn vào SDK | Mới có prototype trên BDK, kiến trúc đích ở PH1/PH6 |
 
@@ -488,7 +488,7 @@ Không ghi trạng thái cao hơn bằng chứng thấp nhất trên commit HEAD
 |---|---|---|
 | STATIC | `docs/issue/check-c-sanity.py`, `verify-dm-paths.py` (`--phase`, `--claims`), `check-automake-conds.py`, `update-sums.py --check` | Chạy trước mọi commit |
 | Cross-gcc của SDK | `docs/issue/check-cc-syntax.py --sdk-root <2025q3>` | Bắt lỗi mà build SDK chỉ cảnh báo (cắt con trỏ 64 bit) |
-| HOST | `tests/host/run.sh all` trong container dùng một lần | Cần container Ubuntu mới, có mạng tới GitHub |
+| HOST | `tests/host/run.sh all` trong container dùng một lần | `ubuntu:24.04`, mạng tới GitHub (deps pin); môi trường đã kiểm ghi trong [tests/host/README.md](../../tests/host/README.md) |
 | SDK build | apply + build hai gói | — |
 | BOARD | runbook gate G1–G9 ([ph0_gate_runbook.md](../plan/ph0_gate_runbook.md)) | Kiểm bằng `ubus call tr069 …` trên board và phiên ACS thật |
 | SOAK | sampler 24 h: VmRSS, fd, thread | — |

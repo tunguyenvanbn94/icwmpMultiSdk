@@ -3,10 +3,11 @@
 Source: A1 model-neutral layout `libicwmp_dm/src`, ABI/package vẫn `libtr098`.
 TR-098 P1–P5 có 458 param C; các nhánh chưa port vẫn dùng compat. A2, A4, A6
 và P6–P8 còn trong kế hoạch; A3 mới làm một phần. Xem [trạng thái và kế hoạch](docs/README.md).
-**Đã kiểm source và apply; các bản sửa 0056–0079 chưa được build bằng SDK/board-test như một bộ hoàn chỉnh.**
-0067–0079 (treo sau phiên đầu, leak, crash do RPC của ACS, tải shell data model, ACS ghi
-`ManagementServer.*`/STUN/PeriodicInformTime trên MTK) đã chạy thật trên host:
-`tests/host/run.sh all` PASS, valgrind 0 leak — xem [tests/host](tests/host/README.md).
+**MTK:** các bản sửa tới 0083 đã build bằng SDK và chạy trên board HP2236B (gate PH0 G1–G7 phía router,
+image 0083). 0084–0086 (ghi chú, `export.py`, gỡ hàm không ai gọi) build gói + image đạt, chưa nạp board;
+0087 chỉ đổi nội dung bundle export. `tests/host/run.sh all` PASS ngày 06/10 trong container `ubuntu:24.04`,
+valgrind 0 leak — xem [tests/host](tests/host/README.md). **BDK chưa build lại với 0067+** (K9).
+Tiến độ và việc còn lại: [docs/handover/icwmp_progress_matrix.md](docs/handover/icwmp_progress_matrix.md).
 Kế hoạch hiện hành, known issue và quy ước phát triển: [docs/plan/sync-main-dev.md](docs/plan/sync-main-dev.md).
 
 ## Giải nén và apply

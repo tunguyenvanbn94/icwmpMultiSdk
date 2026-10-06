@@ -237,7 +237,7 @@
   ],
   "validation": "source/apply fixture verified in original overlay, SDK build and board not verified for this repository HEAD",
   "files": {
-    "README.md": "5267678af83078339c61571fe63d15419455326bec82e0e32402ed2850867bf3",
+    "README.md": "c82401b152581dca800a325729ab38f8739b39af070ec9a44349c62f1362c0ec",
     "apply": "29e38a9cd7a83b691cd0641f84e918eb1eeb7ec58c3498b6105b98c986eb0eaa",
     "apply.py": "f0172bf38ef600bef19193e810c2879c4b60c617a3dd5861a5e701cada2916dd",
     "bdk-integration.json": "269a3d1a0cf07dbbc7d0f8d38fdefe95492c5ef5e305673f8dc11bd10da90c9e",

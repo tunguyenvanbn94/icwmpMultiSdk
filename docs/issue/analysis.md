@@ -3384,3 +3384,66 @@ module 0078 chỉ đọc. **Not established**: vì sao vendor ghi 0.
 
 **G9** chạy lại sau reboot từ 08:14:19 (epoch 1791249259, pid 10691, VmRSS 4964 kB, fd 15, thread 11),
 mốc 24 h là 07/10 08:15.
+
+## 55. Test host chạy lại trên máy build; bundle MTK thiếu microxml (`0087`) (06/10 10:41–11:40)
+
+**Sửa ghi chú §52.** Ở §52 tôi ghi "máy build không vào được GitHub và Docker Hub". Ghi chú đó sai:
+
+- Trên host, `git ls-remote https://github.com/openwrt/libubox.git` báo `server certificate verification failed.
+  CAfile: none`. Nhưng `curl https://github.com/` trả 200 (`ssl_verify_result` 0), và
+  `git -c http.sslCAInfo=/etc/ssl/certs/ca-certificates.crt ls-remote …` trả `e7608b69…`, đúng `LIBUBOX_REV` đã pin.
+  Vậy chỉ git trên host thiếu đường tới CA bundle. Trong container có gói `ca-certificates` thì `git clone` chạy bình thường.
+- `docker pull ubuntu:24.04` thành công.
+
+**Môi trường:** container dùng một lần `icwmp-hosttest-20261006b`:
+
+- image `ubuntu:24.04`: json-c 0.17, gcc 13, Python 3.12.3, valgrind 3.22, busybox 1.36.1;
+- gói như [tests/host/README.md](../../tests/host/README.md), thêm `ca-certificates`;
+- repo mount `/repo:ro`, mọi file tạm nằm trong container;
+- libubox, uci, ubus clone theo rev đã pin.
+
+**`run.sh all` trên repo `97fa36f`** (code giống 0086; các commit sau đó không đổi lib/app): **rc 0**.
+
+| Nhóm | Kết quả |
+|---|---|
+| unit | 3/3. GPV root: 417 getter / 9 request (`*_list`), 73 request (không list), 417 param. `dmcmd` 0 B…3 MB |
+| smoke | 5 phiên, 75 RPC, 15 fault theo kế hoạch, agent còn sống |
+| notify | 100/100 thay đổi giữ và gửi trong Inform |
+| rpc | 5/5: ScheduleDownload hợp lệ không fault; 3 window, Download/Upload/ScheduleDownload thiếu FileType đều fault |
+| msrv, stun | PASS (K1, K2, K13) |
+| ptime | 2/2: Inform kế tiếp đúng `:17:00` (K10); thời điểm không có thật bị fault, giữ giá trị cũ (K14) |
+| valgrind | 12 phiên, Download, tải ubus: definitely 0, indirectly 0, ERROR SUMMARY 0 |
+
+Valgrind còn ghi `possibly lost: 3,520 bytes in 10 blocks`. Cổng không tính loại này. **Verified** từ stack trong `vg.log`:
+đó là 10 block × 352 B mà `calloc` ← `allocate_dtv` ← `_dl_allocate_tls` ← `pthread_create` cấp cho mỗi thread
+`main` tạo lúc khởi động (`cwmp.c:984`, 989, …, 1029, mỗi dòng một thread). Các thread còn sống khi nhận SIGTERM;
+số block cố định, không tăng theo số phiên. Không phải leak.
+Dòng PASS của valgrind in hai dòng `DONE` (12 rồi 13 phiên) vì `grep DONE acs.log` khớp cả hai. Đây chỉ là
+chuyện hiển thị, không ảnh hưởng tiêu chí.
+
+**Segfault ở §52:** cùng code này chạy sạch trên 24.04, nên kết luận "do môi trường" nay có bằng chứng.
+Nguyên nhân cụ thể trên 18.04 thì **Not established**. Môi trường đó ghép json-c 0.15 tự build với
+libubox/uci/ubus lấy từ `dl/` của SDK, không phải các rev đã pin.
+
+**Lỗi của bản giao MTK.** `export.py --sdk mtk` (0085) bỏ cả `userspace/public/libs/microxml/` vì coi đó là
+thành phần của BDK. Nhưng bundle MTK có mang `tests/host`, và `tests/host/build.sh` build microxml từ chính source
+đó (`env.sh` `MICROXML_SRC`). Bằng chứng: trong cùng container, giải nén bundle `97fa36f` và dùng
+`ICWMP_HOST_WORK` mới. `build.sh` build xong libubox/uci/ubus, rồi dừng ở
+`cp: cannot stat '…/libs/microxml/microxml': No such file or directory`, rc 1. Người nhận bản
+`a7549e7` cũng sẽ gặp lỗi y như vậy. Lỗi này không ảnh hưởng `apply` và build SDK: trên MTK, gói
+`libmicroxml` lấy từ SDK, apply không cài microxml của repo.
+
+**0087** (`e273359`): bundle MTK giữ `microxml/microxml/` (22 file) và chỉ bỏ glue BDK của nó (`autodetect`,
+`Bcmbuild.mk`, `Makefile`, `Manifest.brcmoss`), giống cách đã làm với `libicwmp_dm` và `icwmp`.
+
+**Bundle `e273359`:**
+
+| Kiểm | Kết quả |
+|---|---|
+| Export | 327 file, sha256 `e693ae29f8d8a6f44a215655dceb4ca268adffbcc3da6c12da0b39b6f1878f4a`, export hai lần ra cùng sha256 |
+| `apply --sdk mtk --dry-run` trên `1_src/2025q3` | Release `e273359`, layout `sdk-only`, đúng 6 path quản lý như trước (không có microxml), không ghi gì, không để lại `icwmp-apply-*` |
+| So với bản đang cài trên `1_src` (`a7549e7`) | `diff -rq` lib và app: 0 khác; hai feed Makefile giống. Code giống từng byte, nên kết quả build gói + image rc 0 của `a7549e7` (06/10 08:42) đúng cho bundle này. Không build lại |
+| Giải nén trong container, `sha256sum -c SHA256SUMS` | OK |
+| `build.sh` → `setup.sh --yes` → `run.sh all` từ bundle, `ICWMP_HOST_WORK` mới | **rc 0**: build cả microxml; unit 3/3 (417 getter / 9 và 73 request), smoke 5, notify 100/100, rpc 5/5, msrv, stun, ptime 2/2, valgrind 12 phiên 0 lost 0 lỗi (possibly lost cũng 10 × 352 B như trên) |
+
+**Chưa làm:** nạp image của bundle này lên board (board vẫn chạy 0083, chỉ khác ở 27 hàm không ai gọi).
