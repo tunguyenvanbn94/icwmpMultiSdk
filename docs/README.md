@@ -4,6 +4,19 @@ Repo này chứa source dùng chung cho Broadcom BDK và MTK OpenWrt. `userspace
 source áp vào SDK, `feeds/` là hai package MTK, `apply` kiểm bundle và cài vào
 SDK đích. Lệnh sử dụng và build ở [README repo](../README.md).
 
+## Bắt đầu từ đây (đào tạo, chuyển giao)
+
+1. [Kiến trúc, cách chia code và flow xử lý](handover/icwmp_architecture_guide.md): vì sao làm icwmp riêng,
+   ba chiều SDK/model/product, chung và riêng trong source, đặt code ở đâu, flow khởi động/phiên/GPV-SPV,
+   tích hợp SDK, quy ước tên.
+2. [Đã làm gì, đang ở đâu, còn gì](handover/icwmp_progress_matrix.md): bảng tiến độ, gate board PH0, known
+   issue, việc để đóng PH0, lộ trình PH1–PH8.
+
+Từ 2026-10-06, mọi tài liệu về kế hoạch, tiến độ và trạng thái được cập nhật **trong `docs/` của repo này**:
+bằng chứng ở [issue/analysis.md](issue/analysis.md) (đã đồng bộ tới §52), trạng thái ở
+[issue/implementation-status.json](issue/implementation-status.json), gate board ở
+[plan/ph0_gate_runbook.md](plan/ph0_gate_runbook.md).
+
 ## Kế hoạch hiện hành
 
 - [Đồng bộ main/dev và thiết kế v2](plan/sync-main-dev.md): kết luận, khoảng hở so với code, known
@@ -28,15 +41,12 @@ SDK đích. Lệnh sử dụng và build ở [README repo](../README.md).
 - [Phân tích và bằng chứng](issue/analysis.md), [ma trận coverage](issue/tr098_coverage_matrix.tsv)
 - [Lệnh build](issue/build-commands.md), [lệnh debug](issue/debug-commands.md)
 
-Các file trong `issue/`, `mtk/` và `bdk/` là bản sao từ workspace
-ngày 2026-09-29. Chúng giữ mốc commit và đường dẫn gốc để truy vết, vì vậy vài
-liên kết tương đối và trạng thái trong file cũ không phản ánh repo này. Mốc mới
-nhất trong source là patch 0079. Trạng thái phase có cấu trúc cập nhật lần cuối
-ngày 2026-10-04: 458/783 parameter TR-098 bằng C, P1–P5 đã port, P6–P8 còn kế
-hoạch. Các patch 0062–0079 sửa init, debug, apply, lỗi runtime, tải của shell
-data model và nơi ghi config của ManagementServer, không mở rộng coverage. Bản SDK đã build được xác minh tới P4c–P4f;
-chưa có kết quả build/board-test đầy đủ cho HEAD repo này. 0067–0079 đã kiểm
-bằng agent thật chạy trên host: [tests/host](../tests/host/README.md).
+Các file trong `mtk/` và `bdk/`, cùng phần đầu của `issue/`, là bản sao từ workspace ngày 2026-09-29.
+Chúng giữ mốc commit và đường dẫn gốc để truy vết, nên vài liên kết tương đối và trạng thái trong file cũ
+không phản ánh repo này; link tới `../../src/2025q3/...` trong `analysis.md` là cây vendor của workspace.
+Trạng thái hiện hành luôn xem ở [handover/icwmp_progress_matrix.md](handover/icwmp_progress_matrix.md) và JSON:
+mốc code mới nhất `0083`, 458/783 parameter TR-098 bằng C (P1–P5), MTK SDK build đạt tới 0083,
+board MTK đạt G1–G3, G5, K10, K17.
 
 Các script kiểm tĩnh trong `issue/` (`check-c-sanity.py`, `verify-dm-paths.py`,
 `check-automake-conds.py`, `check-pkg-deps.py`) giờ kiểm cây `userspace/` của chính repo này.

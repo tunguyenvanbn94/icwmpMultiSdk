@@ -318,4 +318,10 @@ nào có hành vi bị đổi. Một lỗi đã sửa thì phải có test host 
 3. ~~PH0.2: K1 + K2~~ (0078), ~~K10~~ (0079), ~~PH0.3: K3, K6~~: xong trên host.
 4. **PH0.4–0.5:** chốt K13/K14 (có test host) và quyết định sản phẩm cho K15, rồi gate board G1–G9, tag baseline, cập nhật JSON. G6 kiểm thêm PeriodicInformTime
    (đặt một mốc, xem giờ phiên định kỳ); G7 xác nhận ai đọc `/tmp/stunclient_reload_needed`.
+   **2026-10-06:** K13/K14 sửa ở 0082/0081 (MTK SDK build đạt, board chưa); K10, K17, G1–G3, G5 đạt trên
+   board. Danh sách còn lại để đóng PH0 ở
+   [handover/icwmp_progress_matrix.md §3.1](../handover/icwmp_progress_matrix.md#31-để-đóng-ph0).
 5. Sau đó mới bắt đầu PH1 (resolver), PH2 (provider/routing), PH3 (service ManagementServer).
+   PH2 thêm việc: tách `dmcommon.c` thành helper trung lập và helper schema OpenWrt, xoá hàm không ai gọi;
+   **giữ tên `dmuci_*`** (lý do ở
+   [handover/icwmp_architecture_guide.md §7](../handover/icwmp_architecture_guide.md#7-quy-ước-tên-dmuci_-uci_foreach_element-có-nên-đổi-không)).

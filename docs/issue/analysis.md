@@ -2818,3 +2818,483 @@ Câu hỏi 2026-09-27. Snapshot `src_bk/2025q3` + overlay `b01ec72`.
   đánh thức icwmpd được, nhưng ACS không biết địa chỉ UDP để gửi. Cần một module MTK override các
   leaf STUN (chưa làm). Comment đầu `dmplatform_mtk.c` ("ManagementServer.* is served by the
   script") đã cũ.
+
+> **Cập nhật 04/10 (sau đồng bộ dev):** gap data model STUN ở trên đã sửa ở `0078`
+> (K2, `managementserver_mtk.c` đọc/ghi `stun.@stun[0]`, host PASS), còn G7 lifecycle `stuncd`.
+> Hai điểm init của chế độ agent (network `if0`, cổng `opermode=auto`) chưa có trong K1–K14,
+> ghi thành **K15** ở §44.
+
+## 43. Đồng bộ branch dev — 04/10/2026
+
+Baseline `icwmpMultiSdk/dev` **6352623**, clean và khớp origin/dev sau fetch. `main`
+4965f5d là ancestor, dev thêm 22 commit (sửa source 0067–0079 + host test/docs).
+Review caller/callee và kết quả static/coverage/checksum ở
+[dev-sync-review.md](dev-sync-review.md).
+
+P1–P5 vẫn 458 parameter sản phẩm bằng C, thêm 11 leaf icwmp. Source neutral/SDK
+registry đã có, resolver model/service contracts/full-C/single-model release
+vẫn chưa hoàn tất. PH0–PH8 thay thứ tự A2–A6/P6 trực tiếp của handoff cũ.
+
+Phát hiện bổ sung: **K13** URL validation/defaults side effect và STUN address
+validation chưa tương đương shell SDK hiện có; **K14** dateTime chỉ kiểm shape,
+calendar/timezone chưa đầy đủ. Consumer flag STUN cũ đã xác định tại xml.c:1232,
+gọi restart và xóa flag, khác queue reload của native mới. G7 cần kiểm procd thực tế.
+
+Static/checksum đã tự chạy lại đạt. Host PASS là báo cáo của repo dev, chưa chạy
+lại lượt này. Board G1 ở §40 chỉ gắn với 0065. Source SDK vendor/overlay cũ chỉ đọc,
+không merge dev/main hoặc đưa dev ngược vào overlay cũ trong lượt đồng bộ.
+
+## 44. Claude Code nhận lại việc sau đồng bộ dev — xác minh và bổ sung (04/10/2026)
+
+Xác minh bằng lệnh, không dựa vào handoff:
+
+- `icwmpMultiSdk` branch `dev` = `6352623`, worktree sạch; `main` = `4965f5d` = merge-base;
+  `main..dev` 22 commit, 13 commit source `0067`–`0079`.
+- `git archive main userspace/public` so với overlay cũ `b01ec72` (`git archive HEAD public`):
+  `diff -rq` **không khác byte nào** — `main` mang đúng `0034`–`0066`, overlay cũ chỉ còn là lịch sử.
+- **Cổng compile SDK lần đầu cho `0067`–`0079`**: `check-cc-syntax.py` (cross-gcc aarch64 gcc 10.2
+  musl của `1_src`, `-fsyntax-only` + `-Werror=implicit-function-declaration,int-conversion,
+  incompatible-pointer-types,return-type`) trên `icwmpMultiSdk/userspace`: lib/mtk 41 file 0 lỗi,
+  app/mtk 17 file 0 lỗi. Đã kiểm module `ccs` trỏ `USERSPACE` = repo dev. Đây **không** phải
+  build/link gói — `sdk_build` cho HEAD dev vẫn chưa có.
+- `check-c-sanity` lib/mtk 41/0, app mtk/bdk/uci 17/0; `verify-dm-paths --claims` 126 claim,
+  21 module, 0 chồng — khớp số Codex báo.
+
+Bổ sung:
+
+- **K15 (MEDIUM, OPEN_SOURCE_VERIFIED)** — chế độ agent/AP sau controller.
+  `sdk/mtk/files/icwmpd.init` trên dev: `:125` không chạy khi `clay.opermode.mode=auto`;
+  `:139-140` network mặc định `if0`; `:167` không có IP → chỉ chạy `wan_interface_up` và chờ.
+  `stunclient/files/stuncd.init:26` có cùng cổng `opmode != auto` (khác nhau khi opmode rỗng, §45). Inform đi ra qua NAT controller
+  được khi `easycwmp.@local[0].network` trỏ interface có IP (thường `lan`); Connection Request đi
+  vào cần STUN (K2/G7) hoặc port-forward trên controller + `cwmp.cpe.cr_host`/`cr_port`.
+  Giá trị `opermode` thật trên agent: **Not established** — đọc trên board. Cần quyết định sản
+  phẩm: init tự chọn network theo opmode hay để cấu hình.
+- Đã thêm K15 và `validation.sdk_syntax` vào `implementation-status.json` của workspace.
+  **Chưa ghi vào `icwmpMultiSdk/docs/plan/sync-main-dev.md`** — repo có remote và đang được phát
+  triển trên `origin/dev`, commit local sẽ lệch nhánh; chờ người dùng quyết định nơi ghi.
+
+
+## 45. Cổng `opermode` của `icwmpd.init` và `stuncd.init` — giống ở đâu, khác ở đâu (K15)
+
+Snapshot: `icwmpMultiSdk/dev` `6352623` (`sdk/mtk/files/icwmpd.init`), `stunclient/files/stuncd.init`
+md5 `728c081c200f` giống nhau ở `src_bk` và `1_src`, busybox 1.33.1 của `1_src/build_dir`.
+
+| Script | Dòng | Điều kiện |
+|---|---|---|
+| [icwmpd.init:125](../../userspace/public/apps/icwmp/icwmp/sdk/mtk/files/icwmpd.init#L125) | `:125` | `[ "$opmode" = "auto" ] && return` — biến **có nháy** |
+| [stuncd.init:26](../../src/2025q3/tclinux_phoenix/apps/hni/stunclient/files/stuncd.init#L26) | `:26` | `if [ $stun_enable == "1" ] && [ $opmode != "auto" ]` — biến **không nháy** |
+
+**Verified (busybox `coreutils/test.c`):** biến rỗng không nháy làm mất một đối số. `[ != auto ]` còn
+hai đối số `!=` `auto`; không rơi vào nhánh 3 đối số, `primary()` đi tới `check_emptiness:` (`:890`)
+trả true cho chuỗi `!=`, rồi `test_main` thấy còn `auto` dư → `"auto: unknown operand"` và
+`res = 2` (`:1016-1024`). Exit 2 = false. Tương tự `[ == 1 ]` khi `stun_enable` rỗng.
+
+| `clay.opermode.mode` | icwmpd | stuncd (`stun_enable=1`) |
+|---|---|---|
+| `auto` | không chạy | không chạy — **giống**, nhất quán: không có TR-069 nửa vời |
+| `router` / `ap` / giá trị khác | chạy (nếu `enable`, `EnableCWMP`) | chạy |
+| rỗng / option không có | **chạy** | **không chạy**, in `[: auto: unknown operand` — **khác** |
+
+Hệ quả khi hai cổng **khác** nhau:
+
+1. Opmode rỗng: icwmpd chạy, Inform ra được, nhưng không có STUN → ACS không gửi được UDP
+   Connection Request; data model vẫn đọc `STUNEnable=1` từ `stun.@stun[0]` (0078) trong khi
+   `stuncd` không chạy.
+2. Khi sửa K15 cho icwmpd chạy ở agent mà **chỉ sửa `icwmpd.init`**: agent Inform được nhưng sau NAT
+   controller không nhận Connection Request qua STUN. **Conditional:** `stuncd.init:23` ghi
+   `udpcontnreqaddr=<easycwmp.@local[0].ip>:<port>` (không commit) **trước** cổng `:26`, nên
+   `UDPConnectionRequestAddress` có thể mang địa chỉ LAN dù `stuncd` không chạy — phụ thuộc libuci
+   của icwmpd có đọc delta `/tmp/.uci` hay không, chưa kiểm trên board.
+
+Quy tắc khi sửa K15: đổi cổng **ở cả hai script cùng lúc** và bọc nháy biến. `stuncd.init` là file
+vendor của gói `stunclient`, **không nằm trong repo icwmpMultiSdk** — phải chọn: apply sửa file vendor
+(như hai feed Makefile) hoặc để `icwmpd.init` điều khiển `stuncd` theo opmode. Quyết định sản phẩm.
+
+## 46. STUN cho thiết bị agent: viết trong icwmp hay dùng `stunclient` của vendor (04/10/2026)
+
+Câu hỏi của user (chatlog mục 60). Snapshot `icwmpMultiSdk/dev` `77c9207`, `src_bk/2025q3`.
+
+**Plan hiện có:** chưa có plan cho STUN ở agent. Thiết kế v2 chỉ có cờ `ICWMP_STUN` và hợp đồng
+`stun_get_state/validate/stage` (PH3); PH0 "0.6 STUN parity" giữ `stuncd`, đã làm ở 0078. K15 (§44,
+§45) là lần đầu agent được ghi thành việc.
+
+**Sản phẩm đã có đường TR-069 cho thiết bị con — ở `opermode=ap`, không phải `auto` (Verified):**
+[hmx_network.c `ap_mode_update`](../../src/2025q3/tclinux_phoenix/apps/hni/svcboot/hmx_network.c#L80)
+xóa mọi WAN và tạo WAN bridge giả `BRIDGE` (VLAN 999) "on the sub-router ... so the ACS reports it as
+the device MAC"; `svcboot_update_opermode` không làm gì cho `OPERMODE_AUTO`
+([:124](../../src/2025q3/tclinux_phoenix/apps/hni/svcboot/hmx_network.c#L124)); data model báo
+`ExternalIPAddress` bằng IP LAN khi `ap` (§18.3). `auto` bị cả icwmpd lẫn stuncd tắt có chủ ý.
+**Not established:** agent mesh thật chạy `ap` hay `auto`; ở `ap`, `easycwmp.@local[0].network`
+(`if0` = WAN bridge giả) có IP không — không thấy code nào đổi network theo opmode.
+
+| Tiêu chí | `stunclient` vendor (`stuncd`) | `icwmp_stund` (có sẵn trong repo) |
+|---|---|---|
+| Trạng thái | trong image: `CONFIG_PACKAGE_stunclient=y`, `/usr/sbin/stun-client` | có source, **không build** (`--enable-icwmp_stun` không có trong feed Makefile) |
+| Code | Vovida stund 0.96 + sửa HNI, C++ (uClibc++), [stun.cxx](../../src/2025q3/tclinux_phoenix/apps/hni/stunclient/src/stun.cxx) 2733 dòng | C, [stun/](../../userspace/public/apps/icwmp/icwmp/stun/stun.c) ~1400 dòng, uloop/ubus/uci/openssl |
+| Annex G binding | `CONNECTION-REQUEST-BINDING`, `BINDING-CHANGE` ([stun.cxx:1906-1920](../../src/2025q3/tclinux_phoenix/apps/hni/stunclient/src/stun.cxx#L1906)) | có, `USERNAME` + `MESSAGE-INTEGRITY` ([stun.c:287](../../userspace/public/apps/icwmp/icwmp/stun/stun.c#L287)) |
+| Kiểm chữ ký UDP CR | HMAC-SHA1 với **`stun.@stun[0].username/password`** ([stun.cxx:284-305](../../src/2025q3/tclinux_phoenix/apps/hni/stunclient/src/stun.cxx#L284)) — TR-069 dùng ConnectionRequestUsername/Password; khác chuẩn nhưng là hành vi sản phẩm đang chạy với ACS (TATAPF-219) | đọc `cwmp.cpe.password` ([stun.c:439](../../userspace/public/apps/icwmp/icwmp/stun/stun.c#L439)) nhưng icwmp lưu **`cwmp.cpe.passwd`** ([cwmp.h:69](../../userspace/public/apps/icwmp/icwmp/inc/cwmp.h#L69)) → mật khẩu rỗng → **bỏ qua kiểm chữ ký, nhận mọi UDP CR** (K16) |
+| Chống replay | chỉ từ chối khi cùng `id` và `ts` cũ hơn ([stun.cxx:277](../../src/2025q3/tclinux_phoenix/apps/hni/stunclient/src/stun.cxx#L277)) | `id` khác lần trước **và** `ts` mới hơn ([stun.c:409](../../userspace/public/apps/icwmp/icwmp/stun/stun.c#L409)) |
+| Đánh thức icwmpd | `system("ubus call tr069 inform ... 6 ...")` | ubus API, retry 1 s ([stun.c:104](../../userspace/public/apps/icwmp/icwmp/stun/stun.c#L104)) |
+| Tích hợp sản phẩm | `stun.@stun[0]` (0078 đã map), hal_gateway restart 3 chỗ, ubusmon reload khi interface up, `wan_interface_up` | `cwmp_stun` riêng, không ai trong sản phẩm gọi; phải đổi map 0078 hoặc sửa daemon đọc `stun.@stun[0]` |
+| Đa SDK | chỉ MTK (`HalConfig`, hal_unify) | mọi nơi có uci/ubus |
+| Agent | cổng `opmode` ở `stuncd.init:26` (K15) | init riêng, không cổng opmode |
+
+**Đánh giá:**
+
+1. **Không viết STUN trong process icwmpd.** Lợi duy nhất là chung vòng đời (một cổng thay vì hai),
+   đạt được rẻ hơn bằng init script. Cái giá: thêm socket/timer vào thread uloop đang phục vụ ubus,
+   lỗi STUN kéo sập agent, đi ngược upstream (tách daemon).
+2. **MTK: giữ `stunclient` vendor làm backend.** Đã trong image, đã chạy với ACS operator, 0078 đã
+   map data model. Việc của agent không nằm trong giao thức STUN mà ở **khởi động**: chọn opmode, IP
+   cho Connection Request, cổng `opmode` hai script (K15) — vài dòng shell + quyết định sản phẩm.
+3. **`icwmp_stund` để dành cho SDK không có STUN** (BDK/uci) sau PH3 (`stun_*` contract), và phải
+   sửa K16 trước khi bật. Chuyển MTK sang nó chỉ đáng khi `stunclient` có lỗi chặn được chứng minh
+   trên board (vd. HMAC không khớp ACS, không bind được IP agent).
+4. Câu hỏi sản phẩm phải chốt trước code: agent có được ACS quản trực tiếp không (vendor tắt ở
+   `auto`); chữ ký UDP CR dùng credential STUN (như hiện tại) hay ConnectionRequest (chuẩn).
+
+**Board để chốt (agent thật):** `uci get clay.opermode.mode`, `uci get easycwmp.@local[0].network`,
+`ubus call network.interface.$(uci get easycwmp.@local[0].network) status`, `ip -4 addr show br-lan`,
+`pidof stun-client icwmp_tr098d`, `uci show stun`, `logread | grep -i stun`.
+
+## 47. Board agent 05/10: `opermode=ap`, network `lan` — K15 thu hẹp lại
+
+Output board: [logs/20261005_agent_opmode_stun_board.txt](../../logs/20261005_agent_opmode_stun_board.txt).
+
+| Quan sát | Giá trị | Ý nghĩa |
+|---|---|---|
+| `clay.opermode.mode` | `ap` | **Verified:** agent này chạy `ap`, không phải `auto` → qua cổng [icwmpd.init:125](../../userspace/public/apps/icwmp/icwmp/sdk/mtk/files/icwmpd.init#L125) và cổng opmode của [stuncd.init:26](../../src/2025q3/tclinux_phoenix/apps/hni/stunclient/files/stuncd.init#L26). Cổng `auto` của K15 không chặn agent ở `ap` |
+| `easycwmp.@local[0].network` | `lan` | IP `192.168.1.104/24` trên `br-lan` → icwmpd có IP để chạy. **Conditional:** sản phẩm chỉ ghi `if<id>`/`notused` ([hal_gateway.c:2128 `HalGateway_setInterfaceCwmp`](../../src/2025q3/tclinux_phoenix/apps/hni/hal_unify/src/hal_gateway.c#L2128)), config mặc định `if0` ([config/easycwmp:6](../../src/2025q3/tclinux_phoenix/apps/hni/cwmpclient/ext/openwrt/config/easycwmp#L6)) → `lan` gần như chắc là đặt tay (hướng dẫn 27/09). Ở `ap` thuần sản phẩm, network là `if0` = WAN bridge giả (`ap_mode_update`), có IP hay không: **Not established** |
+| `pidof stun-client icwmp_tr098d` | một pid `12711` | **Conditional:** gần chắc là icwmpd, vì `stun_enable=0` → `stuncd.init:26` false ở vế `stun_enable` |
+| `stun.@stun[0]` | `stun_enable=0`, `serveraddress=0.0.0.0` | STUN chưa cấu hình trên agent này |
+| `udpcontnreqaddr` | `192.168.1.104:3478` | **Verified trên board:** giá trị do [stuncd.init:23](../../src/2025q3/tclinux_phoenix/apps/hni/stunclient/files/stuncd.init#L23) ghi **trước** cổng `:26`, có cả khi `stuncd` không chạy → `UDPConnectionRequestAddress` (0078 đọc option này, active notify) báo địa chỉ LAN riêng. Giống hành vi shell cũ (cùng option), không phải lỗi mới của port |
+
+Hệ quả cho K15: với agent `ap`, phần còn lại là (1) network cho icwmpd — sản phẩm không tự đặt `lan`,
+(2) Connection Request vào từ ACS — STUN chưa bật. Bước kế tiếp là **G7 trên chính agent này**: bật
+STUN qua data model (0078) với STUN server của ACS, kiểm `stuncd` khởi động, binding, và UDP CR.
+
+## 48. Board MTK gate PH0 lần 1 (05/10 21:01) — kết quả và K17 (`0080`)
+
+Build: image từ source `dev` `6352623` (PH0.1 MTK PASS, runbook §0.1). Log:
+[tunv_log/USB5_2236B_2026-10-05_21-01-23.log](tunv_log/USB5_2236B_2026-10-05_21-01-23.log).
+
+| Gate | Kết quả | Bằng chứng (dòng log) |
+|---|---|---|
+| G1 | **PASS** | `:3-17` boot log đi hết tới `ubus object tr069 registered`, không `CRASH` trong 15 dòng cuối; `:20` `status up`; `:40` `/etc/tr098/.dm_enabled_notify` 575 byte (0066). Chưa đếm `CRASH` trên cả file |
+| G2 | **PASS phần định kỳ**, CR NOT RUN | `:35-37` 6/6 phiên success, 0 failure với chu kỳ 120 s; `:69` đúng 1 `icwmp_dm.sh`. `:70` "1 zombie" là chính dòng `grep` (lệnh runbook sai, đã sửa) |
+| G3 | **PASS phần `dm`/notify**, value change NOT RUN | `:76` 16 lần notify; `:80-87` GPV toàn cây `fault 0`, **1768** tham số, **15,62 s** (trước 0066 treo 300 s, §41) |
+| G4 | **PASS GPV từng nhánh**, phần ACS NOT RUN | `:132-137` 6 nhánh `rc=0`, ≤1 s mỗi nhánh (LANDevice 803 dòng) |
+| G5 | **PASS** chuỗi/boolean/unsignedInt; IPv4 NOT RUN | `:152-159` `''`, khoảng trắng, `;&\|`, `` ` ``, `$` → 9007, `g5ok` OK; `:161-165` `yes`/`on` → 9007, `true/0/1` OK; `:192-195` `abc`/`-1`/`4294967296` → 9007, `43200` OK |
+| G6 | phần mirror PASS (đường `tr069 dm`), đường ACS + reboot NOT RUN | `:214-216` `easycwmp` và `cwmp` cùng 43200 |
+| G7 | hoãn (agent, §47) | — |
+| G8, G9 | NOT RUN | — |
+
+**K17 — lỗi mới do board bắt được (Verified chuỗi source, khớp board):** `:163-174` ngay sau
+`set PeriodicInformEnable` (`reloaded: true`), 4 lệnh ubus trả `Command failed: Not found` → object
+`tr069` tạm mất; boot log `:3` có start `-g` lúc 20:54:36. Chuỗi: setter ManagementServer (0078) ghi
+`easycwmp` → engine commit trong process ([dmentry.c:378](../../userspace/public/libs/libicwmp_dm/src/dmentry.c#L378))
+→ [`dm_platform_restart_services`](../../userspace/public/libs/libicwmp_dm/src/sdk/mtk/dmplatform_mtk.c#L1059)
+chạy thêm `ubus call uci commit easycwmp` → rpcd phát `config.change`
+([uci.c:1350](/home/nvtu/workspace/openwrt/1_src/2025q3/openwrt-21.02/openwrt-21.02.1_dev/build_dir/target-aarch64_cortex-a53_musl/rpcd-2021-03-11-ccb75178/uci.c#L1350))
+→ reload trigger [icwmpd.init:220](../../userspace/public/apps/icwmp/icwmp/sdk/mtk/files/icwmpd.init#L220)
+→ `reload_service` stop rồi start `-g`. Shell cũ **bỏ** `easycwmp` đúng chỗ này
+([common:218,224](../../src/2025q3/tclinux_phoenix/apps/hni/cwmpclient/ext/openwrt/scripts/functions/common/common#L218))
+và bật `config_load` ([:189](../../src/2025q3/tclinux_phoenix/apps/hni/cwmpclient/ext/openwrt/scripts/functions/common/common#L189))
+→ lỗi của bản port, không phải kế thừa. Hệ quả: mỗi SPV ManagementServer (ACS hay `tr069 dm`) làm
+daemon bị kill/start lại ~1 s sau phiên, thêm một phiên GetRPCMethods, mất ubus trong lúc đó.
+
+**Sửa `0080`** (repo `dev` `311ad55`): bỏ `easycwmp` khỏi vòng `ubus call uci commit` — dữ liệu đã
+commit bằng `dmuci_commit()`, reload trong process bằng `END_SESSION_RELOAD`. Trong rootfs chỉ
+`/etc/init.d/icwmpd` có trigger trên `easycwmp`. Cổng: cross-gcc lib/mtk 41/0, sanity 0, claims 0,
+automake 0, sums `--staged`. **Không có test host** (harness không có rpcd/procd). **Chưa build, chưa
+board** — kiểm bằng G5 lần 2: không còn `Not found`, không có dòng `==== start` mới.
+
+Lỗi quy trình của runbook (đã sửa): lẫn câu hướng dẫn vào ô lệnh (`đổi: not found`, `từ: not found`),
+lệnh đếm zombie tự đếm chính nó.
+
+## 49. Claude Code kiểm trực tiếp board MTK qua SSH (05/10 21:16–21:25)
+
+User cho SSH từ máy build (`Dell-Slim`, cổng `enx…` `192.168.1.141` → board `192.168.1.1`). Không lưu
+mật khẩu ở đâu: `SSH_ASKPASS` đọc biến môi trường, control socket đóng khi xong; credential CR/STUN
+đọc từ board và đưa thẳng vào HMAC/curl, không in. Image vẫn là source `6352623` (chưa có 0080):
+`libtr098.so.3.0.0` md5 `35534133…`, `icwmp_tr098d` `0a7065f9…` = gói build 19:49.
+
+| Kiểm | Kết quả |
+|---|---|
+| CRASH toàn boot log | **0** |
+| K17 trên board | 6 lần start: 40 s `-g`, 60 s `-b` (boot), 2814 s, 2972 s, **3551,3 s**, **3575,0 s** `-g`. Boot = 20:54:36 − 2972,585 s = 20:05:03 → hai lần cuối là **21:04:14,7** và **21:04:38,4**, đúng ngay sau `set PeriodicInformEnable` (21:04:13, kèm `Not found`) và `set PeriodicInformInterval` (21:04:37). **Verified** |
+| Tiến trình | đúng 1 `icwmp_tr098d`, 1 `icwmp_dm.sh`, 1 `value_monitoring`, 0 zombie — không sót con sau 4 lần restart |
+| **G3 value change** | **PASS**: `uci set easycwmp.@local[0].provisioning_code=g3test` (CLI, không `config.change`) lúc 21:18:11 → Inform `4 VALUE CHANGE` lúc 21:18:39 mang `DeviceInfo.ProvisioningCode=g3test`, phiên success, không restart. Đã trả về `g5ok` |
+| **G2 Connection Request HTTP** | **PASS**: `curl --digest` tới `192.168.1.1:7547/` → HTTP 200, phiên `6 CONNECTION REQUEST` success (21:24:34); sai mật khẩu / không auth → 401, không có phiên |
+| **G7 phần đọc (board router)** | **PASS**: STUN đang bật trên board router, `stun-client 172.16.0.15 -p 19302 -i 30.1.1.153`; binding học được `172.16.0.78:19302`, `natdetect=1`; GPV `ManagementServer.` (0078) trả `STUNEnable=1`, `STUNServerAddress=172.16.0.15`, `STUNServerPort=19302`, `STUNUsername=itms`, `NATDetected=1`, `UDPConnectionRequestAddress=172.16.0.78:19302` — khớp `stun.@stun[0]` |
+| **G7 UDP CR (đánh thức)** | **PASS phía CPE**: gói `GET …?ts&id&un&cn&sig HTTP/1.1` ký HMAC-SHA1 bằng credential `stun.@stun[0]`, gửi từ chính board (lua `nixio`) tới socket `30.1.1.153:19302` → `stun-client` → `ubus call tr069 inform 6` → phiên `6 CONNECTION REQUEST` success trong cùng giây (21:23:32). Gói **sai chữ ký** → không có phiên. **Chưa test**: ACS gửi UDP CR qua NAT tới `172.16.0.78:19302` |
+| Init script trên board | **Phát hiện:** `/overlay/upper/etc/init.d/icwmpd` (sửa tay 26/09) che `/rom/etc/init.d/icwmpd` của image (`37c11abd…`): khác comment và thiếu `procd_set_param stdout 1`; dòng `1000>&-` vẫn có. Không ảnh hưởng chức năng nhưng mọi sửa init sau này sẽ **không có hiệu lực** trên board này tới khi bỏ bản overlay |
+
+Ghi chú môi trường: máy build route `30.1.1.0/24` qua `enp1s0` (mạng khác), nên gói gửi từ máy build
+tới IP WAN của board không qua board — phải gửi từ chính board.
+
+Còn lại cho PH0: build + flash 0080 rồi chạy lại G5 (không `Not found`, không start mới), G4/G6 phần
+ACS + reboot, G5 IPv4, G8, G9; G7 UDP CR từ ACS qua NAT.
+
+## 50. Build 0080 trên cây `1_src/2025q3`, image dev-access, và đường nạp FW của WebUI (05/10 21:40–)
+
+User cho Claude Code apply + build trong cây build (chatlog mục 65), và chốt quy tắc (mục 66): thay đổi
+ngoài repo `icwmpMultiSdk` phải làm ở **project src** (`src/2025q3` = `src_bk/2025q3`, git) → patch →
+`git apply` vào cây build, không tạo/sửa thẳng trong cây build.
+
+**Apply + build** (tmux `tunv1` → docker `nvtu-openwrt`; log `1_src/2025q3/.icwmp-build-logs/`):
+
+| Bước | Kết quả |
+|---|---|
+| So repo `dev` `0ff05dc` với cây build trước apply | chỉ khác `libicwmp_dm/sdk/mtk/dmplatform_mtk.c` (0080); `icwmp_tr098` giống hệt |
+| `apply.py --sdk mtk` | backup `.icwmp-backups/20261005-214332-qxnbgifs`, `Applied: libicwmp_dm`; sau apply `diff -rq` 0 file, 2 feed Makefile cùng nội dung |
+| `make package/libtr098/{clean,compile}` + `icwmp_tr098` | `ICWMP_BUILD_RC=0`; `libtr098_3` 21:44:53, `icwmp_tr098_3-2` 21:45:16 (`20261005-pkg-0080.log`) |
+| Binary | `libtr098.so.3.0.0` md5 **`3f6265bf…`** (bản trên board: `35534133…`); `icwmp_tr098d` vẫn `0a7065f9…` (0080 chỉ sửa lib). `root-airoha` cùng md5 với gói |
+| Image lần 1 `make -j16 MSDK=1` | `ICWMP_IMAGE_RC=0`, `tclinux.bin` 21:55:28, md5 `762da99c…`, **không** có dev-access (`20261005-image-0080.log`) |
+| Image lần 2, sau khi apply dev-access | `ICWMP_IMAGE_RC=0`, log có `Enabling dev_access`; `tclinux.bin` **22:02:37**, md5 **`13e99856…`**, model `HP-2236B`, magic `d00dfeed`. `unsquashfs -l` của `root.squashfs` 22:02:15 có `etc/init.d/dev_access`, `etc/rc.d/S11dev_access`, `usr/lib/libtr098.so.3.0.0` (md5 trong `root-airoha` = `3f6265bf…`) (`20261005-image-0080-devaccess.log`). **Đây là image để nạp** |
+
+Kết luận: **SDK_BUILD_PASS (MTK)** cho source `dev` `0ff05dc` (code `311ad55`, 0080). Board chưa chạy.
+
+**Image dev-access** (v0 `0001-`, nay ở [patches/20261005_board_dev_access_feature](../../patches/20261005_board_dev_access_feature/README.md)). Init script `S11dev_access` bật
+`account.ssh` và `account.telnet` với account cố định. Nó cũng đổi hai rule `firewall_clay`
+`AIS_Default_SSH` và `AIS_Default_TELNET` (`action block`, `interface all`) sang `interface wan`, nên
+LAN mở còn WAN vẫn bị chặn. Rule được tìm theo tên, vì chỉ số `@packetfilter[33]` user dùng không khớp
+file mặc định. Ở file mặc định, `[33]` là `AIS_Default_ICMP`; SSH là `[45]` và `[46]`. Chuỗi xử lý:
+
+- `account` S50 ([init.d/account](../../src/2025q3/airoha_feeds/airoha_build/profile/HP2236B/target/linux/airoha/an7583/base-files/etc/init.d/account))
+  tạo user uid 0 cùng hash trong `/etc/shadow`, và ghi `/etc/tty_pwd` cho telnet. **Verified** (source).
+- Packet filter thành iptables `HMX_PACKET_FILTER`: interface `wan` cho ra PPP + PON, `all` cho thêm
+  LAN ([hal_security.c:1339-1354](../../src/2025q3/tclinux_phoenix/apps/hni/hal_unify/src/hal_security.c#L1339-L1354)).
+  **Verified** (source).
+- WebUI login so với UCI `account.admin` và `account.root`, không đọc `/etc/shadow` (`verifyAdmin`,
+  `verifyRoot` trong FalGateway.cpp). **Verified** theo tìm kiếm: backend và hal_unify không có
+  `getspnam`, `/etc/shadow`.
+- Chạy thật trên board: **Not established**. Máy build không có `uci` host, cũng không có qemu aarch64.
+
+**Đường nạp FW của WebUI** (để trả lời "Claude tự nạp có giống WebUI không"):
+
+1. [HalGateway_doFirmwareUpdate](../../src/2025q3/tclinux_phoenix/apps/hni/hal_unify/src/hal_gateway.c#L1375)
+   nhận file ở `/var/tmp/tclinux.bin` ([hal_gateway.h:37](../../src/2025q3/tclinux_phoenix/apps/hni/hal_unify/include/hal_gateway.h#L37)).
+2. [isFirmwareValid](../../src/2025q3/tclinux_phoenix/apps/hni/hal_unify/src/hal_gateway.c#L454) chạy hai kiểm tra:
+   - [hni_validate_image.sh](../../src/2025q3/airoha_feeds/target/linux/airoha/base-files/userfs/bin/hni_validate_image.sh)
+     so 16 byte model ở offset 10 MiB − 64 với `/etc/fw_info/model_name`. Image này có `HP-2236B`.
+   - `/usr/libexec/validate_firmware_image` phải trả JSON `valid=true`.
+3. Gọi `/sbin/sysupgrade /var/tmp/tclinux.bin` ([hal_gateway.c:1401](../../src/2025q3/tclinux_phoenix/apps/hni/hal_unify/src/hal_gateway.c#L1401)).
+4. [platform_check_image](../../src/2025q3/airoha_feeds/target/linux/airoha/base-files/lib/upgrade/platform.sh#L53):
+   magic `d00dfeed` (FIT, đúng với image này) đi tiếp tới `blapi_cmd system image_check`.
+5. [default_do_upgrade](../../src/2025q3/openwrt-21.02/openwrt-21.02.1_dev/package/base-files/files/lib/upgrade/common.sh#L405)
+   gọi `get_current_partition`:
+   - đang chạy bank 1 thì ghi `tclinux`, nếu không thì ghi `tclinux_slave`. Nói cách khác, luôn ghi
+     **bank không chạy**;
+   - ghi lỗi thì `exit 1` ([:418](../../src/2025q3/openwrt-21.02/openwrt-21.02.1_dev/package/base-files/files/lib/upgrade/common.sh#L418))
+     trước khi đổi `bootflag` ([:446](../../src/2025q3/openwrt-21.02/openwrt-21.02.1_dev/package/base-files/files/lib/upgrade/common.sh#L446)).
+
+`common.sh` và `platform.sh` của project src giống hệt bản trong rootfs đã build (`cmp`). Vì vậy
+`scp` image vào `/var/tmp/tclinux.bin`, chạy hai script kiểm tra rồi `sysupgrade` là **đúng đường ghi
+flash của WebUI**. Chỉ thiếu phần trạng thái UCI (`upgrade_fw_status`, `3rdpartyagent upgrade_state`)
+và nhánh `/tmp/maintenance_services`. **Not established**:
+
+- bootloader có tự quay về bank cũ khi bank mới không boot được hay không. Nếu không, phải đổi
+  `bootflag` qua console;
+- `sysupgrade` giữ cấu hình bằng cơ chế nào. Bằng chứng duy nhất: file overlay `/etc/init.d/icwmpd`
+  ngày 26/09 vẫn còn sau lần nạp WebUI 05/10 (§49).
+
+### 50.1 Claude Code nạp image 22:02 qua SSH (05/10 22:07–22:16, user yêu cầu, chatlog mục 67)
+
+Trước khi nạp: board `HP-2236B`, rootfs đang chạy là dm-verity trên `PARTLABEL=filesystem_slave`, ART
+bootflag=1, nên `sysupgrade` ghi `kernel` + `filesystem` (bank không chạy) rồi đặt bootflag=0.
+Bootflag nằm trong partition `art`, `ecnt_sys` ghi vào đó; WebUI nạp cũng vậy. RAM còn 133 MB,
+`/tmp` còn 180 MB. Image cũ trước khi nạp: CRASH 0, 6 dòng `==== start` (không có lần mới sau
+21:04), 5 phiên success, 0 failure.
+
+Các bước, đúng đường WebUI:
+
+1. `cat > /var/tmp/tclinux.bin`, md5 hai đầu đều `13e99856…`.
+2. `hni_validate_image.sh`: `Model validation successful: HP-2236B`.
+3. `validate_firmware_image`: `"valid": true`.
+4. `sysupgrade -T` rc=0.
+5. `/sbin/sysupgrade /var/tmp/tclinux.bin`:
+   - 22:09:24 `Saving config files… Commencing upgrade`;
+   - board mất mạng 22:10:01, có ping lại 22:11:11.
+
+Lúc 22:14:34 và 22:16:29: các cổng 80, 443 và 7547 (CR icwmp) mở, còn **22 và 23 đóng**. Vì không có
+shell nên **chưa xác minh được image đang chạy** (bank và md5).
+
+**Vì sao dev-access v0 (`0001`, S11) không mở được SSH.** **Verified** từ source:
+
+- `/etc/init.d/svcboot` (S70, procd) chạy `/userfs/bin/svcboot`. Handler đầu tiên
+  ([svcboot.c:9](../../src/2025q3/tclinux_phoenix/apps/hni/svcboot/svcboot.c#L9)) là
+  [svcboot_default](../../src/2025q3/tclinux_phoenix/apps/hni/svcboot/hmx_services.c#L59), gọi
+  `HalSecurity_initAwnSecurity()`.
+- Hàm đó gọi `setTelnetUserActive(false)` và `setSshActive(false)`
+  ([hal_security.c:2320-2328](../../src/2025q3/tclinux_phoenix/apps/hni/hal_unify/src/hal_security.c#L2320-L2328)).
+  Kết quả: `account.telnet.enabled=0` và `account.ssh.enabled=0`, whitelist SSH tắt, xoá rule
+  `ACCEPT br+ 22`.
+
+Việc này xảy ra ở **mọi lần boot**, sau S11. Đây cũng là lý do user phải mở lại SSH bằng console sau
+mỗi lần reboot. API bật lại của vendor: `ubus call hni setSshAccess '{"enabled":true}'` và
+`setTelnetAccess`
+([ubusmon/ubus.c](../../src/2025q3/tclinux_phoenix/apps/hni/ubusmon/ubus.c#L1046)). Lưu ý `dropbear`
+chỉ có trigger reload trên config `dropbear`, không trên `account`, nên vẫn phải reload dropbear
+bằng tay như lệnh console của user.
+
+Hướng sửa (cơ chế khác, sẽ là `1000-`): script chạy lại **sau** khi `svcboot_default` đã chạy. Cụ thể:
+chờ `account.ssh.enabled` từ 1 (do S11 đặt) về 0 hoặc tới timeout, rồi chạy chuỗi lệnh console đã
+chạy được của user. Phải thử trên board trước khi làm patch.
+
+### 50.2 Image 0080 trên board: G5 lần 2, dev-access v1, nạp lần 2 (05/10 22:20–22:40)
+
+User mở SSH bằng console (chatlog mục 69), rồi yêu cầu: làm patch mở mặc định SSH/telnet, dùng lại được
+cho các task khác của project, sau đó kiểm tiếp.
+
+**Image 0080 đang chạy** (lần nạp 1): `libtr098.so` `3f6265bf…`, rootfs `filesystem`, bootflag=0.
+
+**G5 lần 2** (runbook §3), 22:27:53–22:27:55:
+
+| Kiểm | Kết quả |
+|---|---|
+| Trước gate | CRASH 0, 2 dòng `==== start` (`-g` 41 s, `-b` 61 s), 3 phiên success, 1 `icwmp_dm.sh`, 0 zombie |
+| Chuỗi `''`, `'   '`, `a;b`, `a&b`, `a\|b`, `` a`b ``, `a$b` | 9007 cả 7; `g5ok` OK — **PASS** |
+| Boolean `yes`, `on` → 9007; `true`, `0`, `1` OK | **PASS** |
+| unsignedInt `abc`, `-1`, `4294967296` → 9007; `43200` OK | **PASS** |
+| **K17 sau 0080** | 4 lệnh set ManagementServer trả `reloaded: true`. **Không** còn `Command failed: Not found`; pid giữ `10396`; vẫn 2 dòng start; `ubus list tr069` còn. Log chỉ có `deviceid: reading identity …`: daemon đọc lại cấu hình trong tiến trình. **PASS, K17 đã sửa trên board** |
+| Mirror | `easycwmp.@acs[0].periodic_interval` = `cwmp.acs.periodic_inform_interval` = 43200; `provisioning_code` = `g5ok` |
+| IPv4 | `add Layer3Forwarding.Forwarding.` → **9002**: thiếu `network.routev4Common.max_rules` (board chỉ có `route4_common`). Shell `static_route_add_rule` ([layer3_forwarding:132-136](../../src/2025q3/tclinux_phoenix/apps/hni/cwmpclient/ext/openwrt/scripts/functions/tr098/layer3_forwarding#L132-L136)) cũng trả `E_INTERNAL_ERROR`, nên đây là hành vi giữ nguyên ([layer3forwarding_mtk.c:398-400](../../userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/layer3forwarding_mtk.c#L398-L400)), không phải lỗi port. Thay bằng `LANHostConfigManagement.MinAddress`: `1.2.3`, `abc`, `1.2.3.4.5` → 9007, không có `uci changes`. Ghi giá trị đúng: **NOT RUN** (sẽ commit `network` và kích netifd) |
+
+**Dev-access v1** ([patches/20261005_board_dev_access_feature](../../patches/20261005_board_dev_access_feature/README.md),
+[guide](../../docs/board_dev_access_guide.md)):
+
+- Trên board, firewall không chặn SSH: chain `HMX_PACKET_FILTER` không tồn tại, svcboot log
+  `Failed to append tcp rule for interface br+`. `[33]` là `AIS_Default_ICMP`; rule SSH là `[44]`, `[45]`.
+- Thử trước khi làm patch, chạy từ `/tmp`, không ghi overlay:
+  - `start`: 22 và 23 LISTEN, login telnet `admin` ra shell root.
+  - `boot` cộng `ubus call hni setTelnetAccess/setSshAccess false` (đúng hàm svcboot gọi): watcher log
+    `svcboot turned SSH off after 6s`, bật lại cả hai, `admin` login lại được.
+  - Hàm HAL ngắt luôn phiên SSH đang mở và chuyển `admin` sang `/bin/false`. Watcher vẫn chạy tiếp.
+- Patch `1000-`: gỡ `0001-` rồi apply ở project src trước, cây build sau. Ba bản `dev_access` cùng md5
+  `23b1e4c6…`: project src, cây build, bản đã thử.
+- Image `tclinux.bin` **22:32:28**, md5 **`49539b28…`**, `ICWMP_IMAGE_RC=0`
+  (`20261005-image-0080-devaccess-v1.log`). Squashfs có `dev_access` 1953 byte, `S11dev_access`,
+  `libtr098.so.3.0.0`.
+
+**Nạp lần 2** (22:34): kiểm như lần 1, md5 khớp, model đúng, `valid: true`, `-T` đạt. `sysupgrade` ghi
+bank slave. Kiểm một lần lúc 22:38:44 (chờ đủ theo lời user dặn):
+
+| Kiểm | Kết quả |
+|---|---|
+| Bank | rootfs `filesystem_slave`, bootflag=1; `dev_access` `23b1e4c6…`, `libtr098` `3f6265bf…` |
+| Boot thật | S50 `Enable admin` → `svcboot_default` → `dev_access: … (boot, svcboot turned SSH off after 16s)` → `SSH is enabled`, `Telnet is enabled` |
+| Truy cập | 22 và 23 LISTEN; SSH `admin` vào được; telnet `admin` ra `uid=0(root)`. **Không cần console — PASS** |
+| icwmp | CRASH 0, 2 dòng start bình thường, phiên boot success, 1 `icwmp_dm.sh`, 0 zombie |
+| Overlay init | `/etc/init.d/icwmpd` vẫn là bản overlay 26/09 (`541750ed…`), khác bản ROM `37c11abd…` — chờ user quyết |
+
+Còn lại cho PH0:
+- G4 và G6 phần ACS: GPN, SPV nhiều tham số có rollback, reboot, K10;
+- G5 ghi IPv4 đúng (cần route thật);
+- G8, G9;
+- G7 UDP CR từ ACS qua NAT.
+
+## 51. PH0 còn lại: tự đánh giá được gì, phải test thật cái gì (05/10 23:05)
+
+User hỏi (chatlog mục 70): phần còn lại của PH0 có tự rà soát và xác nhận đạt được không, hay phải test
+thật. Cơ sở là [sync-main-dev.md §4–§5](../../docs/plan/sync-main-dev.md): trạng thái **không được
+cao hơn bằng chứng thấp nhất**. Gate board chỉ đóng bằng chạy trên board; đọc source hay test host chỉ
+dùng để đánh giá rủi ro.
+
+| Hạng mục | Hiện có | Tự xác nhận được? | Cần gì |
+|---|---|---|---|
+| PH0.1 MTK build | SDK_BUILD_PASS cho 0080 (§50) | xong | — |
+| PH0.1 BDK build | user báo build OK | **không**: cây BDK trên máy này chưa build (`targets/MO77300EB/fs.install` không có) | user chạy runbook §0.2 trên máy BDK, gửi output |
+| G1, G2, G3, G5 | PASS (§48, §49, §50.2) | xong | G5 ghi IPv4 đúng NOT RUN vì board thiếu `routev4Common.max_rules`, giống shell |
+| G4 GPV từng nhánh | PASS | xong | — |
+| G4 GPN, SPV qua SOAP | lớp dm đã chạy trên board qua `ubus dm` (cùng engine); lớp SOAP (`xml.c`) không phụ thuộc SDK, host PASS | **không** đủ cho mức BOARD_GATE | một phiên ACS: GPN, SPV mỗi nhánh |
+| G4 SPV nhiều param, một param lỗi → rollback | không có ca host riêng cho rollback; chưa chạy board | **không**, và nên test thật: rollback đi qua `dmuci` + end session, đúng vùng 0080 sửa | một SPV 2 param (runbook G4) |
+| G6 sau phiên + mirror | PASS qua `ubus dm` (§50.2) | phần reboot: **tự làm được** qua SSH (ghi, reboot, đọc lại); WebUI: không xem được | reboot test (sau G9), user nhìn WebUI |
+| K10 PeriodicInformTime | host `ptime` PASS | **tự làm được**: `dm set` PeriodicInformTime + Interval, đọc `next_session` | — |
+| G7 | phía router PASS (§49) | UDP CR từ ACS qua NAT: **không** | ACS gửi UDP CR |
+| G8 Download/ScheduleDownload sai | host `rpc` 5/5 (cùng code `cwmp.c`/`xml.c`) | **không** cho BOARD_GATE | ACS gửi 2 RPC; hoặc dùng `tests/host/acs.py` trỏ vào board — nhưng đổi ACS URL làm icwmp gửi `0 BOOTSTRAP` ([event.c:794-816](../../userspace/public/apps/icwmp/icwmp/event.c#L794-L816)) cho ACS thật khi trả URL về, nên cần user đồng ý |
+| G9 soak 24 h | sampler chạy từ 23:03 (`/tmp/g9.sh`, `/tmp/g9.csv`, mỗi 300 s + một `dm get` toàn cây) | **tự làm được**, mốc 24 h là 06/10 23:03 | không reboot board trong thời gian này |
+| K13, K14 | OPEN, cần code + test host (§7.4 của plan) | việc tiếp theo | — |
+| K15 | cần quyết định sản phẩm | không | user |
+
+Kết luận: PH0 **chưa đóng được chỉ bằng tự đánh giá**. Ba ca cần SOAP thật từ một ACS (G4 GPN/SPV
+rollback, G8, G7 qua NAT), BDK cần output từ máy BDK, và còn K13/K14. Những phần tự làm được (K10, G6
+reboot, G9) sẽ làm tiếp. Sau 3h30 (chatlog mục 70), việc tiếp theo là K14 rồi K13 trên `dev` kèm test host.
+
+## 52. 06/10: G9 giữa chừng, K10 trên board, K14 (`0081`) và K13 (`0082`)
+
+Làm tiếp theo hẹn 3h30 (chatlog mục 70) và lượt "làm tiếp" (mục 71).
+
+**G9, đọc lúc 02:33** (sampler chạy từ 05/10 23:03, mỗi 300 s một mẫu kèm một `dm get` toàn cây):
+
+| Cột | min → max (40 mẫu, 3h25) |
+|---|---|
+| pid `icwmp_tr098d` | 10407 (không đổi) |
+| VmRSS | 5344 → 5344 kB |
+| fd / thread | 14–15 / 11 |
+| VmRSS `icwmp_dm.sh` | 3924 → 3928 kB |
+| MemAvailable | 133 788 – 134 824 kB, không giảm dần |
+| `dm get` toàn cây | 15–16 s, 1740 dòng mỗi lần |
+
+Phẳng. Lưu ý: trong cửa sổ này **không có phiên ACS** (chu kỳ 12 h), nên mới thử đường dm/ubus, chưa
+thử đường session. Sampler vẫn chạy tới mốc 24 h.
+
+**K10 trên board, PASS.** Lúc 06:10:31 `dm set` PeriodicInformTime=`2026-10-05T23:20:31Z` và
+Interval=3600:
+- `next_session` = 06:20:31+07, đúng mốc;
+- phiên định kỳ chạy lúc 06:20:31, success (GenieACS 1.2.9 trả 204);
+- `next_session` sau đó = 07:20:31;
+- không restart (pid giữ, 2 dòng start).
+
+Đã trả giá trị gốc `0001-01-01T00:00:00Z` / 43200.
+
+**Shell gốc kiểm `xsd:dateTime` thế nào.** [common:842](../../src/2025q3/tclinux_phoenix/apps/hni/cwmpclient/ext/openwrt/scripts/functions/common/common#L842)
+chạy `date -d` của busybox sau khi đổi `T` thành dấu cách; riêng đúng chuỗi unknown time được nhận.
+Thử trên board:
+
+| Giá trị | busybox `date -d` |
+|---|---|
+| có hậu tố `Z`, mọi trường hợp | **từ chối**, kể cả `2026-10-05T23:20:31Z` và `2024-02-29T00:00:00Z` |
+| không có zone, `+07:00` | nhận (`+07:00` còn bị đọc sai thành `23:20:00`) |
+| `+25:00` | **nhận** |
+| ngày hoặc giờ sai | từ chối |
+
+Shell sai ở cả hai chiều, nên K14 kiểm theo đúng `xsd:dateTime` chứ không chép shell.
+
+**`0081` K14** (`5b57deb`):
+- `ms_valid_datetime` (setter) và `periodic_time_value` (reader của icwmpd) kiểm lịch: tháng, ngày theo
+  tháng và năm nhuận, hh ≤ 23, mm/ss ≤ 59, zone `Z` hoặc `±hh:mm` ≤ 14:00, không có gì phía sau.
+- Setter sai trả 9007 và giữ giá trị cũ; reader sai trả 0 (không căn mốc).
+- Hai hàm, tách khỏi source và build bằng gcc 7.5 trong container: 31 case đúng, epoch khớp `fromisoformat`
+  của Python.
+- `run.sh ptime` có thêm 9 ca SPV (7 bị từ chối, 2 được nhận).
+- Build SDK hai gói đạt lúc 06:18.
+
+**`0082` K13** (`0add366`):
+- URL: `ms_valid_url` theo `grep "[a-zA-Z0-9_]://.*"`.
+- STUNServerAddress: `mtk_shell_valid_host` = bản dịch mới của `is_valid_domain` + `is_valid_ipv4`/`ipv6`
+  (đã có).
+- **Đối chiếu với chính hàm shell trên board: 35/35 giống**, gồm 27 host và 8 URL, kể cả các điểm lạ của
+  shell: `01.2.3.4` và `1.2.3.a` được nhận, `a_b.example.net` bị từ chối, tên có dấu chấm cuối được nhận.
+- Side effect ghi `/usr/share/easycwmp/defaults` **không port**. Chạy đúng lệnh `sed` của shell trên bản sao
+  file của board thì gặp `sed: bad option in substitution expression`, vì URL luôn chứa `/`; file không đổi,
+  tức side effect này chưa bao giờ xảy ra trên sản phẩm.
+- STUNServerPort và keepalive giữ range TR-098 của 0078: phép kiểm range của shell không bao giờ trả sai
+  (`-lt 1 && -gt 65535`, biến trong nháy đơn).
+
+**Cổng §6.3:**
+- Đạt: `check-cc-syntax` (lib 41/0, app 17/0 lỗi; cảnh báo giữ 15/27, không cái nào ở file đã sửa),
+  `check-c-sanity` 0, dm paths thiếu 0 / dôi 11, claims 0 cặp chồng, automake 0, sums OK.
+- **`run.sh all` không chạy hợp lệ được trên máy này.** Không vào được GitHub và Docker Hub, chỉ có Ubuntu
+  archive. Đã thử container dùng một lần `icwmp-hosttest-20261006`:
+  - image `openwrt-an75xx` (Ubuntu 18.04), apt `python3.8 libjson-c-dev libcurl4-openssl-dev busybox valgrind`;
+  - libubox/uci/ubus/json-c 0.15 từ `dl/` của SDK (json-c `-nodoc` cần thư mục `doc/` rỗng);
+  - `build.sh` chạy trên bản chép, bỏ ba lệnh `dep` clone GitHub.
+
+  Build đạt, nhưng agent chết ngay phiên đầu (`Segmentation fault`). **Bản HEAD `7121259`, không có
+  K13/K14, chết y hệt**, nên đây là môi trường. Harness `unit` thì không tìm thấy `libjson-c.so.5` vì không
+  có rpath.
+
+  Muốn có HOST_VERIFIED thì cần một container Ubuntu mới hơn (json-c 0.15+, Python ≥ 3.10) có mạng tới
+  GitHub, hoặc chép sẵn repo deps theo rev đã pin.
