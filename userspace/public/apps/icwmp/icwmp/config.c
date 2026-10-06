@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <uci.h>
 #include <unistd.h>
 #include <sys/file.h>
@@ -432,10 +433,20 @@ static long days_from_civil(long y, long m, long d)
  * read "2026-01-01T00:17:00Z" as 2026 seconds and "0001-01-01T00:00:00Z"
  * as 1, so the periodic Informs were aligned on the wrong instant.  A time
  * without zone is UTC; the unknown time and anything before 1970 give 0
- * (no alignment). */
+ * (no alignment), and so does a value that is not a real instant (K14): a
+ * day past the end of its month, hh > 23, mm or ss > 59, a zone other than
+ * Z or +hh:mm/-hh:mm up to 14:00, anything after it.  sscanf("%2d") let
+ * "+0730" through as a zone of 0 and " 1"/"+1" as digits. */
+static int two_digits(const char *p)
+{
+	return (p[0] - '0') * 10 + (p[1] - '0');
+}
+
 static time_t periodic_time_value(const char *v)
 {
-	int y, mo, d, h, mi, s, n = 0, oh, om;
+	static const char shape[] = "dddd-dd-ddTdd:dd:dd";
+	static const int mdays[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+	int i, y, mo, d, h, mi, s, zh, zm, leap;
 	const char *p;
 	long off = 0;
 	long long t;
@@ -445,15 +456,41 @@ static time_t periodic_time_value(const char *v)
 	p = (*v == '-') ? v + 1 : v;
 	if (*p && strspn(p, "0123456789") == strlen(p))
 		return (time_t)atol(v);
-	if (sscanf(v, "%4d-%2d-%2dT%2d:%2d:%2d%n", &y, &mo, &d, &h, &mi, &s, &n) != 6 || n == 0)
+	for (i = 0; shape[i]; i++) {
+		if (shape[i] == 'd' ? !isdigit((unsigned char)v[i]) : v[i] != shape[i])
+			return 0;
+	}
+	y = two_digits(v) * 100 + two_digits(v + 2);
+	mo = two_digits(v + 5);
+	d = two_digits(v + 8);
+	h = two_digits(v + 11);
+	mi = two_digits(v + 14);
+	s = two_digits(v + 17);
+	leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+	if (y < 1970 || mo < 1 || mo > 12 || d < 1 || d > mdays[mo - 1] + (mo == 2 && leap) ||
+	    h > 23 || mi > 59 || s > 59)
 		return 0;
-	p = v + n;
-	if (*p == '.')
-		for (p++; *p >= '0' && *p <= '9'; p++)
+	p = v + i;
+	if (*p == '.') {
+		if (!isdigit((unsigned char)p[1]))
+			return 0;
+		for (p++; isdigit((unsigned char)*p); p++)
 			;
-	if ((*p == '+' || *p == '-') && sscanf(p + 1, "%2d:%2d", &oh, &om) == 2)
-		off = (*p == '-' ? -1 : 1) * (oh * 3600L + om * 60L);
-	if (y < 1970 || mo < 1 || mo > 12 || d < 1 || d > 31)
+	}
+	if (*p == 'Z')
+		p++;
+	else if (*p == '+' || *p == '-') {
+		if (!isdigit((unsigned char)p[1]) || !isdigit((unsigned char)p[2]) || p[3] != ':' ||
+		    !isdigit((unsigned char)p[4]) || !isdigit((unsigned char)p[5]))
+			return 0;
+		zh = two_digits(p + 1);
+		zm = two_digits(p + 4);
+		if (zh > 14 || zm > 59 || (zh == 14 && zm != 0))
+			return 0;
+		off = (*p == '-' ? -1 : 1) * (zh * 3600L + zm * 60L);
+		p += 6;
+	}
+	if (*p)
 		return 0;
 	t = (long long)days_from_civil(y, mo, d) * 86400 + h * 3600L + mi * 60L + s - off;
 	return t > 0 ? (time_t)t : 0;

@@ -268,7 +268,27 @@ try: print(json.load(sys.stdin)['next_session']['start_time'])
 except Exception: print('')")
 	off=$(date +%z)
 	stop
+	# K14: an SPV of a dateTime that is not a real instant faults and keeps
+	# the stored time; a leap day and the unknown time are taken.  Up to 0080
+	# only the shape was checked: 2026-02-29 or 24:17:00 was stored.
+	bad_n=0
+	for v in 2026-02-29T00:17:00Z 2026-04-31T00:17:00Z 2026-01-01T24:17:00Z 2026-01-01T00:60:00Z \
+		2026-01-01T00:17:60Z 2026-01-01T00:17:00+15:00 2026-01-01T00:17:00+0730; do
+		start 1 "--set InternetGatewayDevice.ManagementServer.PeriodicInformTime=$v"
+		wait_done 30; sleep 1
+		expect "$v faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+		expect "periodic_time after $v" "$(uci -q get easycwmp.@acs[0].periodic_time)" "2026-01-01T00:17:00Z"
+		stop
+	done
+	for v in 2028-02-29T00:17:00Z 0001-01-01T00:00:00Z; do
+		start 1 "--set InternetGatewayDevice.ManagementServer.PeriodicInformTime=$v"
+		wait_done 30; sleep 1
+		expect "$v faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "0"
+		expect "periodic_time after $v" "$(uci -q get easycwmp.@acs[0].periodic_time)" "$v"
+		stop
+	done
 	restore_cfg easycwmp cwmp
+	if [ $bad_n = 0 ]; then pass "ptime: SPV of a time that is not a real instant faults, stored time kept (K14)"; else bad "ptime: $bad_n mismatches above (K14)"; fi
 	# minutes:seconds of the next Inform; the zone of the host shifts whole
 	# hours in the usual case, check it is one
 	case "$off" in *00) ;; *) bad "ptime: host zone $off is not whole hours, cannot check"; return ;; esac

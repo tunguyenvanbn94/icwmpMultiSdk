@@ -38,7 +38,7 @@ again after editing the sources rebuilds what changed.
 | `soak [N]` | N sessions with ubus load, RSS / fd / thread / process samples every 30 s |
 | `msrv` | the ACS sets URL, Username, PeriodicInformInterval/Time, CWMPRetryMinimumWaitInterval, ConnectionRequestUsername: the values must be in `easycwmp` (the product's config of record) and in icwmpd's mirror `cwmp` after the session; PeriodicInformInterval=0 faults. Known issue K1, fixed by 0078 |
 | `stun` | the ACS sets the STUN leaves: they must land in `stun.@stun[0]`, raise `/tmp/stunclient_reload_needed` and run `/etc/init.d/stuncd reload` once; GPV of UDPConnectionRequestAddress/NATDetected reads `stun.@stun[0]`; STUNServerPort=70000 faults. K2, fixed by 0078 |
-| `ptime` | `easycwmp.@acs[0].periodic_time` as the product stores it (a dateTime): the next periodic Inform must fall on its minute and second. K10, fixed by 0079 |
+| `ptime` | `easycwmp.@acs[0].periodic_time` as the product stores it (a dateTime): the next periodic Inform must fall on its minute and second. K10, fixed by 0079. Then SPVs of PeriodicInformTime that are not a real instant (29 February of a common year, 31 April, 24:17, :60, zone +15:00 or +0730) must fault and keep the stored time; a leap day and the unknown time are taken. K14, fixed by 0081 |
 
 Logs: `$ICWMP_HOST_WORK/run/` (`acs.log`, `icwmpd.out`, `vg.log`,
 `fake_dm.cmds` = every request the data model shell got).

@@ -80,16 +80,41 @@ struct ms_opt {
 	int flags;
 };
 
-/* "2026-10-04T03:00:00", optional fraction, optional Z or +hh:mm/-hh:mm */
+static int ms_2digits(const char *p)
+{
+	return (p[0] - '0') * 10 + (p[1] - '0');
+}
+
+static int ms_days_in_month(int y, int m)
+{
+	static const int days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+
+	if (m == 2 && ((y % 4 == 0 && y % 100 != 0) || y % 400 == 0))
+		return 29;
+	return days[m - 1];
+}
+
+/* xsd:dateTime: "2026-10-04T03:00:00", optional fraction, optional Z or
+ * +hh:mm/-hh:mm, and a real instant: month 1-12, the day within its month
+ * (29 February in leap years only), hh 0-23, mm and ss 0-59, a zone of at
+ * most 14:00.  The unknown time 0001-01-01T00:00:00Z passes.  The shell ran
+ * busybox "date -d" on the value with T made a space: that refused every
+ * value ending in Z except the unknown time, and took +25:00 (K14). */
 static int ms_valid_datetime(const char *v)
 {
 	static const char shape[] = "dddd-dd-ddTdd:dd:dd";
-	int i;
+	int i, y, mo, d, zh, zm;
 
 	for (i = 0; shape[i]; i++) {
 		if (shape[i] == 'd' ? !isdigit((unsigned char)v[i]) : v[i] != shape[i])
 			return 0;
 	}
+	y = ms_2digits(v) * 100 + ms_2digits(v + 2);
+	mo = ms_2digits(v + 5);
+	d = ms_2digits(v + 8);
+	if (y < 1 || mo < 1 || mo > 12 || d < 1 || d > ms_days_in_month(y, mo) ||
+	    ms_2digits(v + 11) > 23 || ms_2digits(v + 14) > 59 || ms_2digits(v + 17) > 59)
+		return 0;
 	v += i;
 	if (*v == '.') {
 		v++;
@@ -103,6 +128,10 @@ static int ms_valid_datetime(const char *v)
 	else if (*v == '+' || *v == '-') {
 		if (!isdigit((unsigned char)v[1]) || !isdigit((unsigned char)v[2]) || v[3] != ':' ||
 		    !isdigit((unsigned char)v[4]) || !isdigit((unsigned char)v[5]))
+			return 0;
+		zh = ms_2digits(v + 1);
+		zm = ms_2digits(v + 4);
+		if (zh > 14 || zm > 59 || (zh == 14 && zm != 0))
 			return 0;
 		v += 6;
 	}
