@@ -165,7 +165,7 @@ mỗi mức phải ghi rõ commit hoặc bundle tương ứng.
 | `SDK_BUILD_PASS` | build bằng SDK thật (MTK, BDK) | `apply` + build `libtr098`/`icwmp_tr098` | MTK đạt tới 0086 (06/10, gói + image, cả từ bundle export); BDK chưa build với 0067+ (K9) |
 | `BOARD_GATE_n` | gate board theo §5 PH0.4 | board HP2236B | Image 0083 (06/10): G1–G7 phía router PASS, G4/G6 qua GenieACS NBI; G8 bỏ; G9 24 h tới 07/10 08:15 (analysis §48–§54) |
 | `SOAK` | 24 h, RSS/fd/thread phẳng | `run.sh soak` trên board/host | host: `dev` báo 300 phiên RSS phẳng; board chưa |
-| `RELEASE` | baseline đóng băng, có tag | §6.1 | chưa |
+| `RELEASE` | baseline đóng băng, có tag | §6.1 | baseline chưa; tag bản giao `release/mtk-20261006` (`8dea75b`) |
 
 `check-cc-syntax.py` (cross-gcc của SDK) và `check-pkg-deps.py` cần cây SDK. Đặt đường dẫn bằng
 `--sdk-root` hoặc `ICWMP_SDK_SRC`; nếu không có thì script chỉ in phần làm được.
@@ -251,6 +251,9 @@ và mỗi PH ghi rõ nó thay thế ID nào.
   `feat/<phase>-<chủ đề>`. Không commit thẳng vào `main`.
 - `main`: chỉ fast-forward từ `dev` tại một mốc đã qua cổng (PH0.1, sau đó mỗi gate board).
   Mỗi mốc có tag `baseline/...` hoặc `release/...`.
+- `release/<sdk>-<YYYYMMDD>` (annotated): commit đã xuất một bản giao. `./export.py --sdk <sdk>` chạy tại tag
+  cho lại đúng sha256 ghi trong message của tag. Tag này không có nghĩa đã qua mọi gate; mốc đóng băng dùng
+  `baseline/...`. Đã có: `release/mtk-20261006` → `8dea75b`.
 - Branch đã merge thì xóa. Branch tạm của công cụ AI cũng không giữ lâu.
 
 ### 6.2 Commit

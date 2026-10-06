@@ -94,6 +94,7 @@ flowchart LR
 | | |
 |---|---|
 | Lệnh tạo | `./export.py --sdk mtk <ngoài repo>/icwmp_mtk.tar.gz` |
+| Tag | `release/mtk-20261006` → `8dea75b` (annotated, message ghi sha256). Lấy lại đúng bản giao: checkout tag rồi chạy lệnh tạo ở trên |
 | Bản giao hiện hành | commit `8dea75b`, 327 file, sha256 `9c6ab9ad0e295b7eb5e082edd6a7017c1d6e9d26ee2c3b00bbaafc6565de53fc` (`release/icwmp_mtk_8dea75b.tar.gz` của issue workspace). So với bundle `e273359` ở dòng dưới chỉ khác 5 file tài liệu, `README.md`, `MANIFEST.json`, `SHA256SUMS`; `sha256sum -c` và `apply --dry-run` trên `1_src` OK |
 | Đã kiểm (code 0087, bundle `e273359`, sha256 `e693ae29…`, 327 file) | Export hai lần cùng sha256; `apply --sdk mtk --dry-run` trên `1_src` OK; source lib/app/feed trùng byte với bản `a7549e7` đã apply và build `libtr098` + `icwmp_tr098` + image rc 0 (06/10 08:42); giải nén, `sha256sum -c`, rồi `tests/host` build + setup + `run.sh all` PASS ngay trong bundle (analysis §55) |
 | Chưa kiểm | Nạp image lên board. Board đang chạy 0083, khác 0086 ở 27 hàm không ai gọi; hành vi chạy không đổi |
