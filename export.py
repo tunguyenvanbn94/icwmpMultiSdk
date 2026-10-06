@@ -35,10 +35,11 @@ SDKS = ("bdk", "mtk", "uci")
 # directories.  A path ending in "/" is a directory.
 BDK_GLUE = ("autodetect", "Bcmbuild.mk", "Makefile", "Manifest.brcmoss")
 SDK_EXCLUDES = {
+    # microxml/microxml/ stays: tests/host builds it (apply --sdk mtk does not install it)
     "mtk": ("bdk-integration.json", "docs/bdk/",
-            "userspace/public/libs/microxml/", "userspace/public/libs/uci/",
-            "userspace/public/apps/icwmp/files/")
-           + tuple("userspace/public/libs/libicwmp_dm/" + name for name in BDK_GLUE)
+            "userspace/public/libs/uci/", "userspace/public/apps/icwmp/files/")
+           + tuple("userspace/public/libs/" + lib + "/" + name
+                   for lib in ("microxml", "libicwmp_dm") for name in BDK_GLUE)
            + tuple("userspace/public/apps/icwmp/" + name for name in BDK_GLUE),
     # tests/host builds --with-sdk=mtk
     "bdk": ("feeds/", "docs/mtk/", "tests/host/"),

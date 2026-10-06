@@ -26,6 +26,13 @@ tests/host/run.sh all          # unit smoke notify rpc msrv stun ptime valgrind,
 
 Work files go to `$ICWMP_HOST_WORK` (default `/tmp/icwmp-host`); `build.sh`
 again after editing the sources rebuilds what changed.
+
+Checked environment (06/10): `docker run -v <repo>:/repo:ro ubuntu:24.04`
+(json-c 0.17, Python 3.12, gcc 13) with the packages above plus
+`ca-certificates`; `build.sh` clones the pinned deps from GitHub.  An Ubuntu
+18.04 container with json-c 0.15 and libubox/uci/ubus of the SDK's `dl/`
+built, but the agent died with SIGSEGV in its first session, on old commits
+too: use 24.04.
 `ICWMP_HOST_BIN=<other icwmp_tr098d>` runs the same tests on another build.
 
 | `run.sh` | Checks |

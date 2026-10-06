@@ -393,7 +393,8 @@ ubus call tr069 status
    gì thì báo "Already applied".
 
 Giao một bản chỉ một SDK, ví dụ chỉ MTK/OpenWrt: `./export.py --sdk mtk <ngoài repo>/icwmp_mtk.tar.gz` (0085). Bundle lấy
-từ HEAD đã commit, chỉ còn `sdk/mtk`, bỏ 33 file `tr098/` chỉ SDK `uci` dùng, bỏ microxml/libuci/glue BDK/docs BDK.
+từ HEAD đã commit, chỉ còn `sdk/mtk`, bỏ 33 file `tr098/` chỉ SDK `uci` dùng, bỏ libuci/glue BDK/docs BDK. Source
+microxml vẫn đi kèm, vì test host (`tests/host/build.sh`) build nó (0087).
 `MANIFEST.json` ghi đúng commit. Tarball tái lập được (hai lần export cho cùng sha256). Người nhận giải nén rồi
 chạy `./apply --sdk mtk <2025q3>`; `--sdk bdk` bị từ chối.
 
