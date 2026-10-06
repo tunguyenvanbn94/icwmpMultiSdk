@@ -120,11 +120,72 @@ def sdk_roots(tree):
     return [path.parent.parent for path in sorted(tree.rglob("tools/sdk-scan.sh"))]
 
 
+INCLUDE_RE = re.compile(r'#\s*include\s*[<"](?:icwmp_dm/|libtr098/)?([^>"]+)[>"]')
+SOURCE_RE = re.compile(r'([\w./-]+\.[ch])\b')
+
+
+def unused_portable_sources(lib_root, trees):
+    """Files of the library's tr098/ that what is left no longer uses: not
+    named by bin/Makefile.am or a remaining sdk/<name>/sdk.mk, and not included,
+    directly or through another kept file, by the remaining sources of any tree
+    (the app includes <icwmp_dm/...>).  Matching by file name keeps a file when
+    in doubt."""
+    portable = [p for p in sorted((lib_root / "tr098").rglob("*")) if p.is_file()]
+    named = set()
+    for mk in [lib_root / "bin" / "Makefile.am"] + sorted((lib_root / "sdk").glob("*/sdk.mk")):
+        named |= {Path(m).name for m in SOURCE_RE.findall(mk.read_text(errors="replace"))}
+    keep = {p for p in portable if p.name in named}
+    todo = list(keep) + [p for tree in trees for p in sorted(tree.rglob("*"))
+                         if p.suffix in (".c", ".h") and p.is_file() and p not in portable]
+    seen = set()
+    while todo:
+        path = todo.pop()
+        if path in seen:
+            continue
+        seen.add(path)
+        for include in INCLUDE_RE.findall(path.read_text(errors="replace")):
+            for candidate in portable:
+                if candidate.name == Path(include).name and candidate not in keep:
+                    keep.add(candidate)
+                    todo.append(candidate)
+    return [p for p in portable if p not in keep]
+
+
+def prune_trees(trees, sdk):
+    """Keep only the code of one SDK in trees ({label: directory}, edited in
+    place): every component root drops its other sdk/<name>/ and regenerates
+    sdk/enabled.* the way tools/sdk-prune.sh does; then the library drops the
+    tr098/ sources nothing left uses, and files only another SDK uses go."""
+    for label, tree in sorted(trees.items()):
+        for root in sdk_roots(tree):
+            names = sorted(d.name for d in (root / "sdk").iterdir() if (d / "sdk.mk").is_file())
+            if sdk not in names:
+                raise ValueError("no sdk/{} in {}".format(sdk, label))
+            for name in names:
+                if name != sdk:
+                    shutil.rmtree(str(root / "sdk" / name))
+                    print("Drop:", label + "/" + str((root / "sdk" / name).relative_to(tree)))
+            subprocess.run(["sh", "tools/sdk-scan.sh"], cwd=str(root), check=True,
+                           stdout=subprocess.DEVNULL)
+    for label, tree in sorted(trees.items()):
+        for root in sdk_roots(tree):
+            if (root / "tr098").is_dir():
+                for path in unused_portable_sources(root, list(trees.values())):
+                    path.unlink()
+                    print("Drop:", label + "/" + str(path.relative_to(tree)))
+        for other, files in SDK_ONLY_FILES.items():
+            if other == sdk:
+                continue
+            for name in files:
+                for path in sorted(tree.rglob(name)):
+                    path.unlink()
+                    print("Drop:", label + "/" + str(path.relative_to(tree)))
+
+
 def prune_copies(copies, sdk, workdir):
     """--sdk-only: copy every source tree that has sdk/<name>/ directories to
-    workdir, keep only sdk/<sdk>/ there and regenerate sdk/enabled.* the way
-    tools/sdk-prune.sh does, and drop files only another SDK uses.  The bundle
-    itself stays untouched; the SDK gets the pruned copies."""
+    workdir and prune the copies with prune_trees().  The bundle itself stays
+    untouched; the SDK gets the pruned copies."""
     pruned = {}
     for index, (relative, source_dir) in enumerate(sorted(copies.items())):
         if not sdk_roots(source_dir):
@@ -132,25 +193,25 @@ def prune_copies(copies, sdk, workdir):
             continue
         dest = workdir / str(index)
         shutil.copytree(str(source_dir), str(dest))
-        for root in sdk_roots(dest):
-            names = sorted(d.name for d in (root / "sdk").iterdir() if (d / "sdk.mk").is_file())
-            if sdk not in names:
-                raise ValueError("no sdk/{} in {}".format(sdk, relative))
-            for name in names:
-                if name != sdk:
-                    shutil.rmtree(str(root / "sdk" / name))
-                    print("Drop:", relative + "/" + str((root / "sdk" / name).relative_to(dest)))
-            subprocess.run(["sh", "tools/sdk-scan.sh"], cwd=str(root), check=True,
-                           stdout=subprocess.DEVNULL)
-        for other, files in SDK_ONLY_FILES.items():
-            if other == sdk:
-                continue
-            for name in files:
-                for path in sorted(dest.rglob(name)):
-                    path.unlink()
-                    print("Drop:", relative + "/" + str(path.relative_to(dest)))
         pruned[relative] = dest
+    prune_trees({relative: path for relative, path in pruned.items() if within(path, workdir)}, sdk)
     return pruned
+
+
+def source_commit(here, metadata):
+    """The commit being installed: git HEAD when apply runs from a checkout of
+    the repository ("-dirty" with uncommitted changes), else the commit the
+    export wrote into MANIFEST.json.  The MANIFEST.json kept in the repository
+    names the old overlay baseline, not the checkout (K19)."""
+    if (here / ".git").exists():
+        try:
+            run = lambda *args: subprocess.run(["git", "-C", str(here)] + list(args), check=True,
+                                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                               universal_newlines=True).stdout.strip()
+            return run("rev-parse", "HEAD") + ("-dirty" if run("status", "--porcelain") else "")
+        except (OSError, subprocess.CalledProcessError):
+            pass
+    return metadata["commit"]
 
 
 def plan(here, target, sdk, profile, metadata, layout="full"):
@@ -318,7 +379,11 @@ def main():
                 raise ValueError("cannot detect SDK unambiguously, use --sdk")
             sdk = found[0]
         profile = args.profile or ("MO77300EB" if sdk == "bdk" else "HP2236B")
-        layout = "sdk-only" if args.sdk_only else "full"
+        carried = metadata.get("sdks")
+        if carried and sdk not in carried:
+            raise ValueError("this bundle carries only SDK: " + ", ".join(carried))
+        layout = "sdk-only" if args.sdk_only or carried == [sdk] else "full"
+        metadata = dict(metadata, commit=source_commit(HERE, metadata))
         copies, edits, removals = plan(HERE, target, sdk, profile, metadata, layout)
         print("Release:", metadata["commit"], "SDK:", sdk, "profile:", profile, "layout:", layout)
         print("Target:", target)
