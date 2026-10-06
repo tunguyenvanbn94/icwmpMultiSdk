@@ -3385,7 +3385,7 @@ module 0078 chỉ đọc. **Not established**: vì sao vendor ghi 0.
 **G9** chạy lại sau reboot từ 08:14:19 (epoch 1791249259, pid 10691, VmRSS 4964 kB, fd 15, thread 11),
 mốc 24 h là 07/10 08:15.
 
-## 55. Test host chạy lại trên máy build; bundle MTK thiếu microxml (`0087`) (06/10 10:41–11:40)
+## 55. Test host chạy lại trên máy build; bundle MTK thiếu microxml (`0087`) (06/10 10:41–10:56)
 
 **Sửa ghi chú §52.** Ở §52 tôi ghi "máy build không vào được GitHub và Docker Hub". Ghi chú đó sai:
 

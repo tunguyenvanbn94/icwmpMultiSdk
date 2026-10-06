@@ -94,7 +94,7 @@ flowchart LR
 | | |
 |---|---|
 | Lệnh tạo | `./export.py --sdk mtk <ngoài repo>/icwmp_mtk.tar.gz` |
-| Bản giao hiện hành | `release/icwmp_mtk_<commit>.tar.gz` của issue workspace, xuất từ commit tài liệu ngay sau 0087 để tài liệu bên trong là bản mới. Commit và sha256 ghi trong file `.sha256` đi kèm và ở commit tài liệu kế tiếp |
+| Bản giao hiện hành | `release/icwmp_mtk_<commit>.tar.gz` của issue workspace, xuất từ một commit tài liệu sau 0087 để tài liệu bên trong là bản mới. Commit và sha256 ghi trong file `.sha256` đi kèm và ở commit tài liệu kế tiếp |
 | Đã kiểm (code 0087, bundle `e273359`, sha256 `e693ae29…`, 327 file) | Export hai lần cùng sha256; `apply --sdk mtk --dry-run` trên `1_src` OK; source lib/app/feed trùng byte với bản `a7549e7` đã apply và build `libtr098` + `icwmp_tr098` + image rc 0 (06/10 08:42); giải nén, `sha256sum -c`, rồi `tests/host` build + setup + `run.sh all` PASS ngay trong bundle (analysis §55) |
 | Chưa kiểm | Nạp image lên board. Board đang chạy 0083, khác 0086 ở 27 hàm không ai gọi; hành vi chạy không đổi |
 | Bản cũ `a7549e7` | sha256 `39c8bded…`, 305 file. Apply và build SDK vẫn đúng, nhưng `tests/host/build.sh` dừng vì thiếu source microxml (0087 sửa). Dùng bản `e273359` |
