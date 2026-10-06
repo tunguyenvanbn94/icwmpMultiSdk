@@ -23,6 +23,17 @@ cd icwmpMultiSdk
 ```
 
 Có thể bỏ `--sdk` để tự nhận dạng. `--dry-run` kiểm hết payload và SDK/profile nhưng không ghi.
+
+`--sdk-only` chỉ cài code của SDK đã chọn. Lib và app trong SDK đích chỉ còn `sdk/<sdk>/` (với MTK: bỏ
+`sdk/bdk`, `sdk/uci`); `sdk/enabled.*` được sinh lại như `tools/sdk-prune.sh`, và file chỉ SDK khác dùng
+(`BDK-CHANGES.md`) cũng bị bỏ. Bundle trong repo không đổi, chỉ bản cài bị lược. Không có cờ này thì apply
+cài đủ mọi SDK như trước. Chuyển qua lại giữa hai cách chỉ cần apply lại, có backup như thường.
+`.icwmp-release.json` ghi `"layout": "sdk-only"` hoặc `"full"`.
+
+```sh
+./apply --sdk mtk --sdk-only /path/to/2025q3
+./apply --sdk bdk --sdk-only /path/to/bcm963xx
+```
 Profile mặc định: BDK **MO77300EB**, MTK **HP2236B/config_7583**, đổi tên bằng `--profile NAME`
 nếu cùng layout/chipset. Không coi profile khác đã được board-verify.
 

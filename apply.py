@@ -8,12 +8,16 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
+
+# --sdk-only: files outside sdk/<name>/ that only one SDK uses.
+SDK_ONLY_FILES = {"bdk": ("BDK-CHANGES.md",)}
 
 # The SDK build hosts are older than this workspace: keep to what Python 3.6
 # has.  Path.is_relative_to() is 3.9 and was the one thing that slipped
@@ -111,7 +115,45 @@ def verify_bundle(here):
     return data
 
 
-def plan(here, target, sdk, profile, metadata):
+def sdk_roots(tree):
+    """Component roots inside a copied tree: the directories holding tools/sdk-scan.sh."""
+    return [path.parent.parent for path in sorted(tree.rglob("tools/sdk-scan.sh"))]
+
+
+def prune_copies(copies, sdk, workdir):
+    """--sdk-only: copy every source tree that has sdk/<name>/ directories to
+    workdir, keep only sdk/<sdk>/ there and regenerate sdk/enabled.* the way
+    tools/sdk-prune.sh does, and drop files only another SDK uses.  The bundle
+    itself stays untouched; the SDK gets the pruned copies."""
+    pruned = {}
+    for index, (relative, source_dir) in enumerate(sorted(copies.items())):
+        if not sdk_roots(source_dir):
+            pruned[relative] = source_dir
+            continue
+        dest = workdir / str(index)
+        shutil.copytree(str(source_dir), str(dest))
+        for root in sdk_roots(dest):
+            names = sorted(d.name for d in (root / "sdk").iterdir() if (d / "sdk.mk").is_file())
+            if sdk not in names:
+                raise ValueError("no sdk/{} in {}".format(sdk, relative))
+            for name in names:
+                if name != sdk:
+                    shutil.rmtree(str(root / "sdk" / name))
+                    print("Drop:", relative + "/" + str((root / "sdk" / name).relative_to(dest)))
+            subprocess.run(["sh", "tools/sdk-scan.sh"], cwd=str(root), check=True,
+                           stdout=subprocess.DEVNULL)
+        for other, files in SDK_ONLY_FILES.items():
+            if other == sdk:
+                continue
+            for name in files:
+                for path in sorted(dest.rglob(name)):
+                    path.unlink()
+                    print("Drop:", relative + "/" + str(path.relative_to(dest)))
+        pruned[relative] = dest
+    return pruned
+
+
+def plan(here, target, sdk, profile, metadata, layout="full"):
     """Return directory copies, exact file replacements and legacy removals."""
     if not re.fullmatch(r"[A-Za-z0-9_-]+", profile):
         raise ValueError("invalid profile name")
@@ -150,7 +192,7 @@ def plan(here, target, sdk, profile, metadata):
             raise ValueError("source missing: " + str(source_dir))
     for relative in set(copies) | set(edits) | set(removals):
         checked_target(target, relative)
-    marker = {"format": 1, "commit": metadata["commit"], "sdk": sdk, "profile": profile}
+    marker = {"format": 1, "commit": metadata["commit"], "sdk": sdk, "profile": profile, "layout": layout}
     edits[".icwmp-release.json"] = (json.dumps(marker, indent=2) + "\n").encode()
     checked_target(target, ".icwmp-release.json")
     checked_target(target, ".icwmp-backups")
@@ -255,7 +297,11 @@ def main():
     parser.add_argument("--sdk", choices=("bdk", "mtk"), help="Auto-detected if omitted")
     parser.add_argument("--profile", help="Defaults: MO77300EB for BDK, HP2236B for MTK")
     parser.add_argument("--dry-run", action="store_true", help="Validate and show changes without writing")
+    parser.add_argument("--sdk-only", action="store_true",
+                        help="Install only the code of the selected SDK: drop the other sdk/<name>/ "
+                             "directories of libicwmp_dm and icwmp, and files only another SDK uses")
     args = parser.parse_args()
+    workdir = None
     try:
         metadata = verify_bundle(HERE)
         target = args.target.resolve(strict=True)
@@ -272,9 +318,13 @@ def main():
                 raise ValueError("cannot detect SDK unambiguously, use --sdk")
             sdk = found[0]
         profile = args.profile or ("MO77300EB" if sdk == "bdk" else "HP2236B")
-        copies, edits, removals = plan(HERE, target, sdk, profile, metadata)
-        print("Release:", metadata["commit"], "SDK:", sdk, "profile:", profile)
+        layout = "sdk-only" if args.sdk_only else "full"
+        copies, edits, removals = plan(HERE, target, sdk, profile, metadata, layout)
+        print("Release:", metadata["commit"], "SDK:", sdk, "profile:", profile, "layout:", layout)
         print("Target:", target)
+        if args.sdk_only:
+            workdir = Path(tempfile.mkdtemp(prefix="icwmp-apply-"))
+            copies = prune_copies(copies, sdk, workdir)
         for relative in sorted(set(copies) | set(edits)):
             print("Manage:", relative)
         for relative in removals:
@@ -306,12 +356,15 @@ def main():
             print("make package/icwmp_tr098/{clean,compile} V=sc -j1")
         print("\nApply does not run the compiler or flash a board.")
         return 0
-    except (OSError, ValueError, KeyError) as error:
+    except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
         print("ERROR:", error, file=sys.stderr)
         return 1
     except KeyboardInterrupt:
         print("Interrupted, see backup journal if apply had started.", file=sys.stderr)
         return 130
+    finally:
+        if workdir:
+            shutil.rmtree(str(workdir), ignore_errors=True)
 
 
 if __name__ == "__main__":
