@@ -3298,3 +3298,53 @@ Shell sai ở cả hai chiều, nên K14 kiểm theo đúng `xsd:dateTime` chứ
 
   Muốn có HOST_VERIFIED thì cần một container Ubuntu mới hơn (json-c 0.15+, Python ≥ 3.10) có mạng tới
   GitHub, hoặc chép sẵn repo deps theo rev đã pin.
+
+## 53. Image 0083 trên board: K13/K14 PASS, G9 trên 0080, G9 mới (06/10 07:47–08:00)
+
+User yêu cầu nạp và kiểm (chatlog mục 73). Từ mục này nhật ký bằng chứng ghi trong repo.
+
+**G9 trên image 0080** (sampler từ 05/10 23:03, dừng trước khi nạp; CSV
+[evidence/20261006_g9_soak_image0080.csv](evidence/20261006_g9_soak_image0080.csv)):
+
+| Cột | min → max, 100 mẫu, 8 h 41 |
+|---|---|
+| pid `icwmp_tr098d` | 10407 (không đổi) |
+| VmRSS | 5344 → 5352 kB |
+| fd / thread | 14–15 / 11 |
+| VmRSS `icwmp_dm.sh` | 3924 → 3928 kB |
+| MemAvailable | 131 288 – 134 824 kB |
+| phiên | success 3 → 4 (một phiên định kỳ K10), failure 0 |
+| `dm get` toàn cây | 15–18 s, 1740 dòng |
+
+Phẳng, CRASH 0, vẫn 2 dòng start. Chưa đủ 24 h vì phải nạp image cuối của PH0.
+
+**Image 0083:**
+- Build: `make -j16 MSDK=1` trên cây đã apply `--sdk-only`, `ICWMP_IMAGE_RC=0`. `tclinux.bin` 07:52:30, md5
+  `d495699f…`; `libtr098.so.3.0.0` `e6994037…`, `icwmp_tr098d` `cd10c7bf…`, có `S11dev_access`.
+- Nạp như mọi lần: md5 hai đầu khớp, model `HP-2236B`, `valid: true`, `sysupgrade -T` rc 0. `sysupgrade`
+  lúc 07:53:40 ghi bank A (board đang chạy `filesystem_slave`).
+- Kiểm một lần lúc 07:58:24: 22/23/80/7547 mở. Rootfs `filesystem`, đúng md5.
+  `dev_access: … svcboot turned SSH off after 16s`. CRASH 0, 2 dòng start, phiên boot success lúc 07:55:57.
+
+**K13/K14 trên board, PASS** (`ubus call tr069 dm set`):
+
+| Tham số | Giá trị | Kết quả |
+|---|---|---|
+| PeriodicInformTime | `2026-02-29T00:00:00Z`, `2026-04-31…`, `…T24:00:00Z`, `…T23:60:00Z`, `…T23:59:60Z`, `…+15:00`, `…+0730` | 9007 cả 7 |
+| URL | `acs.example.net:7547/acs`, `://acs.example.net/acs` | 9007 cả 2 |
+| STUNServerAddress | `localhost`, `-stun.example.net`, `stun..example.net`, `192.0.2.256` | 9007 cả 4 |
+| sau 13 lần bị từ chối | `uci changes` = 0; `periodic_time`, `url`, `serveraddress` giữ nguyên | — |
+| PeriodicInformTime | `2028-02-29T00:17:00Z` (ngày nhuận) | 0, lưu đúng; trả về `0001-01-01T00:00:00Z` |
+| STUNServerAddress | `172.16.0.15` (giá trị hiện tại, IPv4) | 0 |
+
+pid giữ `11018`, vẫn 2 dòng start, CRASH 0. Sau khi ghi lại STUN server (có reload `stuncd`), binding học lại
+`172.16.0.78:19302`, nhưng `natdetect` vẫn 0 (ngày 05/10 là 1). Cần xem lại khi kiểm G7.
+
+**G9 mới trên image 0083**: sampler như cũ, chạy từ 07:58:58 (epoch 1791248338; pid 11018, VmRSS 5392 kB, fd 15,
+thread 11). Mốc 24 h là 07/10 07:59.
+
+**Đường tới ACS (để kiểm G4/G6/G7/G8 qua ACS):**
+- Máy build không có route tới `172.16.0.15` (đi `enp1s0` sang mạng khác, mọi cổng đều đóng).
+- Từ board (lua `nixio`, chỉ TCP connect), GenieACS mở 7547 (CWMP), 7557 (NBI), 7567 (FS), 3000 (UI).
+- `nc` của busybox báo "closed" sai cả với 7547, không dùng được để kiểm cổng.
+- Chưa gọi API nào của ACS.

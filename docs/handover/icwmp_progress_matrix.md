@@ -5,7 +5,7 @@ Tài liệu tiến độ để chuyển giao. Kiến trúc và cách chia code �
 
 | | |
 |---|---|
-| Cập nhật | 2026-10-06, repo `dev` sau `[icwmp 0083]` (`4c11ed3`), local, chưa push |
+| Cập nhật | 2026-10-06 08:00, repo `dev` sau `[icwmp 0083]`, local, chưa push; board chạy image 0083 |
 | Nguồn trạng thái có cấu trúc | [../issue/implementation-status.json](../issue/implementation-status.json), xem nhanh: `python3 docs/issue/progress.py` |
 | Bằng chứng chi tiết | [../issue/analysis.md](../issue/analysis.md) (§ theo thời gian, mới nhất ở cuối) |
 | Quy ước | Trạng thái không cao hơn bằng chứng thấp nhất trên HEAD. "Đạt" ở đây luôn ghi rõ mức: STATIC, SDK build, BOARD, HOST |
@@ -54,7 +54,7 @@ flowchart LR
 | Layout source multi-SDK, plugin `sdk/<tên>/`, apply có backup | Xong | MTK SDK build + board |
 | Data model TR-098 bằng C trên MTK | **458/783** param (P1–P5). P6–P8: 320 param còn qua shell compat | MTK board: GPV toàn cây 1768 dòng / 15–16 s |
 | Sửa lỗi runtime 0062–0080 (treo, leak, crash từ ACS, procd restart) | Xong | Board MTK (0080, K17 hết); host PASS tới 0079 |
-| K13, K14 (kiểm input ManagementServer) | Xong ở source (0081, 0082) | MTK SDK build; board chưa |
+| K13, K14 (kiểm input ManagementServer) | Xong (0081, 0082) | **Board** (image 0083, 06/10, analysis §53) |
 | `apply --sdk-only` | Xong (0083) | MTK SDK build trên cây chỉ còn MTK |
 | BDK | Prototype có; user báo build OK trước 0067 | Chưa build lại với 0067–0083 |
 | Test host | Có harness | PASS tới 0079 ở môi trường cũ; máy build hiện tại không chạy được |
@@ -101,7 +101,7 @@ Runbook: [../plan/ph0_gate_runbook.md](../plan/ph0_gate_runbook.md).
 | G6 | ACS ghi ManagementServer, còn sau phiên, WebUI thấy, còn sau reboot; K10 | Mirror qua `dm` **PASS**; **K10 PASS**; ACS + reboot + WebUI **NOT RUN** | §48, §52 |
 | G7 | STUN, UDP Connection Request | Phía router **PASS** (UDP CR ký đúng đánh thức phiên, ký sai bị bỏ). ACS gửi qua NAT **NOT RUN** | §49 |
 | G8 | Download/ScheduleDownload thiếu FileType hoặc 1 window | **NOT RUN** trên board (host 5/5 PASS) | — |
-| G9 | Soak 24 h | Đang chạy từ 05/10 23:03 trên image 0080. 3h25 đầu phẳng: VmRSS 5344 kB, fd 14–15, thread 11 | §52 |
+| G9 | Soak 24 h | Image 0080: 8 h 41 phẳng (VmRSS 5344→5352 kB, fd 14–15, thread 11). **Đang chạy lại trên image 0083** từ 06/10 07:58, xong lúc 07/10 07:59 | §52, §53 |
 
 ### 2.2 Known issue
 
@@ -115,7 +115,7 @@ Runbook: [../plan/ph0_gate_runbook.md](../plan/ph0_gate_runbook.md).
 | K9 | MULTI_SDK | Open | BDK chưa build với 0067+ |
 | K10 | HIGH | **Fixed, board** | PeriodicInformTime căn sai mốc |
 | K12 | LOW | Open | Download/Upload chờ mutex khi phiên nối tiếp liên tục |
-| K13, K14 | HIGH, MEDIUM | Fixed source + SDK build, board chưa | Kiểm input ManagementServer |
+| K13, K14 | HIGH, MEDIUM | **Fixed, board** | Kiểm input ManagementServer |
 | K15 | MEDIUM | Cần quyết định sản phẩm | Agent sau controller: `icwmpd.init` network mặc định `if0`, không chạy khi `opermode=auto` |
 | K16 | MEDIUM | Open | `icwmp_stund` (không build trên MTK) đọc nhầm option mật khẩu |
 | K17 | HIGH | **Fixed, board** | Ghi ManagementServer làm procd restart icwmpd |
@@ -130,12 +130,12 @@ Bảng đầy đủ: `python3 docs/issue/progress.py` hoặc JSON.
 
 | # | Việc | Ai | Ghi chú |
 |---|---|---|---|
-| 1 | Nạp image có 0081–0083, kiểm K13/K14 trên board: `PeriodicInformTime=2026-02-29T00:00:00Z` → 9007; URL không `://` → 9007; STUNServerAddress `localhost` → 9007 | dev + quyền nạp | Image hiện trên board là 0080 |
+| 1 | ~~Nạp image 0083, kiểm K13/K14 trên board~~ | — | **Xong 06/10**, 13/13 bị từ chối đúng, analysis §53 |
 | 2 | G4 qua ACS: GPN `InternetGatewayDevice.` next level; SPV 2 param (`ProvisioningCode=g4ok` + `PeriodicInformInterval=abc`) → 9003, ProvisioningCode **không** đổi | người có ACS | ~5 phút |
 | 3 | G6 qua ACS: SPV `PeriodicInformInterval`, `ConnectionRequestUsername` → kiểm `easycwmp`, `cwmp`, WebUI → reboot → kiểm lại | người có ACS + WebUI | — |
 | 4 | G8: Download thiếu FileType, ScheduleDownload 1 TimeWindow → fault đúng, pid không đổi | người có ACS | — |
 | 5 | G7: ACS gửi UDP CR qua NAT tới địa chỉ STUN map | người có ACS | — |
-| 6 | G9: soak 24 h trên **image cuối của PH0** (0083), không có phiên ACS thì đặt chu kỳ ngắn để có cả đường session | dev | Mẫu hiện tại chạy trên 0080 |
+| 6 | G9: soak 24 h trên **image cuối của PH0** (0083) | dev | Đang chạy từ 06/10 07:58; chu kỳ Inform 12 h nên đường session ít được thử |
 | 7 | BDK: apply + build tại HEAD, chạy runbook §0.2 | người có cây BDK | K9 |
 | 8 | Test host: dựng container Ubuntu mới (json-c ≥ 0.15, Python ≥ 3.10) có mạng tới GitHub, chạy `tests/host/run.sh all` | dev | Máy build hiện tại không vào GitHub/Docker Hub (analysis §52) |
 | 9 | K15: quyết định sản phẩm cho agent sau controller | product | — |
