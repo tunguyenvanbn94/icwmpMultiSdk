@@ -98,7 +98,7 @@ và các crash do RPC (0077). `dev` trội hơn hẳn `main` về độ đúng r
 | **K10** | cao → **sửa (0079)** | `cwmp.acs.periodic_inform_time` là chuỗi dateTime (MTK mirror từ `easycwmp.@acs[0].periodic_time`, BDK từ MDM) nhưng `config.c` đọc bằng `atol()`: `0001-01-01T00:00:00Z` → 1 giây, `2026-01-01T00:17:00Z` → 2026 giây. Inform định kỳ căn sai mốc (board §40: phiên kế tiếp 19:00:01 +07 = epoch + 1 s) | host trước: `run.sh ptime` Inform kế tiếp hh:33:46; sau 0079: hh:17:00 | `config.c` đọc cả epoch lẫn dateTime; getter portable trả nguyên dateTime | board G6 |
 | **K11** | quy trình → **sửa** | Commit docs `f410de4` sửa `README.md` (thuộc bundle) mà không cập nhật `SHA256SUMS`/`MANIFEST.json`: `sha256sum -c` FAIL, `apply` có thể từ chối | `sha256sum -c` báo `README.md: FAILED` | `docs/issue/update-sums.py` (`--check` là cổng PR, `--staged` dùng trước commit) | xong |
 | K12 | thấp | Thread Download/Upload chờ `mutex_session_send`; khi các phiên nối tiếp nhau (ACS gửi CR liên tục) transfer chỉ chạy khi có khoảng trống giữa hai phiên | host valgrind: 4 Download chạy cùng lúc sau phiên cuối, giống nhau trên build trước 0078 và sau 0079 | hành vi upstream; xem lại khi làm regression RPC ở PH5 | PH5 |
-| K9 | đa SDK | `check-c-sanity` cho lib BDK/UCI có nhiễu (thiếu header vendor, danh sách libc chưa đủ); BDK chưa build với 0067–0077 | chạy 2026-10-04: lib/bdk 4, lib/uci 3 "vấn đề" đều là cảnh báo giả | PH0.1 build BDK thật; cổng tĩnh chỉ tính lib/mtk + app×3 | PH0.1 |
+| K9 | đa SDK | `check-c-sanity` cho lib BDK/UCI có nhiễu (thiếu header vendor, danh sách libc chưa đủ); BDK chưa build với 0067–0077 | chạy 2026-10-04: lib/bdk 4, lib/uci 3 "vấn đề" đều là cảnh báo giả | PH0.1 build BDK thật; cổng tĩnh chỉ tính lib/mtk + app×3 | build BDK **xong 06/10** tại 0088 (analysis §56) |
 | **K13** | cao | 0078 bỏ một phần validation/side effect của shell sản phẩm: URL không kiểm scheme và không ghi `/usr/share/easycwmp/defaults` (shell `management_server:69,75`), STUNServerAddress không qua `is_valid_domain`/`is_valid_ip` (`:114`) | đọc shell SDK so với `managementserver_mtk.c`; chưa chạy board | test SPV URL không scheme, STUN address sai, GPV sau phiên/reboot; quyết định sản phẩm giữ hay bỏ từng side effect | PH0 |
 | **K14** | trung bình | PeriodicInformTime chỉ kiểm hình dạng: `ms_valid_datetime` không kiểm lịch/timezone, `config.c` `periodic_time_value` không kiểm ngày của tháng, giờ, suffix | source | thống nhất validation với parser; test leap day, ngày không tồn tại, giờ ≥24, timezone sai; fault 9007 không đổi mốc Inform | PH0 |
 | **K15** | trung bình | Agent/AP sau controller: `icwmpd.init:125` không chạy khi `opermode=auto`, `:139-140` network mặc định `if0`, `:167` không có IP thì chỉ chờ. `stuncd.init:26` (vendor) có cổng opmode riêng, biến không nháy: opmode rỗng → busybox `[ != auto ]` exit 2 → icwmpd chạy còn stuncd không | source icwmpd.init + stuncd.init + busybox 1.33.1 `test.c` | đổi cổng ở cả hai script cùng lúc, bọc nháy; chọn network theo opmode hay cấu hình; CR qua STUN (G7) hoặc port-forward + `cr_host` | PH0 quyết định sản phẩm, board |
@@ -162,7 +162,7 @@ mỗi mức phải ghi rõ commit hoặc bundle tương ứng.
 |---|---|---|---|
 | `STATIC_VERIFIED` | nguồn, path và claim đúng; không có compiler của SDK | `check-c-sanity.py --tree lib/app --sdk ...`, `verify-dm-paths.py --phase 1..5` và `--claims`, `check-automake-conds.py`, `update-sums.py --check` | 06/10 tại 0087: lib/mtk 41 file/0, app mtk/bdk/uci 17/0; phase 1–5 thiếu 0, dôi 11 (K3); claim 126/0 chồng; automake 0; sums OK |
 | `HOST_VERIFIED` | agent và lib thật trên Linux host, ACS test | `tests/host/run.sh all` (+ `soak`) | 06/10 tại 0086, container `ubuntu:24.04`: `all` PASS: unit 3/3, smoke 5 phiên, notify 100/100, rpc 5/5, msrv, stun, ptime 2/2, valgrind 0 lost 0 error; cũng PASS từ bundle MTK `e273359` (analysis §55) |
-| `SDK_BUILD_PASS` | build bằng SDK thật (MTK, BDK) | `apply` + build `libtr098`/`icwmp_tr098` | MTK đạt tới 0086 (06/10, gói + image, cả từ bundle export); BDK chưa build với 0067+ (K9) |
+| `SDK_BUILD_PASS` | build bằng SDK thật (MTK, BDK) | `apply` + build `libtr098`/`icwmp_tr098` | MTK đạt tới 0086 (06/10, gói + image, cả từ bundle export); BDK đạt tại 0088 (06/10, bundle `--sdk bdk`, component + image `MO77300EB`, analysis §56) |
 | `BOARD_GATE_n` | gate board theo §5 PH0.4 | board HP2236B | Image 0083 (06/10): G1–G7 phía router PASS, G4/G6 qua GenieACS NBI; G8 bỏ; G9 24 h tới 07/10 08:15 (analysis §48–§54) |
 | `SOAK` | 24 h, RSS/fd/thread phẳng | `run.sh soak` trên board/host | host: `dev` báo 300 phiên RSS phẳng; board chưa |
 | `RELEASE` | baseline đóng băng, có tag | §6.1 | baseline chưa; tag bản giao `release/mtk-20261006` (`8dea75b`) |
@@ -253,7 +253,7 @@ và mỗi PH ghi rõ nó thay thế ID nào.
   Mỗi mốc có tag `baseline/...` hoặc `release/...`.
 - `release/<sdk>-<YYYYMMDD>` (annotated): commit đã xuất một bản giao. `./export.py --sdk <sdk>` chạy tại tag
   cho lại đúng sha256 ghi trong message của tag. Tag này không có nghĩa đã qua mọi gate; mốc đóng băng dùng
-  `baseline/...`. Đã có: `release/mtk-20261006` → `8dea75b`.
+  `baseline/...`. Đã có: `release/mtk-20261006` → `8dea75b` (bản giao MTK), `release/bdk-20261006` → `9b75ed9` (bản BDK đã build, analysis §56).
 - Branch đã merge thì xóa. Branch tạm của công cụ AI cũng không giữ lâu.
 
 ### 6.2 Commit

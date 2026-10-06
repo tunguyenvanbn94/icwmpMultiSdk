@@ -30,6 +30,20 @@ các lớp cảnh báo nguy hiểm đã là lỗi trong `check-cc-syntax.py` (0 
 
 ### 0.2 BDK — chạy trên máy build BDK (cây này không có trên máy workspace)
 
+Máy build đã dùng 06/10: `192.168.100.38`, cây `/home/vtanh/workspaceBRCM/tunv/2_src/bcm963xx`, build trong
+container `vtanh-brcm` (tmux `bdk1`, user `vtanh`; user SSH không có quyền ghi cây). Apply, rồi chạy các lệnh
+build mà apply in ra.
+
+Lần apply đầu tiên thêm `BUILD_ICWMP=y` vào profile. Lần `make PROFILE=MO77300EB` kế tiếp sẽ dừng ở
+`profile_saved_check` ("profile … has been modified since the last build"), vì profile mới hơn `.last_profile`.
+Thay đổi đó chỉ thêm `-DSUPPORT_ICWMP`, và chỉ `comp_tr69_md.c` dùng define này, nên không cần `make clean`:
+
+1. Chạy `make PROFILE=MO77300EB FORCE=1` một lần. Rule của vendor touch `.last_profile` nhưng vẫn
+   `exit 1`, nên lần này vẫn báo lỗi.
+2. Chạy lại `make PROFILE=MO77300EB`.
+
+Kiểm sau build:
+
 ```sh
 cd <bcm963xx>
 ls -lt .icwmp-backups | head -2                      # lần apply mới nhất
@@ -39,11 +53,13 @@ grep -n 'BUILD_ICWMP' targets/MO77300EB/MO77300EB
 find targets/MO77300EB/fs.install -name 'libtr098.so*' -o -name icwmpd | xargs ls -l
 NM=$(ls /opt/toolchains/*/usr/bin/*-nm | head -1)    # nm của toolchain BDK
 $NM -D $(find targets/MO77300EB/fs.install -name 'libtr098.so*' | head -1) | grep -E 'dm_entry_prefetch_values|dm_platform_prefetch_values'
-$NM -D $(find targets/MO77300EB/fs.install -name icwmpd | head -1) | grep -cE 'posix_spawnp|waitpid'
+$NM -D $(find targets/MO77300EB/fs.install -name 'libtr098.so*' | head -1) | grep -cE 'posix_spawnp|waitpid'   # dmcmd của lib; icwmpd BDK dùng external_bdk.c, không có hai symbol này
 ```
 
-Đạt khi: `diff` rỗng, `BUILD_ICWMP=y`, có `libtr098.so` + `icwmpd`, lib có symbol prefetch (0076 thêm stub
-cho BDK). Gửi output, Claude Code ghi `SDK_BUILD_PASS (BDK)`.
+Đạt khi: `diff` chỉ còn file sinh ra lúc build (`Only in` phía cây), `BUILD_ICWMP=y`, có `libtr098.so` +
+`icwmpd`, lib có symbol prefetch (0076 thêm stub cho BDK) và `posix_spawnp`/`waitpid` (≥ 2). So `diff` với
+bundle đã apply, không so với repo đủ SDK nếu apply bằng bundle một SDK. Image nằm ở
+`targets/MO77300EB/*.pkgtb`, không nằm ở `images/`. Kết quả 06/10: analysis §56.
 
 ## 1. Chuẩn bị board MTK (HP2236B, mode router)
 

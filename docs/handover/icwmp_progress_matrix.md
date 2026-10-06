@@ -56,9 +56,9 @@ flowchart LR
 | Sửa lỗi runtime 0062–0080 (treo, leak, crash từ ACS, procd restart) | Xong | Board MTK (0080, K17 hết); host `run.sh all` PASS lại 06/10 tại 0086 |
 | K13, K14 (kiểm input ManagementServer) | Xong (0081, 0082) | **Board** (image 0083, 06/10, analysis §53) |
 | `apply --sdk-only` | Xong (0083) | MTK SDK build trên cây chỉ còn MTK |
-| BDK | Prototype có; user báo build OK trước 0067 | Chưa build lại với 0067–0083 |
+| BDK | Prototype; **build image đạt 06/10 tại 0088** (bundle một SDK, analysis §56) | SDK build BDK; board BDK chưa (PH7) |
 | Test host | Chạy được trên máy build: container `ubuntu:24.04` (§55) | **`run.sh all` PASS 06/10** trên repo (code 0086) và từ chính bundle MTK `e273359` |
-| **PH0 (đóng băng baseline)** | **Đang làm** | Còn G9 24 h (07/10 08:15), xem WebUI (G6), BDK build (K9), K15, rồi PH0.5 |
+| **PH0 (đóng băng baseline)** | **Đang làm** | Còn G9 24 h (07/10 08:15), xem WebUI (G6), K15, rồi PH0.5 |
 
 ---
 
@@ -87,6 +87,7 @@ flowchart LR
 | Bản giao một SDK (K19) | 0085 | `export.py --sdk mtk` (HEAD, tái lập được, MANIFEST đúng commit); `--sdk-only` bỏ thêm 33 file `tr098/` chỉ SDK `uci` dùng; apply ghi commit thật vào `.icwmp-release.json` | MTK SDK build từ bundle export |
 | Code chết (K18 một phần) | 0086 | Gỡ 27 hàm `dmcommon.c` không ai tham chiếu (519 dòng) | STATIC, cross-gcc, MTK SDK build, host `run.sh all` |
 | Bản giao MTK test được trên host | 0087 | Bundle MTK giữ source microxml mà `tests/host/build.sh` build (bỏ glue BDK của nó); trước đó test host từ bundle dừng ở bước đầu | host `run.sh all` từ chính bundle |
+| Dọn repo | 0088 | Gỡ `tests/__pycache__/*.pyc` bị commit từ 0042 (có trong mọi bundle export trước đó) | `git ls-files` |
 | Công cụ kiểm | — | `check-c-sanity`, `check-cc-syntax` (cross-gcc SDK), `verify-dm-paths` (`--phase`, `--claims`), `check-automake-conds`, `update-sums`, `progress.py`, `tests/host` | — |
 
 ### 1.1 Bản giao MTK/OpenWrt-only
@@ -127,7 +128,7 @@ Runbook: [../plan/ph0_gate_runbook.md](../plan/ph0_gate_runbook.md).
 | K6 | MEDIUM | Accepted | Trace khởi động + crash handler luôn bật |
 | K7 | ARCH | Open | Compat provider + prefetch nằm trong `dmplatform_mtk.c` → PH2 |
 | K8 | LIFECYCLE | Open | AddObject/DeleteObject WAN connection vẫn qua compat |
-| K9 | MULTI_SDK | Open | BDK chưa build với 0067+ |
+| K9 | MULTI_SDK | **Fixed, SDK build** | BDK build image đạt với 0067–0088 (06/10, §56); board BDK thuộc PH7 |
 | K10 | HIGH | **Fixed, board** | PeriodicInformTime căn sai mốc |
 | K12 | LOW | Open | Download/Upload chờ mutex khi phiên nối tiếp liên tục |
 | K13, K14 | HIGH, MEDIUM | **Fixed, board** | Kiểm input ManagementServer |
@@ -150,8 +151,8 @@ Bảng đầy đủ: `python3 docs/issue/progress.py` hoặc JSON.
 | 3 | G6: ~~ACS ghi + reboot~~ xong (§54); còn **xem WebUI** | người có tài khoản WebUI | ConnectionRequestUsername không đổi để không làm hỏng CR của ACS |
 | 4 | G8: Download thiếu FileType, ScheduleDownload 1 TimeWindow → fault đúng, pid không đổi | quyết định sau | User chọn bỏ khi test bằng NBI (GenieACS không gửi được Download sai nếu không upload file lên ACS) |
 | 5 | G7: UDP CR từ ACS | — | Topology hiện tại ACS tới thẳng board bằng HTTP CR; chỉ cần nếu sản phẩm thật nằm sau NAT. Xem thêm `NATDetected` = 0 (§54) |
-| 6 | G9: soak 24 h trên **image cuối của PH0** (0083) | dev | Đang chạy từ 06/10 07:58; chu kỳ Inform 12 h nên đường session ít được thử |
-| 7 | BDK: apply + build tại HEAD, chạy runbook §0.2 | người có cây BDK | K9 |
+| 6 | G9: soak 24 h trên **image cuối của PH0** (0083) | dev | Đang chạy từ 06/10 08:14 (sau reboot G6); chu kỳ Inform 12 h nên đường session ít được thử |
+| 7 | ~~BDK: apply + build tại HEAD, chạy runbook §0.2~~ | — | **Xong 06/10** trên máy `192.168.100.38`: apply bundle `--sdk bdk` tại `9b75ed9`, component + image `MO77300EB` rc 0 (§56) |
 | 8 | ~~Test host: `tests/host/run.sh all`~~ | — | **Xong 06/10** trong container `ubuntu:24.04` trên máy build, cả repo lẫn bundle MTK (§55). Ghi chú cũ "không vào GitHub/Docker Hub" là sai |
 | 9 | K15: quyết định sản phẩm cho agent sau controller | product | — |
 | 10 | PH0.5: tag `baseline/ph0-mtk-tr098-<ngày>` trên `dev`, fast-forward `main`, JSON PH0 = DONE | sau khi 1–8 đạt, cần người duyệt | — |

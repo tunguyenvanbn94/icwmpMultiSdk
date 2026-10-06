@@ -84,7 +84,7 @@ Ba câu cần nhớ:
 
 | Mục tiêu | Đo bằng gì | Hiện trạng (2026-10-06) |
 |---|---|---|
-| Một CWMP core bằng C cho mọi SDK | Cùng `apps/icwmp/icwmp` build cho MTK, BDK, OpenWrt chuẩn | Đạt về source. MTK build và chạy board; BDK đã từng build (user báo), chưa build lại với 0067+ |
+| Một CWMP core bằng C cho mọi SDK | Cùng `apps/icwmp/icwmp` build cho MTK, BDK, OpenWrt chuẩn | Đạt về source. MTK build và chạy board; BDK build image đạt 06/10 tại 0088, chưa chạy board |
 | Giữ nguyên cây tham số ACS đã provision | 783 param / 184 object của sản phẩm (ma trận `docs/issue/tr098_coverage_matrix.tsv`) | 458/783 bằng C, phần còn lại qua compat shell, không mất path nào (`verify-dm-paths.py`: thiếu 0) |
 | Chuyển dần shell sang C, không phải chuyển một lần | Path nào có module C thì C trả lời, còn lại thì shell trả lời | Đạt (router native/compat của MTK) |
 | Test được không cần board | `tests/host/run.sh all`: agent thật + ACS giả trên Linux host | Đạt: PASS 06/10 trong container `ubuntu:24.04` trên máy build |

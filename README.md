@@ -6,7 +6,7 @@ và P6–P8 còn trong kế hoạch; A3 mới làm một phần. Xem [trạng th
 **MTK:** các bản sửa tới 0083 đã build bằng SDK và chạy trên board HP2236B (gate PH0 G1–G7 phía router,
 image 0083). 0084–0086 (ghi chú, `export.py`, gỡ hàm không ai gọi) build gói + image đạt, chưa nạp board;
 0087 chỉ đổi nội dung bundle export. `tests/host/run.sh all` PASS ngày 06/10 trong container `ubuntu:24.04`,
-valgrind 0 leak — xem [tests/host](tests/host/README.md). **BDK chưa build lại với 0067+** (K9).
+valgrind 0 leak — xem [tests/host](tests/host/README.md). **BDK:** build image `MO77300EB` đạt ngày 06/10 tại 0088, chưa nạp board.
 Tiến độ và việc còn lại: [docs/handover/icwmp_progress_matrix.md](docs/handover/icwmp_progress_matrix.md).
 Kế hoạch hiện hành, known issue và quy ước phát triển: [docs/plan/sync-main-dev.md](docs/plan/sync-main-dev.md).
 

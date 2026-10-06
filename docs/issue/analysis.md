@@ -3447,3 +3447,50 @@ thành phần của BDK. Nhưng bundle MTK có mang `tests/host`, và `tests/hos
 | `build.sh` → `setup.sh --yes` → `run.sh all` từ bundle, `ICWMP_HOST_WORK` mới | **rc 0**: build cả microxml; unit 3/3 (417 getter / 9 và 73 request), smoke 5, notify 100/100, rpc 5/5, msrv, stun, ptime 2/2, valgrind 12 phiên 0 lost 0 lỗi (possibly lost cũng 10 × 352 B như trên) |
 
 **Chưa làm:** nạp image của bundle này lên board (board vẫn chạy 0083, chỉ khác ở 27 hàm không ai gọi).
+
+## 56. BDK: apply + build image tại `9b75ed9` (K9), bundle một SDK (06/10 11:37–11:52)
+
+**Môi trường:**
+- Máy `192.168.100.38` (`network2`), cây `/home/vtanh/workspaceBRCM/tunv/2_src/bcm963xx`, profile `MO77300EB`.
+- Build trong container `vtanh-brcm` qua tmux `bdk1` (user `vtanh`). Toolchain
+  `crosstools-aarch64-gcc-13.2-linux-5.15-glibc-2.38`, Python 3.10.
+- Trước lượt này, cây đang cài bản apply ngày 05/10 20:29. Marker của bản đó ghi `b01ec72`, nhưng đó là lỗi K19;
+  thực tế là `dev` khoảng 0079. Bản đó chỉ build component, chưa build image.
+
+**Bundle:** `./export.py --sdk bdk` tại `9b75ed9` (0088): 329 file, sha256 `4f7746f118bc…`, chỉ có `sdk/bdk` ở lib
+(20 file) và ở app (6 file). Đặt tạm ở `tunv/icwmp_bdk_stage_20261006/`. `sha256sum -c` OK.
+Lúc export, tôi thấy bản export trước đó (tại `e5e297f`) mang `tests/__pycache__/verify-apply.cpython-310.pyc`.
+File này bị commit từ 0042 và cũng có trong bản giao `release/mtk-20261006`. 0088 gỡ nó.
+
+| Bước | Kết quả |
+|---|---|
+| `apply --sdk bdk --dry-run .` | rc 0. Release `9b75ed9`, layout `sdk-only`, 8 path quản lý |
+| `apply --sdk bdk .` | rc 0. Backup `.icwmp-backups/20261006-044322-1vd31o5d`. Applied: `microxml`, `uci`, `libicwmp_dm`, `icwmp`, marker. `make.common`, `comp_tr69_md.c` và profile đã đúng từ 05/10 nên không đổi |
+| 6 lệnh build component (theo `apply`) | rc 0, 41 s. `sdk-scan: SDKs = bdk`. Cảnh báo đều là loại có từ trước (biến không dùng trong `xml.c` upstream, `/*` trong comment của `sdk.h`, `CWMP_BKP_FILE` redefined); không có lỗi |
+| `make PROFILE=MO77300EB` | Lần 1 dừng ở `profile_saved_check` của vendor: profile (20:29 ngày 05/10, thêm `BUILD_ICWMP=y`) mới hơn `.last_profile` (19:46). Lần 2 với `FORCE=1`: rule touch cookie nhưng vẫn `exit 1` (do vendor viết vậy). Lần 3: **rc 0**, 04:46:08–04:49:23 UTC, log 26.474 dòng, 0 cảnh báo ở lib/app icwmp |
+
+Vì sao `FORCE=1` mà không `make clean`:
+- **Verified:** so với profile trong backup 05/10, profile hiện tại chỉ thêm đúng `BUILD_ICWMP=y`.
+- **Verified:** `BUILD_ICWMP` chỉ được `make.common` (khối tích hợp của icwmp) và `apps/icwmp` (`Bcmbuild.mk`,
+  `autodetect`) đọc. Nó thêm `-DSUPPORT_ICWMP`, và chỉ `comp_tr69_md.c` dùng define này.
+- **Verified:** sau build, `cms_dmp_flags.h` đã có `SUPPORT_ICWMP`, và `comp_tr69_md.o` mới hơn cookie.
+
+**Kiểm sau build (runbook §0.2):**
+- Source đã cài khớp bundle. `diff -rq` của 4 component chỉ còn `Only in` phía cây: `autom4te.cache`, `.libs`,
+  `Makefile`, … sinh ra lúc build.
+- `.icwmp-release.json` ghi `9b75ed9`, `sdk-only`. `BUILD_ICWMP=y` ở dòng 804 của profile.
+- `fs.install`:
+  - `libtr098.so.3.0.0` 895.760 B, 11:48:23 (bản 05/10 là 924.216 B);
+  - `icwmpd` 721.176 B, 11:48:28;
+  - `libmicroxml.so.1.0` và `libuci.so` cùng được build lại.
+- `nm -D libtr098`: có `dm_entry_prefetch_values` và `dm_platform_prefetch_values`; import `posix_spawnp` và
+  `waitpid` (`dmcmd`).
+- `icwmpd` cần `libtr098.so.3`, `libmicroxml.so.1`, `libuci.so`. `icwmpd` không import `posix_spawnp`/`waitpid`,
+  vì BDK dùng `sdk/bdk/external_bdk.c` thay cho `external.c`. Dòng kiểm cũ của runbook đếm hai symbol này ở
+  `icwmpd` là đặt sai chỗ, nay đã chuyển sang lib.
+- Image: "Done! Image MO77300EB has been built". Các `*.pkgtb` nằm trong `targets/MO77300EB/`, không nằm trong
+  `images/`, ví dụ `bcmMO77300EB_emmc_squashfs_update.pkgtb` 56.892.624 B, md5 `0c5664468dd4…`.
+
+**K9:** BDK build đạt với 0067–0088, từ bundle một SDK. Tag `release/bdk-20261006` → `9b75ed9`; export lại tại tag cho
+đúng file đã build (cmp giống nhau). Bundle lưu ở `release/icwmp_bdk_9b75ed9.tar.gz` của issue workspace. **Chưa làm:** nạp image lên board BDK và smoke (runbook §5,
+thuộc PH7).
