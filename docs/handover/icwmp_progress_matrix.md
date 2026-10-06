@@ -96,12 +96,12 @@ Runbook: [../plan/ph0_gate_runbook.md](../plan/ph0_gate_runbook.md).
 | G1 | Boot, `tr069` lên, Inform đầu | **PASS** | 05/10, analysis §48 |
 | G2 | ≥3 phiên liên tiếp, định kỳ + Connection Request | **PASS** (định kỳ 6/6, HTTP CR 200, sai auth 401) | §48, §49 |
 | G3 | Notify nhiều chu kỳ, `dm get` vẫn trả lời, value change | **PASS** | §48, §49 |
-| G4 | GPV/GPN/SPV theo nhánh, SPV nhiều param có rollback | GPV từng nhánh **PASS**. GPN, SPV, rollback qua ACS **NOT RUN** | §48 |
+| G4 | GPV/GPN/SPV theo nhánh, SPV nhiều param có rollback | **PASS**: GPV từng nhánh (ubus); qua GenieACS NBI: GPV, GPN (`refreshObject`), SPV 2 param một sai → 9003/9007, không ghi gì | §48, §54 |
 | G5 | Hợp đồng input | **PASS** (cả K17); ghi IPv4 đúng NOT RUN vì board thiếu `routev4Common.max_rules`, shell cũ cũng lỗi y hệt | §50.2 |
-| G6 | ACS ghi ManagementServer, còn sau phiên, WebUI thấy, còn sau reboot; K10 | Mirror qua `dm` **PASS**; **K10 PASS**; ACS + reboot + WebUI **NOT RUN** | §48, §52 |
-| G7 | STUN, UDP Connection Request | Phía router **PASS** (UDP CR ký đúng đánh thức phiên, ký sai bị bỏ). ACS gửi qua NAT **NOT RUN** | §49 |
+| G6 | ACS ghi ManagementServer, còn sau phiên, WebUI thấy, còn sau reboot; K10 | **PASS** qua ACS: ghi, mirror, không restart, còn sau reboot; **K10 PASS**. WebUI **NOT RUN** (không có tài khoản) | §52, §54 |
+| G7 | STUN, UDP Connection Request | Phía router **PASS** (UDP CR ký đúng đánh thức phiên, ký sai bị bỏ). ACS dùng HTTP CR trực tiếp được nên không gửi UDP CR; `NATDetected` do vendor ghi 0 dù địa chỉ map khác IP WAN | §49, §54 |
 | G8 | Download/ScheduleDownload thiếu FileType hoặc 1 window | **NOT RUN** trên board (host 5/5 PASS) | — |
-| G9 | Soak 24 h | Image 0080: 8 h 41 phẳng (VmRSS 5344→5352 kB, fd 14–15, thread 11). **Đang chạy lại trên image 0083** từ 06/10 07:58, xong lúc 07/10 07:59 | §52, §53 |
+| G9 | Soak 24 h | Image 0080: 8 h 41 phẳng (VmRSS 5344→5352 kB, fd 14–15, thread 11). **Đang chạy lại trên image 0083** từ 06/10 08:14 (sau reboot G6), xong lúc 07/10 08:15 | §52–§54 |
 
 ### 2.2 Known issue
 
@@ -131,10 +131,10 @@ Bảng đầy đủ: `python3 docs/issue/progress.py` hoặc JSON.
 | # | Việc | Ai | Ghi chú |
 |---|---|---|---|
 | 1 | ~~Nạp image 0083, kiểm K13/K14 trên board~~ | — | **Xong 06/10**, 13/13 bị từ chối đúng, analysis §53 |
-| 2 | G4 qua ACS: GPN `InternetGatewayDevice.` next level; SPV 2 param (`ProvisioningCode=g4ok` + `PeriodicInformInterval=abc`) → 9003, ProvisioningCode **không** đổi | người có ACS | ~5 phút |
-| 3 | G6 qua ACS: SPV `PeriodicInformInterval`, `ConnectionRequestUsername` → kiểm `easycwmp`, `cwmp`, WebUI → reboot → kiểm lại | người có ACS + WebUI | — |
-| 4 | G8: Download thiếu FileType, ScheduleDownload 1 TimeWindow → fault đúng, pid không đổi | người có ACS | — |
-| 5 | G7: ACS gửi UDP CR qua NAT tới địa chỉ STUN map | người có ACS | — |
+| 2 | ~~G4 qua ACS~~ | — | **Xong 06/10** qua GenieACS NBI, §54 |
+| 3 | G6: ~~ACS ghi + reboot~~ xong (§54); còn **xem WebUI** | người có tài khoản WebUI | ConnectionRequestUsername không đổi để không làm hỏng CR của ACS |
+| 4 | G8: Download thiếu FileType, ScheduleDownload 1 TimeWindow → fault đúng, pid không đổi | quyết định sau | User chọn bỏ khi test bằng NBI (GenieACS không gửi được Download sai nếu không upload file lên ACS) |
+| 5 | G7: UDP CR từ ACS | — | Topology hiện tại ACS tới thẳng board bằng HTTP CR; chỉ cần nếu sản phẩm thật nằm sau NAT. Xem thêm `NATDetected` = 0 (§54) |
 | 6 | G9: soak 24 h trên **image cuối của PH0** (0083) | dev | Đang chạy từ 06/10 07:58; chu kỳ Inform 12 h nên đường session ít được thử |
 | 7 | BDK: apply + build tại HEAD, chạy runbook §0.2 | người có cây BDK | K9 |
 | 8 | Test host: dựng container Ubuntu mới (json-c ≥ 0.15, Python ≥ 3.10) có mạng tới GitHub, chạy `tests/host/run.sh all` | dev | Máy build hiện tại không vào GitHub/Docker Hub (analysis §52) |

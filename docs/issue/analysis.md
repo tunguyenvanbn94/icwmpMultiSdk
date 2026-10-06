@@ -3348,3 +3348,39 @@ thread 11). Mốc 24 h là 07/10 07:59.
 - Từ board (lua `nixio`, chỉ TCP connect), GenieACS mở 7547 (CWMP), 7557 (NBI), 7567 (FS), 3000 (UI).
 - `nc` của busybox báo "closed" sai cả với 7547, không dùng được để kiểm cổng.
 - Chưa gọi API nào của ACS.
+
+## 54. G4 và G6 qua ACS (GenieACS NBI), image 0083 (06/10 08:05–08:15)
+
+User chọn "chỉ NBI, bỏ G8" (chatlog mục 74). Điều kiện: không ảnh hưởng ACS, hệ thống liên quan và các
+thiết bị khác; test xong trả lại như cũ.
+
+**Cách làm:**
+- **Đường vào:** NBI GenieACS `172.16.0.15:7557` qua tunnel SSH của board
+  (`ssh -O forward -L 127.0.0.1:17557:172.16.0.15:7557`), vì máy build không có route tới ACS. Không vào UI,
+  Mongo hay docker.
+- **Phạm vi:** chỉ thao tác trên device `000378-HP%2D2236B%2DMain-OANH00000001`. Trong URL, id phải encode
+  thêm một lần thành `%252D`; nếu không, NBI trả 404 `No such device` và không tạo gì.
+- **Chụp trước khi test:** device có 0 task, 0 fault; 4 preset đều là preset mặc định (`default`, `inform`,
+  `getrpcmethods`, `bootstrap`). Không đọc hay sửa provision, virtual parameter, file, config.
+- Mọi task dùng `?connection_request`.
+
+| Gate | Task NBI | Kết quả |
+|---|---|---|
+| G4a GPV | `getParameterValues` SoftwareVersion, PeriodicInformInterval, ProvisioningCode | **PASS**: HTTP 200 trong khoảng 1 s; board log CR 401 rồi `success authentication`, phiên chạy `GetParameterValues` |
+| G4b GPN | `refreshObject` `InternetGatewayDevice.DeviceInfo` | **PASS**: 10 GetParameterNames + 1 GetParameterValues, ACS có 23 phần tử con của DeviceInfo. Lần đầu tôi để `objectName` có dấu chấm cuối: script `refresh` của GenieACS báo `Invalid parameter path` (lỗi phía ACS, board không nhận RPC nào). Đã xoá đúng task và fault đó |
+| G4c SPV nhiều param có một param sai | `setParameterValues` `ProvisioningCode=g4ok` + `PeriodicInformInterval=abc` | **PASS**: fault `cwmp.9003` kèm `9007` đúng ở `PeriodicInformInterval`. Board giữ `g5ok`/43200, `uci changes` 0, pid không đổi. Đã xoá task và fault |
+| G6 ACS ghi, sau phiên | `setParameterValues` `ProvisioningCode=g6test` + `PeriodicInformInterval=3600` | **PASS**: 200; `easycwmp` = g6test/3600, mirror `cwmp` = 3600, `next_session` = +3600; không restart (pid 11018, 2 dòng start), không có `Command failed` |
+| G6 sau reboot | `reboot` lúc 08:09, kiểm lúc 08:13 | **PASS**: vẫn g6test/3600 ở `easycwmp`, `cwmp` và GPV; phiên BOOT success; `next_session` = boot + 3600; CRASH 0, 2 dòng start; ACS thấy `_lastBoot` mới, Interval 3600, ProvisioningCode g6test |
+| Trả lại | `setParameterValues` `ProvisioningCode=g5ok` + `PeriodicInformInterval=43200` | 200; ACS và board đều về `g5ok`/43200; `next_session` về chu kỳ 12 h |
+| Sau cùng | — | Device còn 0 task, 0 fault trên ACS; tunnel đã đóng |
+
+**Chưa làm:** WebUI hiển thị giá trị (G6), vì không có tài khoản WebUI. G8 không làm, theo lựa chọn của user.
+
+**G7:** GenieACS tới thẳng được `30.1.1.153:7547` bằng HTTP CR. Gói UDP thấy trên WAN lúc 08:07:15 là phản
+hồi STUN (`172.16.0.15:19302`), không phải UDP CR, nên đường UDP CR qua NAT không cần và chưa được thử bằng
+ACS trong topology này. Sau khi nạp, `UDPConnectionRequestAddress` = `172.16.0.78:19302`, khác IP WAN,
+nhưng `NATDetected` = 0 (ngày 05/10 là 1). Giá trị này do `stun-client` của vendor ghi vào `stun.@stun[0]`,
+module 0078 chỉ đọc. **Not established**: vì sao vendor ghi 0.
+
+**G9** chạy lại sau reboot từ 08:14:19 (epoch 1791249259, pid 10691, VmRSS 4964 kB, fd 15, thread 11),
+mốc 24 h là 07/10 08:15.
