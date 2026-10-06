@@ -32,8 +32,6 @@
  *
  *	  - The Host check finds a dotted quad ANYWHERE in the value
  *	    (unanchored grep -o), so "x1.2.3.4y" is accepted.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

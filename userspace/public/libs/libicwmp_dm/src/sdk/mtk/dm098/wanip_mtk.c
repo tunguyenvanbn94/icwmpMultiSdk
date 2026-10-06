@@ -69,8 +69,6 @@
  *	machine over easycwmp.@acs[0].enablecwmp, the firewall internet-access
  *	rules and easycwmpd (re)configuration.  It stays with sdk/mtk/compat/
  *	until it gets its own step.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

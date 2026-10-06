@@ -31,8 +31,6 @@
  *	    which the cwmpclient package never installed (cwmpclient/Makefile:
  *	    the tr181 copy line is commented out), so on the product the object
  *	    was always empty and only RouteHopsNumberOfEntries carried a count.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

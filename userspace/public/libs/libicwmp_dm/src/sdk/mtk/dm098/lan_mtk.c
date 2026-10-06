@@ -17,9 +17,7 @@
  *	LANDevice object by dm_registry.c: lanhosts_mtk.c (Hosts), laneth_mtk.c
  *	(LANEthernetInterfaceConfig), x_ais_mesh_mtk.c (X_AIS_Mesh).  The single
  *	LANDevice instance is browsed here, they leave that field NULL.
- *	WLANConfiguration is still served by the shell bridge (phase P3).
- *
- *	NOT BUILD-TESTED YET.
+ *	WLANConfiguration is wlan_mtk.c, wlanassoc_mtk.c and wlansec_mtk.c (P3).
  */
 #include <stdio.h>
 #include <stdlib.h>

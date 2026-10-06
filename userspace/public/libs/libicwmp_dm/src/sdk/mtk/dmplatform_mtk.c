@@ -54,8 +54,6 @@
  *	session (icwmp sdk/mtk/icwmp_mtk.c), so a native setter of an easycwmp
  *	leaf ends the session with END_SESSION_RELOAD, and so does a script SPV
  *	under ManagementServer.* or of DeviceInfo.ProvisioningCode (below).
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

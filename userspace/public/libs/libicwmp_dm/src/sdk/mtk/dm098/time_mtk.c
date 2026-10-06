@@ -23,8 +23,6 @@
  *
  *	This module overrides the portable tr098/times.c: it is registered with
  *	a higher .order, so the registry keeps these rows when both are linked.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

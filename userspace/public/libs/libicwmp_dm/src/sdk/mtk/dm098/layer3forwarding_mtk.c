@@ -77,8 +77,6 @@
  *
  *	Every write queues /usr/sbin/hni_wan_reload.sh (wan_device_network_reload),
  *	the per-route ones only when the route is enabled.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

@@ -15,8 +15,9 @@
  *	Ported from functions/tr098/wan_device (entry_execute_method_root_WANDevice
  *	and everything below wancommoninterfaceconfig_execute_params).  The
  *	WANIPConnection / WANPPPConnection instances under WANConnectionDevice.1
- *	are still answered by the shell -- see .paths at the bottom, only what is
- *	really ported is claimed.
+ *	are the modules after this one (wanip_mtk.c and the P4b-P4f files); only
+ *	what this file serves is claimed in .paths at the bottom.  AddObject and
+ *	DeleteObject of the two connection objects still go to the shell (K8).
  *
  *	Three things of the product are kept verbatim because the ACS has been
  *	reading them for years:
@@ -40,8 +41,6 @@
  *	Booleans keep the exact spelling the shell echoed ("true", "1"), so a
  *	value-by-value comparison against the old client on the board does not
  *	report a difference where there is none.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

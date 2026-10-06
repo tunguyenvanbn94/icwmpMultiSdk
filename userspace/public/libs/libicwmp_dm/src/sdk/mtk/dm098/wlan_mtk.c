@@ -26,8 +26,6 @@
  *	Security leaves (BeaconType, the authentication and encryption modes,
  *	KeyPassphrase, PreSharedKey, WEP) are phase P3b and still served by the
  *	shell bridge -- they are merged into this same object when ported.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

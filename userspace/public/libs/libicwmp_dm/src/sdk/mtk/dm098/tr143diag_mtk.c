@@ -45,8 +45,6 @@
  *	    0..4294967295 by the contract's xsd:unsignedInt check;
  *	  - ROMTime/BOMTime/EOMTime/TCPOpen*Time are strings, not dateTime,
  *	    reading "0000-00-00T00:00:00.000000" before the first run.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

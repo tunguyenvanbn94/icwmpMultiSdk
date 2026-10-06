@@ -23,8 +23,6 @@
  *	      for a DMWRITE leaf with a NULL setter (mparam_set_value);
  *	  SelfTestDiagnostics.Results           reads "";
  *	  WiFi.NeighboringWiFiDiagnostic.DiagnosticsState  reads "".
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <string.h>

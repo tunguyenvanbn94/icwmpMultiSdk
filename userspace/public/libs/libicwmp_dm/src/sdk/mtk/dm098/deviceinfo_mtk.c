@@ -28,8 +28,6 @@
  *
  *	Bring-up override, same as the BDK build: a non-empty cwmp.cpe.<option>
  *	(manufacturer, oui, product_class, serial_number, software_version) wins.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

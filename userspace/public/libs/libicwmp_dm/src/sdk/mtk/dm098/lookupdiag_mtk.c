@@ -42,8 +42,6 @@
  *	ONE DELIBERATE DIFFERENCE: Result.{i} stops at 256 instances.  The shell
  *	ran "seq 1 $ResultNumberOfEntries" on whatever the store held; the
  *	launcher writes the number of answer lines of one nslookup.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

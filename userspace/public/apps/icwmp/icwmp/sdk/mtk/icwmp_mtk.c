@@ -13,8 +13,6 @@
  *	  bool          "1"/"0" both sides
  *	  ssl_verify    "disable" -> cwmp.acs.insecure_enable=1
  *	  logging_level 0..4 (Critic..Debug) -> cwmp.cpe.log_severity name
- *
- *	NOT BUILD-TESTED YET.
  */
 #define _GNU_SOURCE
 #include <stdio.h>

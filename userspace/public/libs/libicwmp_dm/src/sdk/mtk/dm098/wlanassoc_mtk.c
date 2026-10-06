@@ -18,8 +18,6 @@
  *	and its cleanup disappear.
  *
  *	A disabled interface is not queried at all, like assoc_build_cache().
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

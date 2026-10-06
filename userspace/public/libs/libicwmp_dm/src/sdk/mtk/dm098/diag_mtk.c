@@ -5,8 +5,6 @@
  *	(at your option) any later version.
  *
  *	Shared diagnostics machinery.  See diag_mtk.h.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

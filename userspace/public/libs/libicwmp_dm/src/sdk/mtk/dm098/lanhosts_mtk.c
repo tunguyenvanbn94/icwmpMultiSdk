@@ -16,8 +16,6 @@
  *
  *	The LANDevice object and its single instance are browsed in lan_mtk.c,
  *	dm_registry.c merges this subtree into it.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

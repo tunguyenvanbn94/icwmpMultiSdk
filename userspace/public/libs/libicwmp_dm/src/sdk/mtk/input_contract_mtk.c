@@ -37,8 +37,6 @@
  *	Applied to every native path, including the parameters icwmp added that
  *	the product never had (ManagementServer extras): the same guard, for the
  *	same reason.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

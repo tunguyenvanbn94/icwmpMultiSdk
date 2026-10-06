@@ -19,8 +19,6 @@
  *	shell did outside its bulk-get cache, and it is a sysfs-cheap read.
  *
  *	The LANDevice object and its single instance are browsed in lan_mtk.c.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

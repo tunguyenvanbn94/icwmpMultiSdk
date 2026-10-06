@@ -34,8 +34,6 @@
  *	the first refuses any wep+ encryption and syncs the MLO pair, the second
  *	enforces the 8..63 length, also writes the five character key1 digest the
  *	product's WebUI shows, and does not sync.  Both are kept.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>

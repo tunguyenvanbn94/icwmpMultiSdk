@@ -11,8 +11,6 @@
  *	requests: sourcing the 25k lines of the easycwmp function library costs
  *	seconds, doing it once per icwmpd lifetime instead of once per RPC is
  *	the whole point of the bridge.
- *
- *	NOT BUILD-TESTED YET.
  */
 #define _GNU_SOURCE
 #include <stdio.h>

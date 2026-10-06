@@ -36,8 +36,6 @@
  *
  *	Names are provisional (CUSTOM_PREFIX), to be renamed when agreed with
  *	the ACS.
- *
- *	NOT BUILD-TESTED YET.
  */
 #include <stdio.h>
 #include <stdlib.h>
