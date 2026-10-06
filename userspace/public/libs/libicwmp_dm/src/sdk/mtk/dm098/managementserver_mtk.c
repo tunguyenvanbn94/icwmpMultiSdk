@@ -65,6 +65,8 @@ enum ms_kind {
 	MS_UINT,	/* min .. max */
 	MS_INT,		/* min .. max */
 	MS_TIME,	/* dateTime, stored as written */
+	MS_URL,		/* string(256) with "://" after [a-zA-Z0-9_] */
+	MS_HOST,	/* string(256), a domain or an IPv4/IPv6 address */
 };
 
 #define MS_RELOAD	0x1	/* easycwmp: icwmpd reloads its config after the session */
@@ -138,6 +140,23 @@ static int ms_valid_datetime(const char *v)
 	return *v == '\0';
 }
 
+/* management_server_set_url: grep "[a-zA-Z0-9_]://.*", i.e. "://" right
+ * after a letter, digit or '_' anywhere in the value.  The shell then ran
+ * sed "s/(default_management_server_acs_hostname=).* /\1\"$addr\"/" on
+ * /usr/share/easycwmp/defaults; every URL holds '/', so that sed failed
+ * ("bad option in substitution expression", HP2236B 2026-10-06) and the
+ * file never changed: not ported (K13). */
+static int ms_valid_url(const char *v)
+{
+	const char *p;
+
+	for (p = strstr(v, "://"); p; p = strstr(p + 1, "://")) {
+		if (p > v && (isalnum((unsigned char)p[-1]) || p[-1] == '_'))
+			return 1;
+	}
+	return 0;
+}
+
 static int ms_valid_number(const char *v, int is_signed, long long min, long long max)
 {
 	const char *p = v;
@@ -189,6 +208,10 @@ static int ms_check(const struct ms_opt *o, const char *value)
 		return ms_valid_number(value, 1, o->min, o->max) ? 0 : FAULT_9007;
 	case MS_TIME:
 		return ms_valid_datetime(value) ? 0 : FAULT_9007;
+	case MS_URL:
+		return strlen(value) <= 256 && ms_valid_url(value) ? 0 : FAULT_9007;
+	case MS_HOST:	/* management_server_set_stun_serveraddress (K13) */
+		return strlen(value) <= 256 && mtk_shell_valid_host(value) ? 0 : FAULT_9007;
 	}
 	return FAULT_9007;
 }
@@ -235,7 +258,7 @@ static int __attribute__((unused)) set_##name(char *refparam, struct dmctx *ctx,
 #define MS_LOCAL(name, opt, kind, flags)		MS_OPT(name, "easycwmp", "@local[0]", opt, kind, 0, 0, flags)
 #define MS_STUNOPT(name, opt, kind, min, max, flags)	MS_OPT(name, "stun", "@stun[0]", opt, kind, min, max, flags)
 
-MS_ACS(url,                "url",                          MS_STRING, 0, 0,               MS_RELOAD)
+MS_ACS(url,                "url",                          MS_URL,    0, 0,               MS_RELOAD)
 MS_ACS(username,           "username",                     MS_STRING, 0, 0,               MS_RELOAD)
 MS_ACS(password,           "password",                     MS_STRING, 0, 0,               MS_RELOAD | MS_SECRET)
 MS_ACS(periodic_en,        "periodic_enable",              MS_BOOL,   0, 0,               MS_RELOAD)
@@ -246,7 +269,7 @@ MS_ACS(retry_mult,         "cwmpretryintervalmultiplier",  MS_UINT,   1000, 6553
 MS_LOCAL(cr_username,      "username",                     MS_STRING,                     MS_RELOAD)
 MS_LOCAL(cr_password,      "password",                     MS_STRING,                     MS_RELOAD | MS_SECRET)
 MS_STUNOPT(stun_enable,    "stun_enable",                  MS_BOOL,   0, 0,               MS_STUN)
-MS_STUNOPT(stun_server,    "serveraddress",                MS_STRING, 0, 0,               MS_STUN)
+MS_STUNOPT(stun_server,    "serveraddress",                MS_HOST,   0, 0,               MS_STUN)
 MS_STUNOPT(stun_port,      "serverport",                   MS_UINT,   0, 65535,           MS_STUN)
 MS_STUNOPT(stun_user,      "username",                     MS_STRING, 0, 0,               MS_STUN)
 MS_STUNOPT(stun_pass,      "password",                     MS_STRING, 0, 0,               MS_STUN | MS_SECRET)

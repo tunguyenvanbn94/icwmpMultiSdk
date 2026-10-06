@@ -250,6 +250,43 @@ static int shell_ipv6(const char *in)
 	return count == 8;
 }
 
+/* is_valid_domain: at most 256 characters with a dot; labels taken up to
+ * each dot while something is left (so one trailing dot ends the walk),
+ * each 1-63 of [a-zA-Z0-9-] not starting or ending with '-', the last one
+ * holding a letter */
+static int shell_domain(const char *d)
+{
+	const char *p = d, *e;
+	int letter = 0;
+
+	if (strlen(d) > 256 || !strchr(d, '.'))
+		return 0;
+	while (*p) {
+		size_t n, i;
+
+		e = strchr(p, '.');
+		n = e ? (size_t)(e - p) : strlen(p);
+		if (!n || n > 63 || p[0] == '-' || p[n - 1] == '-')
+			return 0;
+		letter = 0;
+		for (i = 0; i < n; i++) {
+			if (!isalnum((unsigned char)p[i]) && p[i] != '-')
+				return 0;
+			if (isalpha((unsigned char)p[i]))
+				letter = 1;
+		}
+		p = e ? e + 1 : p + n;
+	}
+	return letter;
+}
+
+/* is_valid_domain || is_valid_ip (= is_valid_ipv4 || is_valid_ipv6): the
+ * check management_server_set_stun_serveraddress ran (K13) */
+int mtk_shell_valid_host(const char *v)
+{
+	return v && (shell_domain(v) || shell_ipv4(v) || shell_ipv6(v));
+}
+
 static int shell_type_ok(const char *type, const char *v)
 {
 	if (strcmp(type, "xsd:unsignedInt") == 0)

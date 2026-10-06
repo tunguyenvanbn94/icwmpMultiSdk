@@ -207,6 +207,15 @@ do_msrv() {
 	expect "PeriodicInformInterval=0 faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
 	expect "easycwmp periodic_interval after a fault" "$(uci -q get easycwmp.@acs[0].periodic_interval)" "86400"
 	stop
+	# K13: the shell refused a URL without "://" after [a-zA-Z0-9_]
+	url0=$(uci -q get easycwmp.@acs[0].url)
+	for v in acs.example.net:7547/acs "://acs.example.net/acs"; do
+		start 1 "--set InternetGatewayDevice.ManagementServer.URL=$v"
+		wait_done 30; sleep 1
+		expect "URL=$v faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+		expect "easycwmp url after $v" "$(uci -q get easycwmp.@acs[0].url)" "$url0"
+		stop
+	done
 	restore_cfg easycwmp cwmp
 	if [ $bad_n = 0 ]; then pass "msrv: ACS writes of ManagementServer.* kept in easycwmp and cwmp, range fault"; else bad "msrv: $bad_n mismatches above"; fi
 }
@@ -247,6 +256,21 @@ do_stun() {
 	expect "STUNServerPort=70000 faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
 	expect "serverport after a fault" "$(uci -q get stun.@stun[0].serverport)" "3479"
 	stop
+	# K13: is_valid_domain || is_valid_ip of the shell in front of serveraddress
+	for v in localhost -stun.example.net stun..example.net 192.0.2.256; do
+		start 1 "--set InternetGatewayDevice.ManagementServer.STUNServerAddress=$v"
+		wait_done 30; sleep 1
+		expect "STUNServerAddress=$v faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+		expect "serveraddress after $v" "$(uci -q get stun.@stun[0].serveraddress)" "stun.example.net"
+		stop
+	done
+	for v in 192.0.2.10 2001:db8::10 stun.example.net.; do
+		start 1 "--set InternetGatewayDevice.ManagementServer.STUNServerAddress=$v"
+		wait_done 30; sleep 1
+		expect "STUNServerAddress=$v faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "0"
+		expect "serveraddress after $v" "$(uci -q get stun.@stun[0].serveraddress)" "$v"
+		stop
+	done
 	restore_cfg stun
 	if [ $bad_n = 0 ]; then pass "stun: STUN leaves on stun.@stun[0], reload flag, one stuncd reload, range fault"; else bad "stun: $bad_n mismatches above"; fi
 }
