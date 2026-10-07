@@ -102,7 +102,11 @@ do_notify() {
 	sleep 1
 	echo 10 > "$RUN/epoch"		# every value one byte longer
 	$UBUS call tr069 notify >/dev/null 2>&1; sleep 2
-	v10=$(grep -c '"value": "v10:InternetGatewayDevice.Firewall' /etc/tr098/.dm_enabled_notify)
+	# the object of the test is IGD.Device., still answered by the shell
+	# (fake_dm); its parameter count comes from fake_dm itself
+	want=$(printf '%s\n' '{"cmd":"get_value","param":"InternetGatewayDevice.Device."}' '{"cmd":"exit"}' |
+		FAKE_DM_MATRIX=$MATRIX FAKE_DM_EPOCH=$RUN/epoch python3 "$HOST_DIR/fake_dm.py" | grep -c '"value"')
+	v10=$(grep -c '"value": "v10:InternetGatewayDevice.Device' /etc/tr098/.dm_enabled_notify)
 	broken=$(python3 -c "
 import json
 n = 0
@@ -116,9 +120,9 @@ pm = urllib.request.HTTPPasswordMgrWithDefaultRealm(); pm.add_password(None, "ht
 urllib.request.build_opener(urllib.request.HTTPDigestAuthHandler(pm)).open("http://127.0.0.1:7547/", timeout=10).read()
 PY
 	i=0; while [ $i -lt 30 ] && ! grep -q "^session 2" "$RUN/acs.log"; do sleep 1; i=$((i+1)); done
-	inform=$(grep "^session 2" "$RUN/acs.log" | sed 's/.*firewall_params=\([0-9]*\).*/\1/')
-	if [ "$v10" = 100 ] && [ "$broken" = 0 ] && [ "$inform" = 100 ]; then
-		pass "notify: 100/100 changes kept and sent in the Inform"
+	inform=$(grep "^session 2" "$RUN/acs.log" | sed 's/.*device_params=\([0-9]*\).*/\1/')
+	if [ "$want" -gt 0 ] && [ "$v10" = "$want" ] && [ "$broken" = 0 ] && [ "$inform" = "$want" ]; then
+		pass "notify: $want/$want changes kept and sent in the Inform"
 	else
 		bad "notify: file $v10/100 updated, $broken broken lines, Inform carried ${inform:-0}/100"
 	fi
@@ -221,7 +225,7 @@ do_msrv() {
 	if [ $bad_n = 0 ]; then pass "msrv: ACS writes of ManagementServer.* kept in easycwmp and cwmp, range fault"; else bad "msrv: $bad_n mismatches above"; fi
 }
 
-# P6 leaves ported to C (0089): Account.Web, UserInterface.CarrierLocking and
+# P6 leaves ported to C (0090): Account.Web, UserInterface.CarrierLocking and
 # UserInterface.X_AIS_WebUserInfo on the product's configs (hmxwslbackend,
 # isplocking, account, remoteaccess, clay), the service restarts they queue,
 # and the root's objects that answer only when addressed.
@@ -309,6 +313,14 @@ do_p6() {
 	expect "isplocking enabled after the faults" "$(uci -q get isplocking.@isplocking[0].enabled)" "1"
 	expect "isplocking round_num after the faults" "$(uci -q get isplocking.@isplocking[0].round_num)" "5"
 	expect "account.admin.password untouched" "$(uci -q get account.admin.password)" ""
+	# K20: a refusal at VALUESET reaches the ACS.  Without the isplocking
+	# package no section can be added, the setter answers 9002 there; the
+	# engine used to drop it and answer success.
+	rm -f /etc/config/isplocking
+	start 1 "--set $P.CarrierLocking.X_AIS_RoundNum=7"
+	wait_done 30; sleep 1
+	expect "K20 VALUESET fault" "$(grep '^fault ' "$RUN/acs.log" | tr '\n' ' ')" "fault 9003 $P.CarrierLocking.X_AIS_RoundNum=9002 "
+	stop
 	for c in $P6_CONFIGS; do
 		if [ -f "$RUN/$c.p6saved" ]; then cp "$RUN/$c.p6saved" "/etc/config/$c"; else rm -f "/etc/config/$c"; fi
 	done

@@ -82,7 +82,8 @@ PLAN = [
     spv("k1", (IGD + "X_AIS_Telnet.Enable", "1"), (IGD + "Firewall.Config", "x")),
     spv("k2", (IGD + "ManagementServer.PeriodicInformInterval", "86400")),
     spv("k3", (IGD + "DeviceInfo.Nope", "1")),
-    spa(IGD + "Firewall.", 1),
+    spa(IGD + "Device.", 1),          # still the shell's: the notify test
+    spa(IGD + "Firewall.", 0),        # an object answered in C (K21)
     spa(IGD + "DeviceInfo.SoftwareVersion", 2),
     gpa(IGD + "DeviceInfo."),
     gpa(IGD + "Firewall."),
@@ -131,8 +132,8 @@ class H(BaseHTTPRequestHandler):
                 if args.download_every and state["sessions"] % args.download_every == 0:
                     state["queue"].append(DOWNLOAD)
                 ev = ",".join(re.findall(r"<EventCode>([^<]*)</EventCode>", body))
-                fw = body.count("<Name>InternetGatewayDevice.Firewall.")
-                sys.stdout.write("session %d events=%s firewall_params=%d t=%.0fs\n" % (state["sessions"], ev, fw, time.time() - state["start"]))
+                dv = body.count("<Name>InternetGatewayDevice.Device.")
+                sys.stdout.write("session %d events=%s device_params=%d t=%.0fs\n" % (state["sessions"], ev, dv, time.time() - state["start"]))
                 sys.stdout.flush()
                 out = env("<cwmp:InformResponse><MaxEnvelopes>1</MaxEnvelopes></cwmp:InformResponse>")
             elif ":TransferComplete>" in body:

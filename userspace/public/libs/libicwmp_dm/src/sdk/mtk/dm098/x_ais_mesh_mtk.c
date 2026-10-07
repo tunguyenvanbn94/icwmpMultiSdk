@@ -221,13 +221,13 @@ static DMLEAF tMeshParam[] = {
 
 static DMOBJ tLanDeviceMeshObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"X_AIS_Mesh", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tMeshParam, NULL},
+{"X_AIS_Mesh", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tMeshParam, NULL},
 {0}
 };
 
 /* browseinstobj left NULL on purpose: lan_mtk.c owns the LANDevice instance */
 static DMOBJ tLanDeviceMeshRoot[] = {
-{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tLanDeviceMeshObj, NULL, NULL},
+{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLanDeviceMeshObj, NULL, NULL},
 {0}
 };
 

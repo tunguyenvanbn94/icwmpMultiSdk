@@ -1588,8 +1588,15 @@ static int mparam_set_value(DMPARAM_ARGS)
 		add_set_list_tmp(dmctx, dmctx->in_param, dmctx->in_value, 0);
 	}
 	else if (dmctx->setaction == VALUESET) {
-		(set_cmd)(refparam, dmctx, data, instance, dmctx->in_value, VALUESET);
-		//(get_cmd)(refparam, dmctx, data, instance, &v);
+		/* a setter may still refuse here: a check that needs the values
+		 * set before it in the same RPC, or a write that failed.  The
+		 * fault goes back to dm_entry_apply(), which reverts the batch
+		 * (K20: it used to be dropped and the SPV answered success). */
+		int fault = (set_cmd)(refparam, dmctx, data, instance, dmctx->in_value, VALUESET);
+		if (fault) {
+			dmfree(refparam);
+			return fault;
+		}
 		dm_update_enabled_notify_byname(refparam, dmctx->in_value);
 	}
 	dmfree(refparam);

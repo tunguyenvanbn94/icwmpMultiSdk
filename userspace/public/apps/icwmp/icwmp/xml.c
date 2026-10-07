@@ -1622,7 +1622,11 @@ int cwmp_handle_rpc_cpe_set_parameter_values(struct session *session, struct rpc
 
 	int f = dm_entry_apply(&dmctx, CMD_SET_VALUE, parameter_key ? parameter_key : "", NULL);
 	if (f) {
-		fault_code = cwmp_get_fault_code(f);
+		/* parameter-specific faults (a setter refusing at VALUESET, K20,
+		 * or a platform batch naming its parameters) go out as 9003 with
+		 * their SetParameterValuesFault, like the VALUECHECK ones above */
+		fault_code = list_empty(&dmctx.list_fault_param) ? cwmp_get_fault_code(f)
+								  : FAULT_CPE_INVALID_ARGUMENTS;
 		goto fault;
 	}
 

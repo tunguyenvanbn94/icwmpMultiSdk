@@ -558,20 +558,20 @@ static DMLEAF tWlanSecParam[] = {
 
 static DMOBJ tWlanSecObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"PreSharedKey", &DMREAD, NULL, NULL, NULL, browsePreSharedKeyInst, NULL, &DMNONE, NULL, tPreSharedKeyParam, NULL},
-{"WEPKey", &DMREAD, NULL, NULL, NULL, browseWepKeyInst, NULL, &DMNONE, NULL, tWepKeyParam, NULL},
+{"PreSharedKey", &DMREAD, NULL, NULL, NULL, browsePreSharedKeyInst, NULL, NULL, NULL, tPreSharedKeyParam, NULL},
+{"WEPKey", &DMREAD, NULL, NULL, NULL, browseWepKeyInst, NULL, NULL, NULL, tWepKeyParam, NULL},
 {0}
 };
 
 static DMOBJ tLanDeviceWlanSecObj[] = {
-{"WLANConfiguration", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tWlanSecObj, tWlanSecParam, NULL},
+{"WLANConfiguration", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWlanSecObj, tWlanSecParam, NULL},
 {0}
 };
 
 /* browseinstobj left NULL twice on purpose: lan_mtk.c owns the LANDevice
  * instance and wlan_mtk.c owns the WLANConfiguration instance */
 static DMOBJ tLanDeviceWlanSecRoot[] = {
-{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tLanDeviceWlanSecObj, NULL, NULL},
+{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLanDeviceWlanSecObj, NULL, NULL},
 {0}
 };
 

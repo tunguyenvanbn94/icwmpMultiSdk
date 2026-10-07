@@ -357,7 +357,7 @@ int dm_entry_apply(struct dmctx *ctx, int cmd, char *arg1, char *arg2)
 				if (fault) break;
 			}
 			if (fault) {
-				//Should not happen
+				/* a setter refused at VALUESET (mparam_set_value, K20) */
 				dmuci_revert();
 				dm_platform_revert(ctx);
 				dm_end_session_rollback(&end_mark);

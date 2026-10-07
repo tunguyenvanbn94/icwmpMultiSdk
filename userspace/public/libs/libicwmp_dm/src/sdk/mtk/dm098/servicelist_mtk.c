@@ -335,21 +335,21 @@ static DMLEAF tConnServiceListParam[] = {
 
 static DMOBJ tWanCxDevSvcObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"WANIPConnection", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
+{"WANIPConnection", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
  NULL, tConnServiceListParam, NULL},
-{"WANPPPConnection", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
+{"WANPPPConnection", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
  NULL, tConnServiceListParam, NULL},
 {0}
 };
 
 static DMOBJ tWanDeviceSvcObj[] = {
-{"WANConnectionDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
+{"WANConnectionDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
  tWanCxDevSvcObj, NULL, NULL},
 {0}
 };
 
 static DMOBJ tWanDeviceSvcRoot[] = {
-{"WANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tWanDeviceSvcObj, NULL, NULL},
+{"WANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWanDeviceSvcObj, NULL, NULL},
 {0}
 };
 

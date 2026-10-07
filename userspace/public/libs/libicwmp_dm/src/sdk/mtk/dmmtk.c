@@ -15,6 +15,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <signal.h>
@@ -493,6 +495,25 @@ int mtk_apply_service_once(const char *cmd)
 		fclose(f);
 	}
 	return mtk_apply_service(cmd);
+}
+
+/* size of the queue now: the mark a SetParameterValues batch starts from */
+long mtk_apply_service_size(void)
+{
+	struct stat st;
+
+	return stat(APPLY_SERVICE_FILE, &st) == 0 ? (long)st.st_size : 0;
+}
+
+/* forget what was queued after the mark: the batch faulted and was reverted */
+void mtk_apply_service_truncate(long size)
+{
+	if (size <= 0) {
+		remove(APPLY_SERVICE_FILE);
+		return;
+	}
+	if (truncate(APPLY_SERVICE_FILE, (off_t)size) != 0 && errno != ENOENT)
+		fprintf(stderr, "icwmp mtk: truncate %s: %s\n", APPLY_SERVICE_FILE, strerror(errno));
 }
 
 void mtk_run_apply_service(void)

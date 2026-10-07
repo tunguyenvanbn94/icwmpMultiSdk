@@ -663,9 +663,9 @@ static DMLEAF tLanHostCfgParam[] = {
 
 static DMOBJ tLanHostCfgObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"DHCPStaticAddress", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
-{"DHCPOption", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
-{"IPInterface", &DMREAD, NULL, NULL, NULL, browseIPInterfaceInst, NULL, &DMNONE, NULL, tIPInterfaceParam, NULL},
+{"DHCPStaticAddress", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
+{"DHCPOption", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
+{"IPInterface", &DMREAD, NULL, NULL, NULL, browseIPInterfaceInst, NULL, NULL, NULL, tIPInterfaceParam, NULL},
 {0}
 };
 
@@ -679,14 +679,14 @@ static DMLEAF tLanDeviceParam[] = {
 };
 
 static DMOBJ tLanDeviceObj[] = {
-{"LANHostConfigManagement", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tLanHostCfgObj, tLanHostCfgParam, NULL},
-{"DHCPStaticAddress", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
-{"LANUSBInterfaceConfig", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
+{"LANHostConfigManagement", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLanHostCfgObj, tLanHostCfgParam, NULL},
+{"DHCPStaticAddress", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
+{"LANUSBInterfaceConfig", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 {0}
 };
 
 static DMOBJ tLanDeviceRoot[] = {
-{"LANDevice", &DMREAD, NULL, NULL, NULL, browseLanDeviceInst, NULL, &DMNONE, tLanDeviceObj, tLanDeviceParam, NULL},
+{"LANDevice", &DMREAD, NULL, NULL, NULL, browseLanDeviceInst, NULL, NULL, tLanDeviceObj, tLanDeviceParam, NULL},
 {0}
 };
 

@@ -285,7 +285,7 @@ static DMLEAF tWanEthParam[] = {
 
 static DMOBJ tWanEthObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tWanEthStatsParam, NULL},
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tWanEthStatsParam, NULL},
 {0}
 };
 
@@ -304,19 +304,19 @@ static DMLEAF tWanDslLinkParam[] = {
  * later module registers under the same object names.
  */
 static DMOBJ tWanConnectionDeviceObj[] = {
-{"WANDSLLinkConfig", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tWanDslLinkParam, NULL},
+{"WANDSLLinkConfig", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tWanDslLinkParam, NULL},
 {0}
 };
 
 static DMOBJ tWanDeviceObj[] = {
-{"WANCommonInterfaceConfig", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tWanCommonParam, NULL},
-{"WANEthernetInterfaceConfig", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tWanEthObj, tWanEthParam, NULL},
-{"WANConnectionDevice", &DMREAD, NULL, NULL, NULL, browseWanConnectionDeviceInst, NULL, &DMNONE, tWanConnectionDeviceObj, NULL, NULL},
+{"WANCommonInterfaceConfig", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tWanCommonParam, NULL},
+{"WANEthernetInterfaceConfig", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWanEthObj, tWanEthParam, NULL},
+{"WANConnectionDevice", &DMREAD, NULL, NULL, NULL, browseWanConnectionDeviceInst, NULL, NULL, tWanConnectionDeviceObj, NULL, NULL},
 {0}
 };
 
 static DMOBJ tWanDeviceRoot[] = {
-{"WANDevice", &DMREAD, NULL, NULL, NULL, browseWanDeviceInst, NULL, &DMNONE, tWanDeviceObj, NULL, NULL},
+{"WANDevice", &DMREAD, NULL, NULL, NULL, browseWanDeviceInst, NULL, NULL, tWanDeviceObj, NULL, NULL},
 {0}
 };
 

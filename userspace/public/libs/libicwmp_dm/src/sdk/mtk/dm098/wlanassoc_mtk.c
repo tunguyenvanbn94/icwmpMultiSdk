@@ -214,7 +214,7 @@ static DMLEAF tAssocStatsParam[] = {
 
 static DMOBJ tAssocObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tAssocStatsParam, NULL},
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tAssocStatsParam, NULL},
 {0}
 };
 
@@ -230,19 +230,19 @@ static DMLEAF tAssocParam[] = {
 };
 
 static DMOBJ tWlanAssocObj[] = {
-{"AssociatedDevice", &DMREAD, NULL, NULL, NULL, browseAssocInst, NULL, &DMNONE, tAssocObj, tAssocParam, NULL},
+{"AssociatedDevice", &DMREAD, NULL, NULL, NULL, browseAssocInst, NULL, NULL, tAssocObj, tAssocParam, NULL},
 {0}
 };
 
 static DMOBJ tLanDeviceAssocObj[] = {
-{"WLANConfiguration", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tWlanAssocObj, NULL, NULL},
+{"WLANConfiguration", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWlanAssocObj, NULL, NULL},
 {0}
 };
 
 /* browseinstobj left NULL twice on purpose: lan_mtk.c owns the LANDevice
  * instance and wlan_mtk.c owns the WLANConfiguration instance */
 static DMOBJ tLanDeviceAssocRoot[] = {
-{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tLanDeviceAssocObj, NULL, NULL},
+{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLanDeviceAssocObj, NULL, NULL},
 {0}
 };
 

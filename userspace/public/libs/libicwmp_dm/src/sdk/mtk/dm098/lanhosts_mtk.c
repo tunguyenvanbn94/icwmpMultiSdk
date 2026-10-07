@@ -245,7 +245,7 @@ static DMLEAF tHostParam[] = {
 
 static DMOBJ tHostsObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Host", &DMREAD, NULL, NULL, NULL, browseHostInst, NULL, &DMNONE, NULL, tHostParam, NULL},
+{"Host", &DMREAD, NULL, NULL, NULL, browseHostInst, NULL, NULL, NULL, tHostParam, NULL},
 {0}
 };
 
@@ -255,13 +255,13 @@ static DMLEAF tHostsParam[] = {
 };
 
 static DMOBJ tLanDeviceHostsObj[] = {
-{"Hosts", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tHostsObj, tHostsParam, NULL},
+{"Hosts", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tHostsObj, tHostsParam, NULL},
 {0}
 };
 
 /* browseinstobj left NULL on purpose: lan_mtk.c owns the LANDevice instance */
 static DMOBJ tLanDeviceHostsRoot[] = {
-{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tLanDeviceHostsObj, NULL, NULL},
+{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLanDeviceHostsObj, NULL, NULL},
 {0}
 };
 

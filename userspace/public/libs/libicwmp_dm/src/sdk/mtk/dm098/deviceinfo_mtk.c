@@ -501,7 +501,7 @@ static DMLEAF tProcessStatusParam[] = {
 
 static DMOBJ tProcessStatusObj[] = {
 /* the old client advertised the object with no instances, keep it visible */
-{"Process", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
+{"Process", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 {0}
 };
 
@@ -537,23 +537,23 @@ static DMLEAF tTempSensorParam[] = {
 
 /* the product exposes exactly one sensor, at instance 1 */
 static DMOBJ tTempSensorObj[] = {
-{"1", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tTempSensorParam, NULL},
+{"1", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tTempSensorParam, NULL},
 {0}
 };
 
 static DMOBJ tTemperatureStatusObj[] = {
-{"TemperatureSensor", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tTempSensorObj, NULL, NULL},
+{"TemperatureSensor", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tTempSensorObj, NULL, NULL},
 {0}
 };
 
 static DMOBJ tDeviceInfoMtkObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"ProcessStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tProcessStatusObj, tProcessStatusParam, NULL},
-{"MemoryStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tMemoryStatusParam, NULL},
-{"TemperatureStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tTemperatureStatusObj, NULL, NULL},
-{"X_AIS", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, &DMNONE, NULL, tXAisParam, NULL},
-{"X_AIS_DSL", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tXAisDslParam, NULL},
-{"X_AIS_GPON", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, &DMNONE, NULL, tXAisGponParam, NULL},
+{"ProcessStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tProcessStatusObj, tProcessStatusParam, NULL},
+{"MemoryStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tMemoryStatusParam, NULL},
+{"TemperatureStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tTemperatureStatusObj, NULL, NULL},
+{"X_AIS", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, NULL, tXAisParam, NULL},
+{"X_AIS_DSL", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tXAisDslParam, NULL},
+{"X_AIS_GPON", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, NULL, tXAisGponParam, NULL},
 {0}
 };
 
@@ -580,7 +580,7 @@ static DMLEAF tDeviceInfoMtkParam[] = {
 };
 
 static DMOBJ tDeviceInfoMtkRoot[] = {
-{"DeviceInfo", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, &DMNONE, tDeviceInfoMtkObj, tDeviceInfoMtkParam, NULL},
+{"DeviceInfo", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, tDeviceInfoMtkObj, tDeviceInfoMtkParam, NULL},
 {0}
 };
 

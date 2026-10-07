@@ -423,7 +423,7 @@ static DMLEAF tTimeMtkParams[] = {
 
 static DMOBJ tTimeMtkObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Time", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tTimeMtkParams, NULL},
+{"Time", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tTimeMtkParams, NULL},
 {0}
 };
 

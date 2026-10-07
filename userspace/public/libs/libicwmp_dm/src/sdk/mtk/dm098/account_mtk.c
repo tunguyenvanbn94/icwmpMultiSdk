@@ -73,12 +73,12 @@ static DMLEAF tAccountWebParams[] = {
 
 static DMOBJ tAccountObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Web", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tAccountWebParams, NULL},
+{"Web", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tAccountWebParams, NULL},
 {0}
 };
 
 static DMOBJ tAccountRoot[] = {
-{"Account", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tAccountObj, NULL, NULL},
+{"Account", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tAccountObj, NULL, NULL},
 {0}
 };
 

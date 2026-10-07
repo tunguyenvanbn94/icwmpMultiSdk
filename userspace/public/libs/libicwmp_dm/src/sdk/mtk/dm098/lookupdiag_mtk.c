@@ -212,7 +212,7 @@ static DMLEAF tNSLookupParams[] = {
 
 static DMOBJ tNSLookupChildObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Result", &DMREAD, NULL, NULL, NULL, browseNSLookupResultInst, NULL, &DMNONE,
+{"Result", &DMREAD, NULL, NULL, NULL, browseNSLookupResultInst, NULL, NULL,
  NULL, tNSLookupResultParams, NULL},
 {0}
 };
@@ -278,9 +278,9 @@ static DMLEAF tDNSDiagParams[] = {
 /* ------------------------------------------------------------------ */
 
 static DMOBJ tLookupDiagMtkObj[] = {
-{"NSLookupDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
+{"NSLookupDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
  tNSLookupChildObj, tNSLookupParams, NULL},
-{"DNSDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
+{"DNSDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
  NULL, tDNSDiagParams, NULL},
 {0}
 };

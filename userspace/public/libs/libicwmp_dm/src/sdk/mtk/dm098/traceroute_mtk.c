@@ -139,12 +139,12 @@ static DMLEAF tTraceRouteMtkParams[] = {
 /* always empty on the product -- see the header */
 static DMOBJ tTraceRouteMtkChildObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"RouteHops", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
+{"RouteHops", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 {0}
 };
 
 static DMOBJ tTraceRouteMtkObj[] = {
-{"TraceRouteDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
+{"TraceRouteDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
  tTraceRouteMtkChildObj, tTraceRouteMtkParams, NULL},
 {0}
 };

@@ -33,7 +33,7 @@ static DMOBJ tRootMtkObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
 /* icwmpd's own settings (tr098/common/icwmpcfg.c): log level, CWMP amendment,
  * session timeout, connection request host/port override, backend name */
-{CUSTOM_PREFIX"Icwmp", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tIcwmpCfgParam, NULL},
+{CUSTOM_PREFIX"Icwmp", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tIcwmpCfgParam, NULL},
 {0}
 };
 

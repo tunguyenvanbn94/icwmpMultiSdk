@@ -86,7 +86,7 @@ snprintf sprintf vsnprintf printf fprintf sscanf
 malloc calloc realloc free abort exit
 atoi atol atoll strtol strtoul strtoll strtod
 isdigit isxdigit isalpha isalnum isspace isupper islower toupper tolower
-open close read write lseek unlink access stat lstat mkdir rmdir rename
+open close read write lseek unlink access stat lstat mkdir rmdir rename truncate
 fopen fclose fgets fputs fread fwrite fflush feof ferror fileno remove
 popen pclose fork execv execvp waitpid kill _exit dup2 pipe
 posix_spawn posix_spawnp posix_spawn_file_actions_init posix_spawn_file_actions_destroy

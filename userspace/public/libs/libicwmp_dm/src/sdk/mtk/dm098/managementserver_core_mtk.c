@@ -15,7 +15,7 @@
 
 static DMOBJ tManagementServerCoreRoot[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"ManagementServer", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, &DMNONE, NULL, tManagementServerParams, NULL},
+{"ManagementServer", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, NULL, tManagementServerParams, NULL},
 {0}
 };
 

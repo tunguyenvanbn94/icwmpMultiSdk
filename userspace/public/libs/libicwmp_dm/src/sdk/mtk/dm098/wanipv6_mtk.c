@@ -912,7 +912,7 @@ static DMLEAF tWanV6PdParam[] = {
 
 static DMOBJ tWanV6Obj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Pd", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tWanV6PdParam, NULL},
+{"Pd", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tWanV6PdParam, NULL},
 {0}
 };
 
@@ -930,7 +930,7 @@ static DMLEAF tWanV6Param[] = {
 
 /* the subtree is identical on both objects, so one pair of tables serves both */
 static DMOBJ tWanConnV6Obj[] = {
-{"X_AIS_IPv6", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tWanV6Obj, tWanV6Param, NULL},
+{"X_AIS_IPv6", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWanV6Obj, tWanV6Param, NULL},
 {0}
 };
 
@@ -971,21 +971,21 @@ static DMLEAF tWanPppConnV6Param[] = {
  * every getter here reads.
  */
 static DMOBJ tWanCxDevV6Obj[] = {
-{"WANIPConnection", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
+{"WANIPConnection", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
  tWanConnV6Obj, tWanIpConnV6Param, NULL},
-{"WANPPPConnection", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
+{"WANPPPConnection", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
  tWanConnV6Obj, tWanPppConnV6Param, NULL},
 {0}
 };
 
 static DMOBJ tWanDeviceV6Obj[] = {
-{"WANConnectionDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
+{"WANConnectionDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
  tWanCxDevV6Obj, NULL, NULL},
 {0}
 };
 
 static DMOBJ tWanDeviceV6Root[] = {
-{"WANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tWanDeviceV6Obj, NULL, NULL},
+{"WANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWanDeviceV6Obj, NULL, NULL},
 {0}
 };
 

@@ -173,12 +173,12 @@ static DMLEAF tCarrierLockingParams[] = {
 
 static DMOBJ tUserInterfaceClObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"CarrierLocking", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tCarrierLockingParams, NULL},
+{"CarrierLocking", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tCarrierLockingParams, NULL},
 {0}
 };
 
 static DMOBJ tCarrierLockingRoot[] = {
-{"UserInterface", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tUserInterfaceClObj, NULL, NULL},
+{"UserInterface", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tUserInterfaceClObj, NULL, NULL},
 {0}
 };
 

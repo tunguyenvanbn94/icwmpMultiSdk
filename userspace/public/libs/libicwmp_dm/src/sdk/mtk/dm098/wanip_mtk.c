@@ -1536,7 +1536,7 @@ static DMLEAF tWanIpStatsParam[] = {
 
 static DMOBJ tWanIpConnObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tWanIpStatsParam, NULL},
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tWanIpStatsParam, NULL},
 {0}
 };
 
@@ -1584,7 +1584,7 @@ static DMLEAF tWanPppStatsParam[] = {
 };
 
 static DMOBJ tWanPppConnObj[] = {
-{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tWanPppStatsParam, NULL},
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tWanPppStatsParam, NULL},
 {0}
 };
 
@@ -1638,22 +1638,22 @@ static DMLEAF tWanCxDevIpParam[] = {
 
 static DMOBJ tWanCxDevIpObj[] = {
 {"WANIPConnection", &DMWRITE, add_ipconn_instance, del_conn_instance, NULL, browseWanIpConnInst,
- NULL, &DMNONE, tWanIpConnObj, tWanIpConnParam, NULL},
+ NULL, NULL, tWanIpConnObj, tWanIpConnParam, NULL},
 {"WANPPPConnection", &DMWRITE, add_pppconn_instance, del_conn_instance, NULL, browseWanPppConnInst,
- NULL, &DMNONE, tWanPppConnObj, tWanPppConnParam, NULL},
+ NULL, NULL, tWanPppConnObj, tWanPppConnParam, NULL},
 {0}
 };
 
 /* browseinstobj left NULL twice on purpose: wan_mtk.c owns the WANDevice and
  * WANConnectionDevice instances, dm_registry merges this subtree into them */
 static DMOBJ tWanDeviceIpObj[] = {
-{"WANConnectionDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
+{"WANConnectionDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
  tWanCxDevIpObj, tWanCxDevIpParam, NULL},
 {0}
 };
 
 static DMOBJ tWanDeviceIpRoot[] = {
-{"WANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tWanDeviceIpObj, NULL, NULL},
+{"WANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWanDeviceIpObj, NULL, NULL},
 {0}
 };
 

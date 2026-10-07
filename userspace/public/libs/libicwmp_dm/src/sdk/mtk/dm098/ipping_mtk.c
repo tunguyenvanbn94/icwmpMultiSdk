@@ -173,7 +173,7 @@ static DMLEAF tIPPingMtkParams[] = {
 
 static DMOBJ tIPPingMtkObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"IPPingDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tIPPingMtkParams, NULL},
+{"IPPingDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tIPPingMtkParams, NULL},
 {0}
 };
 

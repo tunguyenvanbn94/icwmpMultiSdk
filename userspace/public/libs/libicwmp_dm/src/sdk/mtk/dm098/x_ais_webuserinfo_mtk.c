@@ -506,12 +506,12 @@ static DMLEAF tWebUserInfoParams[] = {
 
 static DMOBJ tUserInterfaceWuiObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"X_AIS_WebUserInfo", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tWebUserInfoParams, NULL},
+{"X_AIS_WebUserInfo", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tWebUserInfoParams, NULL},
 {0}
 };
 
 static DMOBJ tWebUserInfoRoot[] = {
-{"UserInterface", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tUserInterfaceWuiObj, NULL, NULL},
+{"UserInterface", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tUserInterfaceWuiObj, NULL, NULL},
 {0}
 };
 

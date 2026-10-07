@@ -220,8 +220,8 @@ static DMLEAF tUploadDiagParams[] = {
 
 static DMOBJ tTr143DiagMtkObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"DownloadDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tDownloadDiagParams, NULL},
-{"UploadDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tUploadDiagParams, NULL},
+{"DownloadDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tDownloadDiagParams, NULL},
+{"UploadDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tUploadDiagParams, NULL},
 {0}
 };
 

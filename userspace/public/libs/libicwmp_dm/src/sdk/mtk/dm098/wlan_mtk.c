@@ -906,19 +906,19 @@ static DMLEAF tWlanParam[] = {
 
 static DMOBJ tWlanObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tWlanStatsParam, NULL},
-{"WPS", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tWpsParam, NULL},
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tWlanStatsParam, NULL},
+{"WPS", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tWpsParam, NULL},
 {0}
 };
 
 static DMOBJ tLanDeviceWlanObj[] = {
-{"WLANConfiguration", &DMREAD, NULL, NULL, NULL, browseWlanInst, NULL, &DMNONE, tWlanObj, tWlanParam, NULL},
+{"WLANConfiguration", &DMREAD, NULL, NULL, NULL, browseWlanInst, NULL, NULL, tWlanObj, tWlanParam, NULL},
 {0}
 };
 
 /* browseinstobj left NULL on purpose: lan_mtk.c owns the LANDevice instance */
 static DMOBJ tLanDeviceWlanRoot[] = {
-{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tLanDeviceWlanObj, NULL, NULL},
+{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLanDeviceWlanObj, NULL, NULL},
 {0}
 };
 

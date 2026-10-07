@@ -148,52 +148,52 @@ static DMLEAF tGpsParams[] = {
 
 static DMOBJ tWiFiChildObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker, container_leaf, addressed_only */
-{"NeighboringWiFiDiagnostic", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tNeighborWiFiParams, NULL},
+{"NeighboringWiFiDiagnostic", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tNeighborWiFiParams, NULL},
 {0}
 };
 
 static DMOBJ tFaultMgmtObj[] = {
-{"CurrentAlarm", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
+{"CurrentAlarm", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 {0}
 };
 
 static DMOBJ tBulkDataObj[] = {
-{"Profile", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
+{"Profile", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 {0}
 };
 
 static DMOBJ tSoftwareModulesObj[] = {
-{"DeploymentUnit", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
+{"DeploymentUnit", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 {0}
 };
 
 static DMOBJ tLayer2BridgingObj[] = {
-{"AvailableInterface", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
-{"Bridge", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
+{"AvailableInterface", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
+{"Bridge", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 {0}
 };
 
 static DMOBJ tUSBHostsObj[] = {
-{"Host", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL},
+{"Host", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 {0}
 };
 
 static DMOBJ tFAPObj[] = {
-{"GPS", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tGpsParams, NULL},
+{"GPS", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tGpsParams, NULL},
 {0}
 };
 
 static DMOBJ tRootHiddenMtkObj[] = {
-{"SelfTestDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tSelfTestParams, NULL, NULL, 1},
-{"WiFi", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tWiFiChildObj, NULL, NULL, NULL, 1},
-{"FaultMgmt", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tFaultMgmtObj, NULL, NULL, NULL, 1},
-{"BulkData", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tBulkDataObj, tBulkDataParams, NULL, NULL, 1},
-{"SoftwareModules", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tSoftwareModulesObj, NULL, NULL, NULL, 1},
-{"Layer2Bridging", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tLayer2BridgingObj, NULL, NULL, NULL, 1},
-{"USBHosts", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tUSBHostsObj, NULL, NULL, NULL, 1},
-{"CaptivePortal", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tCaptivePortalParams, NULL, NULL, 1},
-{"FAP", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tFAPObj, NULL, NULL, NULL, 1},
-{"User", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, NULL, NULL, NULL, 1},
+{"SelfTestDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tSelfTestParams, NULL, NULL, 1},
+{"WiFi", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWiFiChildObj, NULL, NULL, NULL, 1},
+{"FaultMgmt", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tFaultMgmtObj, NULL, NULL, NULL, 1},
+{"BulkData", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tBulkDataObj, tBulkDataParams, NULL, NULL, 1},
+{"SoftwareModules", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tSoftwareModulesObj, NULL, NULL, NULL, 1},
+{"Layer2Bridging", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLayer2BridgingObj, NULL, NULL, NULL, 1},
+{"USBHosts", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tUSBHostsObj, NULL, NULL, NULL, 1},
+{"CaptivePortal", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tCaptivePortalParams, NULL, NULL, 1},
+{"FAP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tFAPObj, NULL, NULL, NULL, 1},
+{"User", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1},
 {0}
 };
 

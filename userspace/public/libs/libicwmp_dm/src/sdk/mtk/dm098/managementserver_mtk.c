@@ -354,7 +354,7 @@ static DMLEAF tManagementServerMtkParam[] = {
 };
 
 static DMOBJ tManagementServerMtkRoot[] = {
-{"ManagementServer", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, &DMNONE, NULL, tManagementServerMtkParam, NULL},
+{"ManagementServer", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, NULL, tManagementServerMtkParam, NULL},
 {0}
 };
 

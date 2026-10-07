@@ -58,6 +58,11 @@ int mtk_apply_service_once(const char *cmd);
  * session by dm_platform_restart_services() when the shell fallback is not
  * compiled in (--disable-dm-script-compat). */
 void mtk_run_apply_service(void);
+/* The queue size before a SetParameterValues batch writes anything, and the
+ * cut back to it when the batch faults (dm_platform_revert): commands a
+ * reverted batch queued are not run. */
+long mtk_apply_service_size(void);
+void mtk_apply_service_truncate(long size);
 
 /* Factory defaults, what the shell calls $UCI_GET_DEFAULT
  * ("uci -q -c /rom/etc/config get").  Never NULL. */

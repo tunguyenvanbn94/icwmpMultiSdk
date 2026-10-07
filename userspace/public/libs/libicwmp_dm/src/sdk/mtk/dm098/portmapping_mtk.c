@@ -464,7 +464,7 @@ static DMLEAF tPortMappingParam[] = {
 static DMOBJ tConnPortMappingObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
 {"PortMapping", &DMWRITE, add_pm_instance, del_pm_instance, NULL, browsePortMappingInst,
- NULL, &DMNONE, NULL, tPortMappingParam, NULL},
+ NULL, NULL, NULL, tPortMappingParam, NULL},
 {0}
 };
 
@@ -474,21 +474,21 @@ static DMLEAF tConnPortMappingParam[] = {
 };
 
 static DMOBJ tWanCxDevPmObj[] = {
-{"WANIPConnection", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
+{"WANIPConnection", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
  tConnPortMappingObj, tConnPortMappingParam, NULL},
-{"WANPPPConnection", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
+{"WANPPPConnection", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
  tConnPortMappingObj, tConnPortMappingParam, NULL},
 {0}
 };
 
 static DMOBJ tWanDevicePmObj[] = {
-{"WANConnectionDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE,
+{"WANConnectionDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
  tWanCxDevPmObj, NULL, NULL},
 {0}
 };
 
 static DMOBJ tWanDevicePmRoot[] = {
-{"WANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tWanDevicePmObj, NULL, NULL},
+{"WANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWanDevicePmObj, NULL, NULL},
 {0}
 };
 

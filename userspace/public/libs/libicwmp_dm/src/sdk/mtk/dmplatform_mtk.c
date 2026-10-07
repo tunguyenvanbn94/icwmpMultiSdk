@@ -98,6 +98,9 @@ static int mtk_is_object(const char *path)
 /* path is inside an object a data model module owns.  The claim list is the
  * union of the .paths of every module linked into this build (dm_registry.c),
  * so porting an object to C never touches this file. */
+/* apply_service queue size at the last VALUECHECK of a set batch, -1 none */
+static long mtk_apply_mark = -1;
+
 static int mtk_is_native(const char *path)
 {
 	return dm_registry_owns(DM_MODEL_TR098, path);
@@ -1043,6 +1046,10 @@ int dm_platform_commit(struct dmctx *ctx, const char *parameter_key)
 
 void dm_platform_revert(struct dmctx *ctx)
 {
+	if (mtk_apply_mark >= 0) {
+		mtk_apply_service_truncate(mtk_apply_mark);
+		mtk_apply_mark = -1;
+	}
 #ifdef DM_MTK_SCRIPT_COMPAT
 	struct mtk_reply r;
 
@@ -1141,6 +1148,9 @@ int dm_platform_param_method(struct dmctx *ctx, int cmd, char *inparam, char *ar
 	 * served by the script gets the script's own copy.  VALUECHECK only --
 	 * at VALUESET the value has passed already.  See input_contract_mtk.c. */
 	if (cmd == CMD_SET_VALUE && ctx && ctx->setaction == VALUECHECK) {
+		/* setters queue only at VALUESET: after the last VALUECHECK of the
+		 * batch this is where a revert cuts the queue back to */
+		mtk_apply_mark = mtk_apply_service_size();
 #ifdef DM_MTK_SCRIPT_COMPAT
 		int native = mtk_is_native(inparam ? inparam : "");
 #else

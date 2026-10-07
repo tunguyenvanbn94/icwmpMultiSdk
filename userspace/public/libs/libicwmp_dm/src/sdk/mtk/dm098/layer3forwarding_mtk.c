@@ -630,13 +630,13 @@ static DMLEAF tL3fForwardingParams[] = {
 
 static DMOBJ tL3fChildObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker, container_leaf */
-{"Forwarding", &DMWRITE, add_l3f_route, del_l3f_route, NULL, browseL3fRouteInst, NULL, &DMNONE,
+{"Forwarding", &DMWRITE, add_l3f_route, del_l3f_route, NULL, browseL3fRouteInst, NULL, NULL,
  NULL, tL3fRouteParams, NULL, tL3fForwardingParams},
 {0}
 };
 
 static DMOBJ tL3fMtkObj[] = {
-{"Layer3Forwarding", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tL3fChildObj, NULL, NULL},
+{"Layer3Forwarding", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tL3fChildObj, NULL, NULL},
 {0}
 };
 

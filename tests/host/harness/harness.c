@@ -61,6 +61,8 @@ char *dmuci_set_value(char *p, char *s, char *o, char *v) { return ""; }
 void free_all_list_package_change(struct list_head *l) {}
 int mtk_input_contract(const char *p, const char *v) { return 0; }
 void mtk_run_apply_service(void) {}
+long mtk_apply_service_size(void) { return 0; }
+void mtk_apply_service_truncate(long size) { (void)size; }
 int string_to_bool(char *v, bool *b) { *b = (v[0] == '1' || v[0] == 't'); return 0; }
 
 /* ---- registry: the real claims + the real matcher ---------------------- */

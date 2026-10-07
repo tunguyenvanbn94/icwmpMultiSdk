@@ -68,7 +68,7 @@ static DMLEAF tXmppServerParams[] = {
 
 static DMOBJ tXmppServerInstObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"1", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tXmppServerParams, NULL},
+{"1", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tXmppServerParams, NULL},
 {0}
 };
 
@@ -89,17 +89,17 @@ static DMLEAF tXmppConnectionParams[] = {
 };
 
 static DMOBJ tXmppConnectionChildObj[] = {
-{"Server", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tXmppServerInstObj, NULL, NULL},
+{"Server", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tXmppServerInstObj, NULL, NULL},
 {0}
 };
 
 static DMOBJ tXmppConnectionInstObj[] = {
-{"1", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tXmppConnectionChildObj, tXmppConnectionParams, NULL},
+{"1", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tXmppConnectionChildObj, tXmppConnectionParams, NULL},
 {0}
 };
 
 static DMOBJ tXmppObj[] = {
-{"Connection", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tXmppConnectionInstObj, NULL, NULL},
+{"Connection", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tXmppConnectionInstObj, NULL, NULL},
 {0}
 };
 
@@ -120,8 +120,8 @@ static DMLEAF tLteParams[] = {
 };
 
 static DMOBJ tXmppRootObj[] = {
-{"XMPP", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tXmppObj, NULL, NULL},
-{"LTE", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tLteParams, NULL},
+{"XMPP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tXmppObj, NULL, NULL},
+{"LTE", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tLteParams, NULL},
 {0}
 };
 

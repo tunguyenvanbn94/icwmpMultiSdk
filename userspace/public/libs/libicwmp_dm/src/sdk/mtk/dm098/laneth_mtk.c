@@ -459,7 +459,7 @@ static DMLEAF tLanEthStatsParam[] = {
 
 static DMOBJ tLanEthInstObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, NULL, tLanEthStatsParam, NULL},
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tLanEthStatsParam, NULL},
 {0}
 };
 
@@ -476,13 +476,13 @@ static DMLEAF tLanEthInstParam[] = {
 };
 
 static DMOBJ tLanDeviceEthObj[] = {
-{"LANEthernetInterfaceConfig", &DMREAD, NULL, NULL, NULL, browseLanEthInst, NULL, &DMNONE, tLanEthInstObj, tLanEthInstParam, NULL},
+{"LANEthernetInterfaceConfig", &DMREAD, NULL, NULL, NULL, browseLanEthInst, NULL, NULL, tLanEthInstObj, tLanEthInstParam, NULL},
 {0}
 };
 
 /* browseinstobj left NULL on purpose: lan_mtk.c owns the LANDevice instance */
 static DMOBJ tLanDeviceEthRoot[] = {
-{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, &DMNONE, tLanDeviceEthObj, NULL, NULL},
+{"LANDevice", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLanDeviceEthObj, NULL, NULL},
 {0}
 };
 
