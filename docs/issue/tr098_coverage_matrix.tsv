@@ -649,7 +649,7 @@ phase	phase_name	kind	path	perm	getter	setter	type	forced_inform	easycwmp_file
 6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.SuperAdminEnable	1	get_SuperAdminEnable	set_SuperAdminEnable	xsd:string		tr098/X_AIS_WebUserInfo
 6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.SuperAdminName	1	get_SuperAdminName	set_SuperAdminName	xsd:string		tr098/X_AIS_WebUserInfo
 6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.SuperAdminPassword	1	get_SuperAdminPassword	set_SuperAdminPassword	xsd:string		tr098/X_AIS_WebUserInfo
-6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.SuperAdminSecurity	1	get_SuperAdminSecurity	set_SuperAdminSecurity	xsd:string		tr098/X_AIS_WebUserInfo
+6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.SuperAdminSecurity	1	get_SuperAdminSecurity	set_SuperAdminSecurity	xsd:boolean		tr098/X_AIS_WebUserInfo
 6	P6 firewall, UI, misc root	param	InternetGatewayDevice.UserInterface.X_AIS_WebUserInfo.WebIp	1	get_WebIp	set_WebIp	xsd:string		tr098/X_AIS_WebUserInfo
 6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.XMPP.	0					tr098/xmpp
 6	P6 firewall, UI, misc root	obj	InternetGatewayDevice.XMPP.Connection.	0					tr098/xmpp
@@ -683,14 +683,14 @@ phase	phase_name	kind	path	perm	getter	setter	type	forced_inform	easycwmp_file
 7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_CPEagent.SecretKey	1	get_cpeagent_secretkey	set_cpeagent_secretkey	xsd:string		tr098/X_AIS_CPEagent
 7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_CPEagent.SecretKeyVersion	1	get_cpeagent_secretkey_version	set_cpeagent_secretkey_version	xsd:string		tr098/X_AIS_CPEagent
 7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_Conf.	0					tr098/X_AIS_Conf
-7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.auto_download_status	\					tr098/X_AIS_Conf
-7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.auto_upload_delay	\					tr098/X_AIS_Conf
-7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.auto_upload_interval_time	\					tr098/X_AIS_Conf
-7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.auto_upload_status	\					tr098/X_AIS_Conf
-7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.download_from_server	\					tr098/X_AIS_Conf
-7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.download_server	\					tr098/X_AIS_Conf
-7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.upload_server	\					tr098/X_AIS_Conf
-7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.upload_to_server	\					tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.auto_download_status	0	get_X_AIS_Conf_auto_download_status		xsd:string		tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.auto_upload_delay	1	get_X_AIS_Conf_auto_upload_delay	set_X_AIS_Conf_auto_upload_delay	xsd:int		tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.auto_upload_interval_time	1	get_X_AIS_Conf_auto_upload_interval_time	set_X_AIS_Conf_auto_upload_interval_time	xsd:int		tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.auto_upload_status	0	get_X_AIS_Conf_auto_upload_status		xsd:string		tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.download_from_server	1	get_X_AIS_Conf_download_from_server	set_X_AIS_Conf_download_from_server	xsd:boolean		tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.download_server	1	get_X_AIS_Conf_download_server	set_X_AIS_Conf_download_server	xsd:string		tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.upload_server	1	get_X_AIS_Conf_upload_server	set_X_AIS_Conf_upload_server	xsd:string		tr098/X_AIS_Conf
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Conf.upload_to_server	1	get_X_AIS_Conf_upload_to_server	set_X_AIS_Conf_upload_to_server	xsd:boolean		tr098/X_AIS_Conf
 7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_DDNS.	0					tr098/X_AIS_DDNS
 7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_DDNS.DomainName	1	get_ddns_domain	set_ddns_domain	xsd:string		tr098/X_AIS_DDNS
 7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_DDNS.Enable	1	get_ddns_enable	set_ddns_enable	xsd:boolean		tr098/X_AIS_DDNS
@@ -741,9 +741,9 @@ phase	phase_name	kind	path	perm	getter	setter	type	forced_inform	easycwmp_file
 7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_MeshAPI.Domain_name	1	get_X_AIS_MeshAPI_Domain_name	set_X_AIS_MeshAPI_Domain_name	xsd:string		tr098/X_AIS_MeshAPI
 7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_MeshAPI.enable	1	get_X_AIS_MeshAPI_enable	set_X_AIS_MeshAPI_enable	xsd:boolean		tr098/X_AIS_MeshAPI
 7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_SSH.	0					tr098/X_AIS_SSH
-7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_SSH.Enable	1	get_X_AIS_SSH_Enable	set_X_AIS_SSH_Enable	xsd:string		tr098/X_AIS_SSH
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_SSH.Enable	1	get_X_AIS_SSH_Enable	set_X_AIS_SSH_Enable	xsd:boolean		tr098/X_AIS_SSH
 7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_Telnet.	0					tr098/X_AIS_Telnet
-7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Telnet.Enable	1	get_X_AIS_Telnet_Enable	set_X_AIS_Telnet_Enable	xsd:string		tr098/X_AIS_Telnet
+7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Telnet.Enable	1	get_X_AIS_Telnet_Enable	set_X_AIS_Telnet_Enable	xsd:boolean		tr098/X_AIS_Telnet
 7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Telnet.Password	1	get_X_AIS_Telnet_Password	set_X_AIS_Telnet_Password	xsd:string		tr098/X_AIS_Telnet
 7	P7 operator X_AIS tree	param	InternetGatewayDevice.X_AIS_Telnet.Username	1	get_X_AIS_Telnet_Username	set_X_AIS_Telnet_Username	xsd:string		tr098/X_AIS_Telnet
 7	P7 operator X_AIS tree	obj	InternetGatewayDevice.X_AIS_UPnP.	0					tr098/X_AIS_UPnP

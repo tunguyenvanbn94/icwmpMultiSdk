@@ -68,6 +68,9 @@ INST = re.compile(r'\$\{?(i|j|k|inst|instance|object_idx|wan_index|rule_index|of
 rows = []
 for rel, path in files:
     txt = open(path, encoding='utf-8', errors='replace').read()
+    # nối dòng tiếp "\" như shell: X_AIS_Conf viết mỗi lời gọi trên hai dòng,
+    # không nối thì perm là "\" và mất type/getter/setter của cả 8 param
+    txt = re.sub(r'\\\n[ \t]*', ' ', txt)
     env = dict(GLOBAL)
     def expand(s, depth=0):
         if depth > 8: return s
