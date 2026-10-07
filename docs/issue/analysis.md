@@ -3859,3 +3859,14 @@ riêng, cần test board trước.
     do C claim nên bridge bỏ qua. Đã chuyển sang `IGD.X_HNI_FakeShell.`, chạy lại `unit` PASS.
 - Gate tĩnh: cross-gcc lib 68 file 0 lỗi, 14 cảnh báo thường như trước; check-c-sanity 0 (thêm `scandir`, `alphasort`,
   `fscanf`); claims 0 chồng.
+
+**MTK SDK build tại `2ea7c00` (07/10 23:14–23:21):**
+- Export `--sdk mtk` rồi apply vào `1_src` (backup `.icwmp-backups/20261007-231444-_qkszu1c`).
+- Feed Makefile đã cùng nội dung với bản copy `feeds/airoha`, nên vòng `cmp || cp` không phải chép gì.
+- Gói: rc 0, không cảnh báo nào ở file P8. Image: rc 0, log có `Enabling dev_access`.
+- `tclinux.bin` 23:20:34, md5 `4626ae1ebaf98a385aa043a8b24e65af`, chép ra
+  `1_src/2025q3/.icwmp-images/tclinux_p8_2ea7c00_devaccess.bin`.
+- `root.squashfs` (23:20:11):
+  - có `etc/init.d/dev_access` và `etc/rc.d/S11dev_access`, tức SSH/telnet tự mở sau boot (patch dev-access v1);
+  - `libtr098.so.3.0.0` md5 `20914d44…`, trùng bản trong `root-airoha`, có các module P8 và khóa CPEagent.
+- Chưa nạp board (SSH vẫn đóng).

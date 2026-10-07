@@ -85,9 +85,9 @@
     },
     {
       "id": "P8",
-      "status": "HOST_VERIFIED",
+      "status": "BUILD_PASS",
       "title": "Remaining domains — 144 param",
-      "note": "144/144: LTE (0090), 0097 Device.IP + TraceRoute + DHCPv6 + DOCSIS, 0098 PPP + DynamicDNS + RouterAdvertisement, 0099 Services (StorageService, STBService). Số instance gán và commit khi GET như shell (mtk_uci_set_persist). run.sh p8/p8b/p8c PASS (analysis §61). SDK build/board chưa"
+      "note": "144/144: LTE (0090), 0097 Device.IP + TraceRoute + DHCPv6 + DOCSIS, 0098 PPP + DynamicDNS + RouterAdvertisement, 0099 Services (StorageService, STBService). Số instance gán và commit khi GET như shell (mtk_uci_set_persist). run.sh p8/p8b/p8c PASS (analysis §61). MTK SDK build gói + image đạt tại 2ea7c00 (tclinux.bin md5 4626ae1e…, có dev-access). Board chưa"
     },
     {
       "id": "A6",
