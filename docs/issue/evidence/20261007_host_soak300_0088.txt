@@ -1,0 +1,17 @@
+SOAK_START 2026-10-07 08:53:07
+sessions=1 rss=12496kB fds=17 threads=11 forks=8
+sessions=24 rss=13652kB fds=17 threads=11 forks=1900
+sessions=47 rss=13172kB fds=14 threads=11 forks=3818
+sessions=71 rss=14332kB fds=18 threads=11 forks=5729
+sessions=94 rss=13216kB fds=17 threads=11 forks=7648
+sessions=117 rss=13236kB fds=14 threads=11 forks=9548
+sessions=141 rss=13308kB fds=18 threads=11 forks=11445
+sessions=164 rss=13296kB fds=17 threads=11 forks=13429
+sessions=187 rss=13956kB fds=14 threads=11 forks=15383
+sessions=210 rss=13324kB fds=14 threads=11 forks=17301
+sessions=234 rss=13832kB fds=17 threads=11 forks=19245
+sessions=257 rss=13352kB fds=14 threads=11 forks=21146
+sessions=280 rss=13340kB fds=14 threads=11 forks=23044
+PASS soak: DONE sessions=300 rpcs=4500 faults=900 transfers=0
+SOAK_RC=0
+SOAK_END 2026-10-07 08:59:41

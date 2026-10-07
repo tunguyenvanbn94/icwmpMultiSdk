@@ -3494,3 +3494,28 @@ Vì sao `FORCE=1` mà không `make clean`:
 **K9:** BDK build đạt với 0067–0088, từ bundle một SDK. Tag `release/bdk-20261006` → `9b75ed9`; export lại tại tag cho
 đúng file đã build (cmp giống nhau). Bundle lưu ở `release/icwmp_bdk_9b75ed9.tar.gz` của issue workspace. **Chưa làm:** nạp image lên board BDK và smoke (runbook §5,
 thuộc PH7).
+
+## 57. Soak host 300 phiên tại 0088; G9 board hoãn (07/10 15:34–16:05)
+
+**G9 trên board chưa đọc được.** Từ 15:34, SSH (22) và telnet (23) của HP2236B đóng; ping và web 80/443 vẫn có.
+DNS của board trả địa chỉ giả cho mọi tên (A `123.0.0.2`, AAAA `fc00::1`). User xác nhận đã rút PON nên board
+mất WAN. G9 24 h trên image 0083 (sampler chạy từ 06/10 08:14) vì vậy chưa có kết quả. Theo user, test để sau:
+G9 và PH0.5 (tag baseline, fast-forward `main`) làm khi board có lại WAN và SSH.
+
+**Soak host tại `775fee2`** (code 0088), cho thêm bằng chứng ổn định của 0080–0088:
+
+- Môi trường: container `ubuntu:24.04` dùng một lần, tạo với `--dns 192.168.100.4 --dns 8.8.8.8`, vì DNS của
+  board đang trap làm apt hỏng.
+- Lệnh: `build.sh` → `setup.sh --yes` → `run.sh soak 300`. Tải ubus mỗi 2 s: `notify`, `status`,
+  `dm get/names/inform`.
+
+| Chỉ số | Kết quả |
+|---|---|
+| Phiên | 300/300, 4.500 RPC, 900 fault theo kế hoạch ACS; 08:53:07–08:59:41 UTC (6,5 phút) |
+| Agent | còn sống tới cuối, `PASS soak` |
+| VmRSS | 12.496 kB ở mẫu đầu (khởi động); sau đó 13.172–14.332 kB, mẫu cuối 13.340 kB, không có xu hướng tăng |
+| fd | 14–18 |
+| Thread | 11 suốt thời gian chạy |
+
+Mẫu đầy đủ (13 mẫu, mỗi 30 s): [evidence/20261007_host_soak300_0088.txt](evidence/20261007_host_soak300_0088.txt).
+Host soak không thay được G9: board có shell data model thật, procd và thời gian 24 h.

@@ -164,7 +164,7 @@ mỗi mức phải ghi rõ commit hoặc bundle tương ứng.
 | `HOST_VERIFIED` | agent và lib thật trên Linux host, ACS test | `tests/host/run.sh all` (+ `soak`) | 06/10 tại 0086, container `ubuntu:24.04`: `all` PASS: unit 3/3, smoke 5 phiên, notify 100/100, rpc 5/5, msrv, stun, ptime 2/2, valgrind 0 lost 0 error; cũng PASS từ bundle MTK `e273359` (analysis §55) |
 | `SDK_BUILD_PASS` | build bằng SDK thật (MTK, BDK) | `apply` + build `libtr098`/`icwmp_tr098` | MTK đạt tới 0086 (06/10, gói + image, cả từ bundle export); BDK đạt tại 0088 (06/10, bundle `--sdk bdk`, component + image `MO77300EB`, analysis §56) |
 | `BOARD_GATE_n` | gate board theo §5 PH0.4 | board HP2236B | Image 0083 (06/10): G1–G7 phía router PASS, G4/G6 qua GenieACS NBI; G8 bỏ; G9 24 h tới 07/10 08:15 (analysis §48–§54) |
-| `SOAK` | 24 h, RSS/fd/thread phẳng | `run.sh soak` trên board/host | host: `dev` báo 300 phiên RSS phẳng; board chưa |
+| `SOAK` | 24 h, RSS/fd/thread phẳng | `run.sh soak` trên board/host | host 07/10 tại 0088: 300 phiên, RSS 13,2–14,3 MB không tăng, fd 14–18, 11 thread (analysis §57); board: 0080 8 h 41 phẳng, 24 h trên 0083 chưa đọc (board mất WAN) |
 | `RELEASE` | baseline đóng băng, có tag | §6.1 | baseline chưa; tag bản giao `release/mtk-20261006` (`8dea75b`) |
 
 `check-cc-syntax.py` (cross-gcc của SDK) và `check-pkg-deps.py` cần cây SDK. Đặt đường dẫn bằng
