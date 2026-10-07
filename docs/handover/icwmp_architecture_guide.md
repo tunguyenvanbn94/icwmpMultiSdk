@@ -85,7 +85,7 @@ Ba câu cần nhớ:
 | Mục tiêu | Đo bằng gì | Hiện trạng (2026-10-06) |
 |---|---|---|
 | Một CWMP core bằng C cho mọi SDK | Cùng `apps/icwmp/icwmp` build cho MTK, BDK, OpenWrt chuẩn | Đạt về source. MTK build và chạy board; BDK build image đạt 06/10 tại 0088, chưa chạy board |
-| Giữ nguyên cây tham số ACS đã provision | 783 param / 184 object của sản phẩm (ma trận `docs/issue/tr098_coverage_matrix.tsv`) | 516/783 bằng C, phần còn lại qua compat shell, không mất path nào (`verify-dm-paths.py`: thiếu 0) |
+| Giữ nguyên cây tham số ACS đã provision | 783 param / 184 object của sản phẩm (ma trận `docs/issue/tr098_coverage_matrix.tsv`) | 567/783 bằng C, phần còn lại qua compat shell, không mất path nào (`verify-dm-paths.py`: thiếu 0) |
 | Chuyển dần shell sang C, không phải chuyển một lần | Path nào có module C thì C trả lời, còn lại thì shell trả lời | Đạt (router native/compat của MTK) |
 | Test được không cần board | `tests/host/run.sh all`: agent thật + ACS giả trên Linux host | Đạt: PASS 06/10 trong container `ubuntu:24.04` trên máy build |
 | Thêm SDK mới không đụng code chung | Thêm `sdk/<tên>/` ở lib và app, chạy `tools/sdk-scan.sh` | Đạt về cấu trúc: `--sdk-only` xoá SDK khác mà vẫn build (0083) |
@@ -161,7 +161,7 @@ backend SDK chung. Hiện code chưa đạt hết điều này, xem phần 8.
 | Reboot, factory reset, áp firmware | `external.c` gọi action | Script `/usr/sbin/icwmp` của SDK (MTK `sdk/mtk/scripts/icwmp.sh`), BDK làm bằng C |
 | Init/procd, value monitoring | — | MTK `sdk/mtk/files/` (`icwmpd.init`, `value_monitoring`, `easycwmpd` shim) |
 | Engine data model, transaction, registry | `dmentry.c`, `dmtr098.c`, `dm_registry.c` | Hook `dm_platform_commit/revert/restart_services` |
-| Getter/setter tham số | `tr098/` (khi semantic giống nhau) | `sdk/mtk/dm098/` (28 file C, 516 param của sản phẩm), `sdk/bdk/dm098/` (TR-098 chiếu lên TR-181 MDM) |
+| Getter/setter tham số | `tr098/` (khi semantic giống nhau) | `sdk/mtk/dm098/` (29 file C, 567 param của sản phẩm), `sdk/bdk/dm098/` (TR-098 chiếu lên TR-181 MDM) |
 | Path chưa port | — | MTK: `sdk/mtk/compat/` gọi thư viện shell của sản phẩm qua `icwmp_dm.sh` |
 | Hợp đồng input trước setter | — | MTK `input_contract_mtk.c`: `is_safe_input` + kiểm theo kiểu shell |
 

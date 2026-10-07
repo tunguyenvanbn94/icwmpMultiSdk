@@ -52,7 +52,7 @@ flowchart LR
 | Hạng mục | Trạng thái | Mức bằng chứng cao nhất |
 |---|---|---|
 | Layout source multi-SDK, plugin `sdk/<tên>/`, apply có backup | Xong | MTK SDK build + board |
-| Data model TR-098 bằng C trên MTK | **516/783** param (P1–P5; P6 trừ Firewall, 0090; LTE của P8). Còn 262 qua shell compat: Firewall 51, P7 79, P8 132 | MTK board: GPV toàn cây 1768 dòng / 15–16 s |
+| Data model TR-098 bằng C trên MTK | **567/783** param (P1–P6, 0090 + 0092; LTE của P8). Còn 211 qua shell compat: P7 79, P8 132 | MTK board: GPV toàn cây 1768 dòng / 15–16 s |
 | Sửa lỗi runtime 0062–0080 (treo, leak, crash từ ACS, procd restart) | Xong | Board MTK (0080, K17 hết); host `run.sh all` PASS lại 06/10 tại 0086 |
 | K13, K14 (kiểm input ManagementServer) | Xong (0081, 0082) | **Board** (image 0083, 06/10, analysis §53) |
 | `apply --sdk-only` | Xong (0083) | MTK SDK build trên cây chỉ còn MTK |
@@ -89,6 +89,8 @@ flowchart LR
 | Bản giao MTK test được trên host | 0087 | Bundle MTK giữ source microxml mà `tests/host/build.sh` build (bỏ glue BDK của nó); trước đó test host từ bundle dừng ở bước đầu | host `run.sh all` từ chính bundle |
 | Công cụ kiểm | 0089 | `verify-dm-paths` đọc lá ở gốc (`.params`), `check-c-sanity` biết thêm 2 hàm json-c, ACS test ghi mã fault từng tham số | STATIC |
 | TR-098 C — P6a–d (+ LTE) | 0090 | Object ẩn ở gốc + DeviceSummary, Account, UserInterface.CarrierLocking, X_AIS_WebUserInfo, XMPP, LTE: 58 param; test host `p6` | host `run.sh all`; MTK SDK build gói + image (§58) |
+| Engine: fault ở VALUESET (K20), SPA lên object C (K21) | 0091 | Setter từ chối ở VALUESET giờ làm SPV fault 9003 và hoàn tác (trước đây trả thành công mà không ghi); hàng đợi apply cắt lại khi revert; object MTK nhận SetParameterAttributes như shell | host `p6`, `fw`, smoke |
+| TR-098 C — P6e Firewall | 0092 | DisablePort, ServiceControl IPv4/IPv6, IPFilter: 51 param, Add/Delete theo vị trí như shell; test host `fw` | host `run.sh all`; MTK SDK build gói + image |
 | Dọn repo | 0088 | Gỡ `tests/__pycache__/*.pyc` bị commit từ 0042 (có trong mọi bundle export trước đó) | `git ls-files` |
 | Công cụ kiểm | — | `check-c-sanity`, `check-cc-syntax` (cross-gcc SDK), `verify-dm-paths` (`--phase`, `--claims`), `check-automake-conds`, `update-sums`, `progress.py`, `tests/host` | — |
 
@@ -137,6 +139,9 @@ Runbook: [../plan/ph0_gate_runbook.md](../plan/ph0_gate_runbook.md).
 | K15 | MEDIUM | **Hoãn** (quyết định 07/10) | Agent sau controller: `icwmpd.init` network mặc định `if0`, không chạy khi `opermode=auto`. Giữ nguyên; STUN dùng app có sẵn của sản phẩm; làm khi có yêu cầu hoặc lỗi |
 | K16 | MEDIUM | **Hoãn** (07/10) | `icwmp_stund` đọc nhầm option mật khẩu; không build trên MTK vì dùng app STUN của sản phẩm |
 | K17 | HIGH | **Fixed, board** | Ghi ManagementServer làm procd restart icwmpd |
+| K20 | HIGH | **Fixed, host** (0091) | Setter từ chối ở VALUESET bị bỏ qua, SPV trả thành công mà không ghi |
+| K21 | MEDIUM | **Fixed, host** (0091) | SetParameterAttributes lên object do C trả lời bị 9009 |
+| K22 | LOW | Theo dõi | Một lần agent dưới valgrind không thoát hẳn sau SIGTERM, không lặp lại (§59) |
 
 Bảng đầy đủ: `python3 docs/issue/progress.py` hoặc JSON.
 

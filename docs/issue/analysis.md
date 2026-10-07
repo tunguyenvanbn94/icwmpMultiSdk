@@ -3575,3 +3575,69 @@ Dòng fault của ACS đã giúp tìm ra một kỳ vọng sai của chính test
 - **Tổng tham số bằng C: 516/783** (P1–P5 458 + P6 46 + LTE 12).
 
 **Chưa làm:** Firewall (51 tham số: DisablePort, IPFilter, ServiceControl, có Add/Delete); nạp image lên board (board đang mất WAN).
+
+## 59. P6e Firewall (`0092`), K20 lỗi fault ở VALUESET, K21 SPA lên object C (`0091`), K22 (07/10 16:45–17:30)
+
+**P6e:** `firewall_mtk.c` port `functions/tr098/firewall` (51 tham số), dữ liệu nằm trong `firewall_clay`.
+
+| Nhánh | Section UCI | Ghi chú |
+|---|---|---|
+| `Config`, `Enable` | — | hằng `High` / `true` |
+| `X_AIS_DisablePort.{i}` | `disable_port` (tối đa 32) | Interface đổi thì xếp hàng `hni.service set ruleIdx` |
+| `X_AIS_ServiceControl.IPV4ServiceControl/IPV6ServiceControl.{i}` | `packetfilter`, lọc theo `ipversion` (tối đa 64 mỗi loại) | ánh xạ Ingress/ServiceType/OtherPort/OtherProtocol, điền `-` cho IPStart/IPEnd |
+| `X_AIS_IPFilter.{i}` | `ipfilter2` (tối đa 20) | 27 lá, giữ giá trị mặc định và ánh xạ của shell |
+
+- Instance theo vị trí như shell. AddObject ghi giá trị mặc định của shell (IPFilter lấy priority trống nhỏ nhất).
+  DeleteObject xoá section, các instance sau dồn số.
+- Kiểm địa chỉ và mask của IPFilter theo `IPVersion`, và kiểm `Order` trùng, đặt ở VALUESET. Shell chạy setter theo
+  thứ tự request, nên `IPVersion=6` + `SourceIP` IPv6 trong cùng SPV là hợp lệ.
+- **P6 xong 97/97** (`verify-dm-paths --phase 6`: thiếu 0, dôi 0). **Tổng tham số bằng C: 567/783.**
+
+**K20 (HIGH, Verified, đã sửa 0091):** `mparam_set_value()` (`dmtr098.c`) gọi setter ở VALUESET rồi **bỏ giá trị trả về**.
+Setter từ chối ở bước đó thì SPV vẫn báo thành công mà không ghi gì.
+- Bị ảnh hưởng từ trước: `X_AIS_Mesh.MeshEnabled` ngoài chế độ router (9001).
+- Bị ảnh hưởng trong code hôm nay: CarrierLocking khi không có package `isplocking` (9002), whitelist của hni, WebIp khi
+  không có WAN.
+- Lộ ra khi test firewall: các ca VALUESET trả "thành công", còn `IPVersion` lẽ ra phải hoàn tác thì vẫn ở lại.
+- Sửa:
+  - fault được trả về `dm_entry_apply()`, hàm này vốn đã revert UCI, platform và hành động cuối phiên;
+  - handler SPV gửi fault đó dưới mã 9003 kèm mã của từng tham số, giống fault ở VALUECHECK (cũng áp dụng cho
+    batch BDK có ghi tên tham số);
+  - MTK: hàng đợi `apply_service` được cắt về kích thước lúc VALUECHECK cuối cùng khi batch bị revert, nên SPV bị từ
+    chối không còn làm restart dịch vụ.
+- Test: `run.sh p6` (9003 kèm 9002 khi thiếu `isplocking`), `run.sh fw` (SPV có lá thứ hai lỗi ở VALUESET, lá thứ nhất
+  không được ghi).
+
+**K21 (MEDIUM, Verified, đã sửa 0091):** cả 114 dòng object trong `sdk/mtk/dm098` đều đặt `&DMNONE` ở cột notification.
+- Engine chỉ đọc cột này để từ chối SPA lên đúng path object bằng 9009 (`mobj_set_notification_in_obj`); GPA không dùng
+  (`mobj_get_notification` trả 0).
+- Shell của sản phẩm nhận SPA lên object. Vì vậy từ khi P1–P5 chạy bằng C, ACS đặt attribute cho `IGD.LANDevice.` sẽ
+  nhận 9009.
+- Lộ ra khi smoke có thêm một fault 9009 mỗi phiên cho `SPA IGD.Firewall.`.
+- Sửa: đặt NULL ở cột đó. Code portable vẫn giữ `&DMNONE` cho 27 object nó cố ý không cho đặt notification.
+
+**Test host phải sửa theo:**
+- `notify` từng dựa vào 100 tham số Firewall do `fake_dm` phục vụ. Nay chuyển sang `IGD.Device.` (vẫn là shell, 128
+  tham số), số kỳ vọng đọc từ `fake_dm`.
+- `smoke` có `SPV Firewall.Config=x`. Lá này chỉ đọc cả trong shell, nên 9008 bây giờ là đúng (trước đây `fake_dm` nhận nhầm).
+
+**K22 (LOW, Not established):** trong một lần `run.sh all`, agent chạy dưới valgrind không thoát hẳn sau SIGTERM.
+- Luồng chính thoát; còn một luồng chờ futex (`wchan futex_wait_queue`, trạng thái `Zl`).
+- Luồng đó vẫn giữ `/var/run/icwmpd.pid`, nên agent sau thoát ngay ("is locked by another process") và không có dòng
+  tổng kết của valgrind.
+- Chạy lại valgrind 3 phiên, 12 phiên và `all` hai lần: đều thoát sạch.
+- Chưa biết luồng nào và kẹt ở mutex nào. Trên board, procd sẽ `kill -9` sau timeout nếu chuyện này xảy ra. Cần stack
+  (gdb attach) nếu gặp lại.
+
+**Kiểm (tại `e576b0b`):**
+- `run.sh all` rc 0 hai lần (ubuntu:24.04): unit (script getter GPV gốc 259 / 9 request), smoke 5 phiên (20 fault theo
+  kế hoạch), notify 128/128, rpc 5/5, msrv, stun, ptime, p6, fw, valgrind 12 phiên 0 lost 0 lỗi.
+- Cổng tĩnh: phase 1–6 thiếu 0; claims 0 chồng; sanity 0; cross-gcc lib 46 file và app 17 file, 0 lỗi, không có cảnh
+  báo mới.
+- MTK SDK build (17:29–17:35):
+  - export `--sdk mtk` tại `e576b0b` → apply `1_src` (lib + app, backup `.icwmp-backups/20261007-172910-7verbfh_`);
+  - `libtr098` + `icwmp_tr098` rc 0, image rc 0 (`tclinux.bin` 17:35:01, md5 `7474f123a5b4…`);
+  - cảnh báo duy nhất ở các file đã sửa là `dmtr098.c:536` (`-Wpointer-to-int-cast`), đã có từ bản build trước.
+  - Log: `1_src/2025q3/.icwmp-build-logs/20261007-p6e-e576b0b.log`.
+
+**Chưa làm:** nạp image lên board (board mất WAN và SSH từ 15:34).
