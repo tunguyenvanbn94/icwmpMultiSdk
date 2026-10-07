@@ -1,3 +1,6 @@
 # Python bytecode of the docs/issue tools and apply/export
 __pycache__/
 *.pyc
+# X_AIS_CPEagent key, generated at build time from the product tree
+# (tools/mtk-cpeagent-key.sh): never committed, the repository is public
+cpeagent_key_mtk.h

@@ -296,6 +296,12 @@ int mtk_shell_ipv6(const char *v)
 	return v && shell_ipv6(v);
 }
 
+/* the integer operand of busybox "test" ([ "$v" -lt 1 ] ...) */
+int mtk_shell_getn(const char *v, long long *out)
+{
+	return v ? bb_getn(v, out) : -1;
+}
+
 static int shell_type_ok(const char *type, const char *v)
 {
 	if (strcmp(type, "xsd:unsignedInt") == 0)

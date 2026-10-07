@@ -43,6 +43,10 @@ define Build/Prepare
 		exit 1; }
 	mkdir -p $(PKG_BUILD_DIR)
 	$(CP) $(PKG_SOURCE)/. $(PKG_BUILD_DIR)
+	# X_AIS_CPEagent.SecretKey reads back encrypted with the operator's key:
+	# taken from the product's shell library, never kept in this source
+	$(PKG_BUILD_DIR)/tools/mtk-cpeagent-key.sh "$(TRUNK_DIR)" \
+		$(PKG_BUILD_DIR)/sdk/mtk/dm098/cpeagent_key_mtk.h
 endef
 
 TARGET_CFLAGS += -D_GNU_SOURCE

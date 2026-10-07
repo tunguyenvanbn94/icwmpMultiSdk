@@ -11,7 +11,8 @@
 #   run.sh ptime           PeriodicInformTime dateTime aligns the periodic Inform (K10)
 #   run.sh p6              P6 leaves in C: Account, CarrierLocking, X_AIS_WebUserInfo, hidden root objects
 #   run.sh fw              P6e Firewall in C: add/set/delete, faults, VALUESET revert
-#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw valgrind
+#   run.sh p7              P7a/b operator X_AIS_* in C: writes, queued restarts, faults
+#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw p7 valgrind
 # Needs build.sh, then setup.sh --yes (root, throwaway container).
 . "$(dirname "$0")/env.sh"
 
@@ -471,6 +472,187 @@ EOC
 	if [ $bad_n = 0 ]; then pass "fw: DisablePort, ServiceControl v4/v6, IPFilter: get, add, set, faults, VALUESET revert, delete"; else bad "fw: $bad_n mismatches above"; fi
 }
 
+# P7 operator X_AIS_* objects in C (0094-): the product's options written,
+# each service restart / hni call queued once and run after the commit, the
+# shell's "unchanged, do nothing" kept, values the shell refused faulted.
+P7_CONFIGS="upnpd 3rdpartyagent autowifiscan lanhost landingpage dhcp account meshapi ddns clay aisbackup system"
+P7_INIT="miniupnpd 3rdpartyagent autowifiscan dnsmasq landingpage account telnet dropbear meshapi ddns log"
+p7_calls() { sort "$RUN/p7.calls" 2>/dev/null | tr '\n' '|'; }
+do_p7() {
+	for c in $P7_CONFIGS; do
+		if [ -f "/etc/config/$c" ]; then cp "/etc/config/$c" "$RUN/$c.p7saved"; else rm -f "${RUN:?}/${c:?}.p7saved"; fi
+	done
+	printf "config upnpd 'config'\n\toption enabled '0'\n" > /etc/config/upnpd
+	printf "config 3rdpartyagent '3rdpartyagent'\n\toption enabled '0'\n\toption broker_url 'mqtts://old.example.net:8883'\n\toption client_id 'c1'\n\toption secret_key 'k3y-of-test'\n" > /etc/config/3rdpartyagent
+	printf "config autowifiscan\n\toption traffic_limit '300'\n" > /etc/config/autowifiscan
+	printf "config opermode 'opermode'\n\toption mode 'ap'\n" > /etc/config/clay
+	printf "config service 'service'\n\toption enabled '0'\n" > /etc/config/ddns
+	printf "config devinfo\n\toption modelname 'HP2236B'\n\nconfig syslog 'syslog'\n\toption log_enable '0'\n\toption selected_log_levels 'err|warn'\n\toption selected_remote_levels 'none'\n" > /etc/config/system
+	# no section at all: the setters add landingpage[0], dhcp.lan,
+	# account.ssh/telnet, meshapi.meshapi and aisbackup.params
+	for c in lanhost landingpage dhcp account meshapi aisbackup; do : > "/etc/config/$c"; done
+	# X_AIS_Logging requests: the log directory, and a tftp that reports
+	# what it was given and what the archive holds
+	rm -rf /backup; mkdir -p /backup/log/backup
+	echo old > /backup/log/backup/old.log; echo app > /backup/log/app.log
+	if [ -f /var/log/messages ]; then p7_msgs=kept; else p7_msgs=made; echo test > /var/log/messages; fi
+	rm -f "${RUN:?}/p7.calls"
+	for s in $P7_INIT; do
+		printf '#!/bin/sh\necho "%s $*" >> %s/p7.calls\n' "$s" "$RUN" > "/etc/init.d/$s"
+		chmod +x "/etc/init.d/$s"
+	done
+	# "ubus call hni ..." of the queued lines is logged; the engine's own
+	# "ubus -S -t N call ..." goes on to the real ubus
+	mkdir -p "$RUN/p7bin"
+	printf '#!/bin/sh\n[ "$1 $2" = "call hni" ] || exec /usr/bin/ubus "$@"\necho "ubus $*" >> %s/p7.calls\n' "$RUN" > "$RUN/p7bin/ubus"
+	chmod +x "$RUN/p7bin/ubus"
+	printf '#!/bin/sh\nn=$(tar -tzf "$3" 2>/dev/null | grep -c "messages$")\necho "tftp $* archive=$([ -f "$3" ] && echo yes || echo no) messages=$n" >> %s/p7.calls\n' "$RUN" > "$RUN/p7bin/tftp"
+	chmod +x "$RUN/p7bin/tftp"
+	X=InternetGatewayDevice
+	start 1 "--set $X.X_AIS_UPnP.Enable=true
+		--set $X.X_AIS_3rdAgent.server_Cert=1
+		--set $X.X_AIS_3rdAgent.server_URL=mqtts://new.example.net:8883
+		--set $X.X_AIS_CPEagent.SecretKeyVersion=v2
+		--set $X.X_AIS_AutoWifiScan.Enable=1
+		--set $X.X_AIS_AutoWifiScan.TrafficKeepTime=90
+		--set $X.X_AIS_DHCPClient.Clean=1
+		--set $X.X_AIS_DnsLandingPage.Enable=1
+		--set $X.X_AIS_Isolation.LANIsolation=1
+		--set $X.X_AIS_SSH.Enable=true
+		--set $X.X_AIS_Telnet.Username=con1
+		--set $X.X_AIS_Telnet.Password=pw-of-test
+		--set $X.X_AIS_MeshAPI.Delay_time=1800
+		--set $X.X_AIS_MeshAPI.enable=true
+		--set $X.X_AIS_DDNS.Provider=No-IP
+		--set $X.X_AIS_DDNS.Enable=true
+		--set $X.X_AIS_Conf.download_server=https://dl.example.net/x
+		--set $X.X_AIS_Conf.upload_to_server=1
+		--set $X.X_AIS_Conf.auto_upload_delay=600
+		--set $X.X_AIS_Logging.EnableLogging=true
+		--set $X.X_AIS_Logging.LoggingLevel=6
+		--set $X.X_AIS_Logging.RemoteLoggingAddress=192.0.2.10
+		--set $X.X_AIS_Logging.RemoteLoggingPort=514
+		--set $X.X_AIS_Logging.DebugEnable=1
+		--set $X.X_AIS_Logging.ErrorEnable=0
+		--set $X.X_AIS_Logging.RemoteLogging.EmergencyEnable=true
+		--set $X.X_AIS_Logging.CleanLogging=1
+		--set $X.X_AIS_Logging.TFTPAddress=192.0.2.20
+		--set $X.X_AIS_Logging.TFTPUploadResponse=1" env PATH="$RUN/p7bin:$PATH"
+	wait_done 60; sleep 3
+	bad_n=0
+	expect "faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "0"
+	grep '^fault ' "$RUN/acs.log" | sed 's/^/  ACS: /'
+	expect "upnpd enabled" "$(uci -q get upnpd.config.enabled)" "1"
+	expect "agent cert_enable" "$(uci -q get 3rdpartyagent.3rdpartyagent.cert_enable)" "1"
+	expect "agent broker_url" "$(uci -q get 3rdpartyagent.3rdpartyagent.broker_url)" "mqtts://new.example.net:8883"
+	expect "agent client_id cleared in AP mode" "$(uci -q get 3rdpartyagent.3rdpartyagent.client_id)" ""
+	expect "agent secret_key_version" "$(uci -q get 3rdpartyagent.3rdpartyagent.secret_key_version)" "v2"
+	expect "autowifiscan enabled" "$(uci -q get autowifiscan.@autowifiscan[0].enabled)" "1"
+	expect "autowifiscan traffic_keeptime" "$(uci -q get autowifiscan.@autowifiscan[0].traffic_keeptime)" "90"
+	expect "landingpage section added" "$(uci -q get landingpage.@landingpage[0].enabled)" "1"
+	expect "dhcp.lan added" "$(uci -q get dhcp.lan)" "dhcp"
+	expect "dhcp.lan.isolation" "$(uci -q get dhcp.lan.isolation)" "1"
+	expect "account.ssh added" "$(uci -q get account.ssh)" "account"
+	expect "account.ssh.enabled left to hni" "$(uci -q get account.ssh.enabled)" ""
+	expect "account.telnet.username" "$(uci -q get account.telnet.username)" "con1"
+	expect "account.ssh.username synced" "$(uci -q get account.ssh.username)" "con1"
+	expect "account.telnet.password" "$(uci -q get account.telnet.password)" "pw-of-test"
+	expect "meshapi.meshapi added" "$(uci -q get meshapi.meshapi)" "meshapi"
+	expect "meshapi delay_time" "$(uci -q get meshapi.meshapi.delay_time)" "1800"
+	expect "meshapi enable" "$(uci -q get meshapi.meshapi.enable)" "1"
+	expect "ddns service_name" "$(uci -q get ddns.service.service_name)" "no-ip.com"
+	expect "ddns enabled" "$(uci -q get ddns.service.enabled)" "1"
+	expect "aisbackup.params added" "$(uci -q get aisbackup.params)" "aisbackup"
+	expect "aisbackup download_server" "$(uci -q get aisbackup.params.download_server)" "https://dl.example.net/x"
+	expect "aisbackup upload_to_server" "$(uci -q get aisbackup.params.upload_to_server)" "true"
+	expect "aisbackup auto_upload_delay" "$(uci -q get aisbackup.params.auto_upload_delay)" "600"
+	expect "syslog log_enable" "$(uci -q get system.syslog.log_enable)" "1"
+	expect "syslog log_level" "$(uci -q get system.syslog.log_level)" "6"
+	expect "syslog log_ip" "$(uci -q get system.syslog.log_ip)" "192.0.2.10"
+	expect "syslog log_port" "$(uci -q get system.syslog.log_port)" "514"
+	expect "syslog levels: debug added, err removed" "$(uci -q get system.syslog.selected_log_levels)" "warn|debug"
+	expect "syslog remote levels: none -> emerg" "$(uci -q get system.syslog.selected_remote_levels)" "emerg"
+	expect "CleanLogging responded" "$(uci -q get system.syslog.clean_logging)" "2"
+	expect "backup logs removed" "$(ls /backup/log/backup | wc -l)" "0"
+	expect "TFTP upload responded" "$(uci -q get system.syslog.tftp_response)" "2"
+	expect "messages link removed" "$([ -e /backup/log/messages ] || [ -L /backup/log/messages ] && echo left || echo gone)" "gone"
+	expect "tar.gz removed" "$(ls /tmp/AIS_*.tar.gz 2>/dev/null | wc -l)" "0"
+	tgz=AIS_HP2236B_$(date +%Y%m%d).tar.gz
+	want=$(printf '%s\n' "miniupnpd reload" "3rdpartyagent restart" "autowifiscan running" \
+		"dnsmasq stop" "dnsmasq start" "landingpage restart" "ubus call hni doLanIsolation" \
+		'ubus call hni setSshAccess {"enabled":true}' "account reload" "telnet restart" \
+		"dropbear killclients" "dropbear reload" "meshapi restart" "ddns restart" "log restart" \
+		"tftp -p -l /tmp/$tgz -r $tgz 192.0.2.20 archive=yes messages=1" | sort | tr '\n' '|')
+	expect "restarts and hni calls, once each" "$(p7_calls)" "$want"
+	# encrypt_with_specialkey of the shell, verbatim, with the test key
+	printf '%s' 'k3y-of-test' > "$RUN/p7.plain"
+	dd if=/dev/zero bs=1 count=256 >> "$RUN/p7.plain" 2>/dev/null
+	dd if="$RUN/p7.plain" bs=256 count=1 of="$RUN/p7.pad" 2>/dev/null
+	key=$(openssl enc -aes-256-ecb -K "$CPEAGENT_TEST_KEY" -nopad -in "$RUN/p7.pad" 2>/dev/null | openssl base64 -A 2>/dev/null | cut -c1-64)
+	[ ${#key} = 64 ] || expect "openssl in this container" "${#key} characters" "64"
+	expect "GPV SecretKey = the shell's encryption" "$(dm_value $X.X_AIS_CPEagent.SecretKey)" "$key"
+	expect "GPV SecretKeyVersion" "$(dm_value $X.X_AIS_CPEagent.SecretKeyVersion)" "v2"
+	expect "GPV UPnP.Enable" "$(dm_value $X.X_AIS_UPnP.Enable)" "true"
+	expect "GPV 3rdAgent.enable" "$(dm_value $X.X_AIS_3rdAgent.enable)" "false"
+	expect "GPV AutoWifiScan.TrafficLimit" "$(dm_value $X.X_AIS_AutoWifiScan.TrafficLimit)" "300"
+	expect "GPV DHCPClient.Session" "$(dm_value $X.X_AIS_DHCPClient.Session)" "3"
+	expect "GPV DHCPClient.Clean" "$(dm_value $X.X_AIS_DHCPClient.Clean)" "0"
+	expect "GPV DnsLandingPage.Enable" "$(dm_value $X.X_AIS_DnsLandingPage.Enable)" "1"
+	expect "GPV SSH.Enable (hni did not run)" "$(dm_value $X.X_AIS_SSH.Enable)" "false"
+	expect "GPV Telnet.Password write only" "$(dm_value $X.X_AIS_Telnet.Password)" ""
+	expect "GPV MeshAPI.enable" "$(dm_value $X.X_AIS_MeshAPI.enable)" "true"
+	expect "GPV DDNS.Provider" "$(dm_value $X.X_AIS_DDNS.Provider)" "No-IP"
+	expect "GPV Conf.upload_to_server" "$(dm_value $X.X_AIS_Conf.upload_to_server)" "1"
+	expect "GPV Conf.download_from_server" "$(dm_value $X.X_AIS_Conf.download_from_server)" "0"
+	expect "GPV Logging.ErrorEnable" "$(dm_value $X.X_AIS_Logging.ErrorEnable)" "0"
+	expect "GPV Logging.WarningEnable" "$(dm_value $X.X_AIS_Logging.WarningEnable)" "1"
+	expect "GPV Logging.DebugEnable" "$(dm_value $X.X_AIS_Logging.DebugEnable)" "1"
+	expect "GPV RemoteLogging.EmergencyEnable" "$(dm_value $X.X_AIS_Logging.RemoteLogging.EmergencyEnable)" "1"
+	expect "GPV RemoteLogging.DebugEnable" "$(dm_value $X.X_AIS_Logging.RemoteLogging.DebugEnable)" "0"
+	expect "GPV TFTPUploadResponse" "$(dm_value $X.X_AIS_Logging.TFTPUploadResponse)" "2"
+	alive || expect "agent" "dead" "alive"
+	stop
+	# same values again: nothing written, nothing restarted
+	rm -f "${RUN:?}/p7.calls"
+	start 1 "--set $X.X_AIS_DnsLandingPage.Enable=1 --set $X.X_AIS_Isolation.LANIsolation=1
+		--set $X.X_AIS_MeshAPI.Delay_time=1800 --set $X.X_AIS_Telnet.Username=con1" env PATH="$RUN/p7bin:$PATH"
+	wait_done 30; sleep 1
+	expect "unchanged values: faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "0"
+	expect "unchanged values: no restart" "$(p7_calls)" ""
+	stop
+	# values the shell refused: one session each, nothing written
+	long=$(printf 'a%.0s' $(seq 1 65))
+	for kv in X_AIS_UPnP.Enable=TRUE X_AIS_SSH.Enable=yes \
+		  X_AIS_CPEagent.SecretKeyVersion=$long \
+		  X_AIS_AutoWifiScan.TrafficLimit=-1 \
+		  X_AIS_DHCPClient.Session=2 X_AIS_DHCPClient.Clean=0 \
+		  X_AIS_DnsLandingPage.Enable=true X_AIS_Isolation.LANIsolation=2 \
+		  X_AIS_Telnet.Username= X_AIS_MeshAPI.Domain_name= \
+		  X_AIS_DDNS.Provider=Dyn X_AIS_DDNS.Enable=on \
+		  X_AIS_Conf.upload_to_server=yes X_AIS_Conf.auto_upload_delay=x1 \
+		  X_AIS_Logging.LoggingLevel=8 X_AIS_Logging.RemoteLoggingAddress=host.example \
+		  X_AIS_Logging.RemoteLoggingPort=70000 X_AIS_Logging.TFTPUploadResponse=4; do
+		start 1 "--set $X.$kv" env PATH="$RUN/p7bin:$PATH"
+		wait_done 30; sleep 1
+		expect "$kv faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+		stop
+	done
+	expect "upnpd after the faults" "$(uci -q get upnpd.config.enabled)" "1"
+	expect "secret_key_version after the faults" "$(uci -q get 3rdpartyagent.3rdpartyagent.secret_key_version)" "v2"
+	expect "isolation after the faults" "$(uci -q get dhcp.lan.isolation)" "1"
+	expect "ddns service_name after the faults" "$(uci -q get ddns.service.service_name)" "no-ip.com"
+	expect "log_level after the faults" "$(uci -q get system.syslog.log_level)" "6"
+	expect "log_port after the faults" "$(uci -q get system.syslog.log_port)" "514"
+	rm -rf /backup
+	[ "$p7_msgs" = made ] && rm -f /var/log/messages
+	for c in $P7_CONFIGS; do
+		if [ -f "$RUN/$c.p7saved" ]; then cp "$RUN/$c.p7saved" "/etc/config/$c"; else rm -f "/etc/config/${c:?}"; fi
+	done
+	for s in $P7_INIT; do rm -f "/etc/init.d/${s:?}"; done
+	rm -rf "${RUN:?}/p7bin"
+	if [ $bad_n = 0 ]; then pass "p7: operator X_AIS_* writes, queued restarts/hni calls, log upload/clean, unchanged values, faults"; else bad "p7: $bad_n mismatches above"; fi
+}
+
 # STUN leaves are the product's stunclient: stun.@stun[0], the reload flag
 # of the shell setter and one stuncd reload at the end of the session (K2).
 do_stun() {
@@ -598,7 +780,8 @@ case "$1" in
 	ptime) do_ptime ;;
 	p6) do_p6 ;;
 	fw) do_fw ;;
-	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_valgrind ;;
+	p7) do_p7 ;;
+	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_valgrind ;;
 	*) sed -n '2,/^# Needs/p' "$0"; exit 1 ;;
 esac
 exit $fail

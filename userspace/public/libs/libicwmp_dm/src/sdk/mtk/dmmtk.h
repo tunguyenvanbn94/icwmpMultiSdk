@@ -27,6 +27,10 @@ char *mtk_uci(const char *package, const char *section, const char *option);
 char *mtk_varstate(const char *package, const char *section, const char *option);
 int mtk_varstate_set(const char *package, const char *section, const char *option,
                      const char *value);
+/* ensure_<x>_section() of the shell: "uci get <pkg>.<sec>", else
+ * "uci set <pkg>.<sec>=<type>".  1 when it was added, 0 when it was there,
+ * -1 when it cannot be added (no such package: E_INTERNAL_ERROR there). */
+int mtk_uci_ensure_section(const char *package, const char *section, const char *type);
 
 /* System ------------------------------------------------------------ */
 /* First line of a file, trimmed, dm-allocated, "" when unreadable. */
@@ -44,6 +48,9 @@ long mtk_uptime(void);
 char *mtk_exec(char *const argv[]);
 /* First line of it, trimmed. */
 char *mtk_exec_line(char *const argv[]);
+/* Exit status of argv, its output discarded: the "$?" of the shell's
+ * "cmd >/dev/null 2>&1".  -1 when it could not run or did not exit. */
+int mtk_run(char *const argv[]);
 
 /* Delayed work ------------------------------------------------------ */
 /* Queue a shell command for the end of the session, exactly what
@@ -106,6 +113,9 @@ int mtk_shell_valid_host(const char *v);
 /* is_valid_ipv4 / is_valid_ipv6 of the shell: 1 when the value passes */
 int mtk_shell_ipv4(const char *v);
 int mtk_shell_ipv6(const char *v);
+/* an integer operand of busybox "test": strtoll, blanks around allowed.
+ * 0 and *out set, or -1 when "[ $v -lt N ]" would fail with an error */
+int mtk_shell_getn(const char *v, long long *out);
 
 /* IPv4 --------------------------------------------------------------- */
 /* Dotted quad -> host order integer, mirroring is_valid_ipv4 + ipstr2int

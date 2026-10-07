@@ -54,6 +54,8 @@ CFLAGS_COMMON="-g -O1 -D_GNU_SOURCE -I$PREFIX/include"
 LDFLAGS_COMMON="-L$PREFIX/lib -Wl,-rpath,$PREFIX/lib"
 
 sync_tree "$LIB_SRC" "$WORK/build/dm"
+key_h=$WORK/build/dm/sdk/mtk/dm098/cpeagent_key_mtk.h
+[ -f "$key_h" ] || printf '#define MTK_CPEAGENT_KEY_HEX "%s"\n' "$CPEAGENT_TEST_KEY" > "$key_h"
 if [ ! -f "$WORK/build/dm/Makefile" ]; then
 	(cd "$WORK/build/dm" && ./tools/sdk-scan.sh >/dev/null && autoreconf -i >/dev/null 2>&1 &&
 	 CFLAGS="$CFLAGS_COMMON" LDFLAGS="$LDFLAGS_COMMON" ./configure --prefix="$PREFIX" --with-sdk=mtk >/dev/null)

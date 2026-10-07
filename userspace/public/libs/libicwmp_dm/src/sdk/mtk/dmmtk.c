@@ -49,6 +49,19 @@ char *mtk_varstate(const char *package, const char *section, const char *option)
 	return v ? v : "";
 }
 
+int mtk_uci_ensure_section(const char *package, const char *section, const char *type)
+{
+	char *t = NULL;
+
+	dmuci_get_section_type((char *)package, (char *)section, &t);
+	if (t && *t)
+		return 0;
+	dmuci_set_value((char *)package, (char *)section, "", (char *)type);
+	t = NULL;
+	dmuci_get_section_type((char *)package, (char *)section, &t);
+	return (t && *t) ? 1 : -1;
+}
+
 int mtk_varstate_set(const char *package, const char *section, const char *option, const char *value)
 {
 	struct uci_ptr ptr = {0};
@@ -460,6 +473,38 @@ char *mtk_exec_line(char *const argv[])
 	while (l && (out[l - 1] == '\r' || out[l - 1] == ' '))
 		out[--l] = '\0';
 	return out;
+}
+
+int mtk_run(char *const argv[])
+{
+	int status;
+	pid_t pid;
+
+	if (!argv || !argv[0])
+		return -1;
+	pid = fork();
+	if (pid < 0)
+		return -1;
+	if (pid == 0) {
+		int fd, maxfd = (int)sysconf(_SC_OPEN_MAX);
+
+		fd = open("/dev/null", O_RDWR);
+		if (fd >= 0) {
+			dup2(fd, STDIN_FILENO);
+			dup2(fd, STDOUT_FILENO);
+			dup2(fd, STDERR_FILENO);
+		}
+		/* the agent's sockets stay with the agent, as in mtk_exec() */
+		if (maxfd < 3)
+			maxfd = 1024;
+		for (fd = 3; fd < maxfd; fd++)
+			close(fd);
+		execvp(argv[0], argv);
+		_exit(127);
+	}
+	if (waitpid(pid, &status, 0) != pid)
+		return -1;
+	return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
 int mtk_apply_service(const char *cmd)

@@ -11,3 +11,6 @@ BIN=${ICWMP_HOST_BIN:-$WORK/build/app/bin/icwmp_tr098d}
 UBUS="$PREFIX/bin/ubus -s /var/run/ubus/ubus.sock"
 RUN=$WORK/run
 mkdir -p "$RUN" 2>/dev/null
+# X_AIS_CPEagent: the product build takes the operator's key from the product
+# tree (tools/mtk-cpeagent-key.sh); the host build uses this test key
+CPEAGENT_TEST_KEY=000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f

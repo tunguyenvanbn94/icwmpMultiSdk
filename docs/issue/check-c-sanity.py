@@ -86,13 +86,13 @@ snprintf sprintf vsnprintf printf fprintf sscanf
 malloc calloc realloc free abort exit
 atoi atol atoll strtol strtoul strtoll strtod
 isdigit isxdigit isalpha isalnum isspace isupper islower toupper tolower
-open close read write lseek unlink access stat lstat mkdir rmdir rename truncate
+open close read write lseek unlink access stat lstat mkdir rmdir rename truncate mkstemp symlink
 fopen fclose fgets fputs fread fwrite fflush feof ferror fileno remove
 popen pclose fork execv execvp waitpid kill _exit dup2 pipe
 posix_spawn posix_spawnp posix_spawn_file_actions_init posix_spawn_file_actions_destroy
 posix_spawn_file_actions_addclose posix_spawn_file_actions_adddup2
 tmpfile dup
-time localtime gmtime mktime strftime strptime difftime gettimeofday
+time localtime localtime_r gmtime mktime strftime strptime difftime gettimeofday
 socket bind connect send recv inet_ntop inet_pton htons htonl ntohs ntohl
 opendir readdir closedir glob globfree
 json_object_object_get_ex json_object_get_string json_object_array_length

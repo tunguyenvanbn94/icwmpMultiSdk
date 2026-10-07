@@ -33,7 +33,18 @@ libtr098_la_SOURCES +=	\
 	../sdk/mtk/dm098/x_ais_carrierlocking_mtk.c	\
 	../sdk/mtk/dm098/x_ais_webuserinfo_mtk.c	\
 	../sdk/mtk/dm098/xmpp_mtk.c	\
-	../sdk/mtk/dm098/firewall_mtk.c
+	../sdk/mtk/dm098/firewall_mtk.c	\
+	../sdk/mtk/dm098/x_ais_upnp_mtk.c	\
+	../sdk/mtk/dm098/x_ais_3rdagent_mtk.c	\
+	../sdk/mtk/dm098/x_ais_cpeagent_mtk.c	\
+	../sdk/mtk/dm098/x_ais_autowifiscan_mtk.c	\
+	../sdk/mtk/dm098/x_ais_dhcpclient_mtk.c	\
+	../sdk/mtk/dm098/x_ais_lanpolicy_mtk.c	\
+	../sdk/mtk/dm098/x_ais_sshtelnet_mtk.c	\
+	../sdk/mtk/dm098/x_ais_meshapi_mtk.c	\
+	../sdk/mtk/dm098/x_ais_ddns_mtk.c	\
+	../sdk/mtk/dm098/x_ais_conf_mtk.c	\
+	../sdk/mtk/dm098/x_ais_logging_mtk.c
 
 if DM_MTK_SCRIPT_COMPAT
 libtr098_la_SOURCES +=	\
