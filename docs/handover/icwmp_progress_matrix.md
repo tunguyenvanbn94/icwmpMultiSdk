@@ -52,7 +52,7 @@ flowchart LR
 | Hạng mục | Trạng thái | Mức bằng chứng cao nhất |
 |---|---|---|
 | Layout source multi-SDK, plugin `sdk/<tên>/`, apply có backup | Xong | MTK SDK build + board |
-| Data model TR-098 bằng C trên MTK | **458/783** param (P1–P5). P6–P8: 320 param còn qua shell compat | MTK board: GPV toàn cây 1768 dòng / 15–16 s |
+| Data model TR-098 bằng C trên MTK | **516/783** param (P1–P5; P6 trừ Firewall, 0090; LTE của P8). Còn 262 qua shell compat: Firewall 51, P7 79, P8 132 | MTK board: GPV toàn cây 1768 dòng / 15–16 s |
 | Sửa lỗi runtime 0062–0080 (treo, leak, crash từ ACS, procd restart) | Xong | Board MTK (0080, K17 hết); host `run.sh all` PASS lại 06/10 tại 0086 |
 | K13, K14 (kiểm input ManagementServer) | Xong (0081, 0082) | **Board** (image 0083, 06/10, analysis §53) |
 | `apply --sdk-only` | Xong (0083) | MTK SDK build trên cây chỉ còn MTK |
@@ -87,6 +87,8 @@ flowchart LR
 | Bản giao một SDK (K19) | 0085 | `export.py --sdk mtk` (HEAD, tái lập được, MANIFEST đúng commit); `--sdk-only` bỏ thêm 33 file `tr098/` chỉ SDK `uci` dùng; apply ghi commit thật vào `.icwmp-release.json` | MTK SDK build từ bundle export |
 | Code chết (K18 một phần) | 0086 | Gỡ 27 hàm `dmcommon.c` không ai tham chiếu (519 dòng) | STATIC, cross-gcc, MTK SDK build, host `run.sh all` |
 | Bản giao MTK test được trên host | 0087 | Bundle MTK giữ source microxml mà `tests/host/build.sh` build (bỏ glue BDK của nó); trước đó test host từ bundle dừng ở bước đầu | host `run.sh all` từ chính bundle |
+| Công cụ kiểm | 0089 | `verify-dm-paths` đọc lá ở gốc (`.params`), `check-c-sanity` biết thêm 2 hàm json-c, ACS test ghi mã fault từng tham số | STATIC |
+| TR-098 C — P6a–d (+ LTE) | 0090 | Object ẩn ở gốc + DeviceSummary, Account, UserInterface.CarrierLocking, X_AIS_WebUserInfo, XMPP, LTE: 58 param; test host `p6` | host `run.sh all`; MTK SDK build gói + image (§58) |
 | Dọn repo | 0088 | Gỡ `tests/__pycache__/*.pyc` bị commit từ 0042 (có trong mọi bundle export trước đó) | `git ls-files` |
 | Công cụ kiểm | — | `check-c-sanity`, `check-cc-syntax` (cross-gcc SDK), `verify-dm-paths` (`--phase`, `--claims`), `check-automake-conds`, `update-sums`, `progress.py`, `tests/host` | — |
 

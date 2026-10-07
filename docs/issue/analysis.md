@@ -3519,3 +3519,59 @@ G9 và PH0.5 (tag baseline, fast-forward `main`) làm khi board có lại WAN v�
 
 Mẫu đầy đủ (13 mẫu, mỗi 30 s): [evidence/20261007_host_soak300_0088.txt](evidence/20261007_host_soak300_0088.txt).
 Host soak không thay được G9: board có shell data model thật, procd và thời gian 24 h.
+
+## 58. P6a–d: phần P6 trừ Firewall, cùng LTE của P8, sang C (`0089`, `0090`, 07/10 16:05–)
+
+**Vì sao làm bây giờ:** ngày 07/10 user chốt ưu tiên: icwmp chạy ổn định và hỗ trợ đủ tham số theo kế hoạch. Board
+đang mất WAN, nên phần test board để sau. Thứ tự làm: hết P6 (cây UserInterface, các object lẻ ở root, Firewall), rồi P7,
+P8. Mỗi object port từ đúng file `functions/tr098/*` của sản phẩm trong `src/2025q3`.
+
+| Phần | File C | Tham số | Nguồn shell | Ghi chú |
+|---|---|---|---|---|
+| P6a | `root_hidden_mtk.c` (mở rộng) | 10 | `tr098/root` | `DeviceSummary` (lá ở gốc, forced inform) và các object chỉ trả lời khi được hỏi đúng path: FaultMgmt, BulkData, SoftwareModules, Layer2Bridging, USBHosts, CaptivePortal, FAP.GPS, User (`addressed_only`). Tất cả là hằng |
+| P6a | `account_mtk.c` | 1 | `tr098/account` | `SessionMaxTime` = `hmxwslbackend.@hmxwslbackend[0].SessionTimeOut`, 300..3600; restart wsl xếp hàng |
+| P6b | `x_ais_carrierlocking_mtk.c` | 7 | `tr098/X_AIS_CarrierLocking` | `isplocking.@isplocking[0]`, thêm section khi thiếu; LockingEnable chỉ nhận `0`/`1`; bốn bộ đếm chỉ nhận chữ số |
+| P6c | `x_ais_webuserinfo_mtk.c` | 13 | `tr098/X_AIS_WebUserInfo` | remoteaccess, account.admin/root, clay captcha/language, whitelist qua `ubus call hni setAISWhiteList`, WebIp |
+| P6d | `xmpp_mtk.c` | 15 | `tr098/xmpp` | XMPP.Connection.1/Server.1, hằng; setter nhận rồi bỏ |
+| P8 | `xmpp_mtk.c` | 12 | `tr098/xmpp` | LTE, hằng chỉ đọc |
+
+**Khác shell, có chủ đích** (ghi ở đầu từng file):
+- Restart dịch vụ và WebIp xếp hàng tới cuối phiên, sau khi engine commit. Shell commit và restart ngay trong từng setter,
+  nên một lá khác trong cùng SPV lỗi cũng không hoàn tác được.
+- Không chép mật khẩu mặc định của nhà máy vào C. Shell so mật khẩu mới với mặc định để bỏ qua lần ghi; ở đây, khi option
+  chưa có, giá trị được ghi luôn. Kết quả đăng nhập như nhau.
+- Thiết bị của default route lấy từ `/proc/net/route`. `awk '{print $5}'` của shell lấy nhầm `link` khi route không có gateway.
+- `FAP.` được trả lời khi hỏi đúng `FAP.`. Shell chỉ khớp `FAP.GPS.*` nên báo 9005.
+- `setAISWhiteList`: không có reply, hoặc reply không phải JSON, thì báo 9007 như khi ubus lỗi. Shell cho reply rỗng của
+  một lần gọi thành công thành 9002.
+
+**Sửa công cụ (0089):**
+- `verify-dm-paths.py` đọc thêm `.params` (lá ở gốc). Trước đó `DeviceSummary` bị đếm là thiếu.
+- `check-c-sanity.py` biết thêm `json_object_new_boolean` và `json_object_to_json_string_ext`.
+- `acs.py` ghi `fault <mã> <tham số>=<mã>`.
+
+**Test host mới `run.sh p6`, đã đưa vào `all`:**
+- Ghi trên config của sản phẩm, kiểm mỗi dịch vụ restart đúng một lần (init script dạng stub).
+- 8 giá trị bị từ chối và không ghi gì: SessionMaxTime 299/3601, LockingEnable `true`, RoundNum `5a`, CurrentLanguage
+  ngoài danh sách, SuperAdminEnable `2`, Captcha `TRUE` (bị kiểm boolean phía trước chặn, đúng như shell), mật khẩu 33
+  ký tự.
+- Object ẩn không xuất hiện khi lấy cả cây; XMPP/LTE thì có (27 dòng).
+
+Dòng fault của ACS đã giúp tìm ra một kỳ vọng sai của chính test: tôi tưởng `Captcha_enable=TRUE` đi tới được setter.
+
+**Kiểm:**
+- `verify-dm-paths --phase 6`: 46 C, thiếu 51 (chỉ còn Firewall), dôi 0. Phase 1–5 không đổi (thiếu 0, dôi 11). Phase 8:
+  thiếu 132/144. Claims 0 cặp chồng.
+- `check-c-sanity` lib/app 0 vấn đề; cross-gcc SDK MTK 45 file, 0 lỗi.
+- `run.sh all` rc 0 (ubuntu:24.04). `unit`: số getter mà script phải chạy cho một GPV gốc giảm từ 417 còn 359, đúng bằng
+  58 lá đã port; request 9 (list), 66 (nolist). Các nhóm còn lại: smoke, notify, rpc 5/5, msrv, stun, ptime, p6, valgrind
+  0 lost 0 lỗi.
+- **MTK SDK build** (07/10 16:31–16:38):
+  - export `--sdk mtk` tại `8858816` → apply vào `1_src/2025q3`, backup `.icwmp-backups/20261007-163156-phy7syj5`;
+  - build trong container `nvtu-openwrt` bằng `docker exec`, vì pane `tunv1` đang được user dùng;
+  - `libtr098` + `icwmp_tr098` clean/compile rc 0, image `make -j16 MSDK=1` rc 0 (`tclinux.bin` 16:37:57,
+    md5 `41a40eea9ca2…`);
+  - 0 cảnh báo ở 5 file mới. Log: `1_src/2025q3/.icwmp-build-logs/20261007-p6-8858816.log`.
+- **Tổng tham số bằng C: 516/783** (P1–P5 458 + P6 46 + LTE 12).
+
+**Chưa làm:** Firewall (51 tham số: DisablePort, IPFilter, ServiceControl, có Add/Delete); nạp image lên board (board đang mất WAN).

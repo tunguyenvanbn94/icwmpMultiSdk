@@ -1,7 +1,7 @@
 # icwmp multi-SDK source delivery
 
 Source: A1 model-neutral layout `libicwmp_dm/src`, ABI/package vẫn `libtr098`.
-TR-098 P1–P5 có 458 param C; các nhánh chưa port vẫn dùng compat. A2, A4, A6
+TR-098: 516/783 param bằng C (P1–P5, P6 trừ Firewall, LTE của P8); các nhánh chưa port vẫn dùng compat. A2, A4, A6
 và P6–P8 còn trong kế hoạch; A3 mới làm một phần. Xem [trạng thái và kế hoạch](docs/README.md).
 **MTK:** các bản sửa tới 0083 đã build bằng SDK và chạy trên board HP2236B (gate PH0 G1–G7 phía router,
 image 0083). 0084–0086 (ghi chú, `export.py`, gỡ hàm không ai gọi) build gói + image đạt, chưa nạp board;
