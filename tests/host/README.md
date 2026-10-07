@@ -21,7 +21,7 @@ busybox valgrind libjson-c-dev libcurl4-openssl-dev libssl-dev zlib1g-dev`.
 ```sh
 tests/host/build.sh            # deps (pinned libubox/uci/ubus), microxml, libtr098, icwmp_tr098d
 sudo tests/host/setup.sh --yes # fake CPE: UCI config (cwmp, easycwmp, stun), ubusd, stuncd stand-in, data model shell, external script
-tests/host/run.sh all          # unit smoke notify rpc msrv stun ptime p6 fw p7 p7c valgrind, exit 1 on any FAIL
+tests/host/run.sh all          # unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 valgrind, exit 1 on any FAIL
 ```
 
 Work files go to `$ICWMP_HOST_WORK` (default `/tmp/icwmp-host`); `build.sh`
@@ -39,7 +39,7 @@ too: use 24.04.
 |---|---|
 | `unit` | `dmplatform_mtk.c` + `dmscript.c` alone: pruned GPV walk returns what one plain `get_value` did (both with and without the `*_list` commands), Inform cache; `dmcmd()` with 0 B … 3 MB of output |
 | `smoke [N]` | N ACS sessions (GPV/GPN/SPV/SPA/GPA/Add/Delete/GetRPCMethods), agent alive after |
-| `notify` | passive notification on `IGD.Device.`, still the shell's (fake_dm; 128 parameters, the count read from fake_dm), every value one byte longer: all written back and sent in the next Inform (the old loop lost some). The smoke plan also sets attributes on `IGD.Firewall.`, an object answered in C (K21) |
+| `notify` | passive notification on `IGD.Services.`, still the shell's until P8c (fake_dm; 34 parameters, the count read from fake_dm; `IGD.Device.` went to C in P8a), every value one byte longer: all written back and sent in the next Inform (the old loop lost some). The smoke plan also sets attributes on `IGD.Firewall.`, an object answered in C (K21) |
 | `rpc` | Download/Upload/ScheduleDownload with empty FileType, 3 time windows, a valid single window: faults where due, agent alive |
 | `valgrind [N]` | memcheck over N sessions with Download and ubus load (`notify`, `dm`, `status`): 0 bytes definitely/indirectly lost, 0 errors |
 | `soak [N]` | N sessions with ubus load, RSS / fd / thread / process samples every 30 s |
@@ -50,6 +50,7 @@ too: use 24.04.
 | `fw` | Firewall in C (0092) on a firewall_clay of every kind: DisablePort, ServiceControl IPv4/IPv6 (packetfilter by ipversion), IPFilter (ipfilter2); AddObject defaults and instance numbers, an SPV setting IPVersion=6 and a v6 address together, Ingress/ServiceType/Protocol mappings, 6 refused values, an SPV whose second leaf faults at VALUESET leaving the first unwritten (K20), DeleteObject renumbering |
 | `p7` | P7a/P7b in C (0094) on fixture configs (sections missing on purpose): UPnP, 3rdAgent (AP mode clears client_id), CPEagent (SecretKey equal to the shell's `printf \| dd \| openssl enc \| openssl base64 \| cut` with the test key `CPEAGENT_TEST_KEY`; the product build takes the real key from the product tree), AutoWifiScan, DHCPClient, DnsLandingPage, Isolation, SSH/Telnet, MeshAPI, DDNS, Conf, Logging (level lists, TFTP upload through a stand-in `tftp`, CleanLogging); every restart / `ubus call hni` queued once (stand-in init scripts and `ubus` on PATH); same values again change nothing; 18 values the shell refused fault |
 | `p7c` | P7c in C (0095): UplinkSetup against a stand-in `hni.dualuplink` that commits dualuplink itself (mode3 Backup then Main in one SPV compares with what hni just wrote; a FAIL reply is 9003/9002 at VALUESET), UplinkStatus from a stand-in `blapi_cmd`; WiFiStatus reports from stand-in `mwctl`/`iw`, JSON equal to what the product's shell functions print for the same input under busybox (except the lease lookup and the escaped `"`, see `x_ais_wifistatus_mtk.c`); MLO groups and their `wifi reload` |
+| `p8` | P8a in C (0097): `IGD.Device.IP.Interface` numbered by `network.<sec>.ip_int_instance` (given and committed on a GET, loopback out, an anonymous section is `@interface[n]`), Add (`if<n>`, static, auto 0) / Delete, Enable/IPv4Enable/IPv6Enable writing network + `wan.@entry[n]` and queuing hni_wan_reload / ifdown-ifup / the IPv4 flush (stand-in tools on PATH); `IPv6Enable` over every anonymous wan entry; `Device.DHCPv6.Server.Pool` (own numbering, a section without a Device.IP number is out, odhcpd options); `Device.IP.Diagnostics.TraceRoute` (default route device, the shared store, RouteHops listed only below RouteHops. while Complete, parsed from trace_results.txt); DOCSIS constants; 7 faults |
 
 Logs: `$ICWMP_HOST_WORK/run/` (`acs.log`, `icwmpd.out`, `vg.log`,
 `fake_dm.cmds` = every request the data model shell got).

@@ -31,6 +31,14 @@ int mtk_varstate_set(const char *package, const char *section, const char *optio
  * "uci set <pkg>.<sec>=<type>".  1 when it was added, 0 when it was there,
  * -1 when it cannot be added (no such package: E_INTERNAL_ERROR there). */
 int mtk_uci_ensure_section(const char *package, const char *section, const char *type);
+/* "$UCI_SET <pkg>.<sec>.<opt>=<v>; $UCI_COMMIT <pkg>" in the middle of a
+ * walk: the shell numbered instances that way while answering a GET.  The
+ * value goes into this session's copy (later getters of the same RPC see it)
+ * and is committed at once through a context of its own, so a GET keeps the
+ * number and the session's other pending changes are not committed with it.
+ * 0, or -1 when the commit failed. */
+int mtk_uci_set_persist(const char *package, const char *section, const char *option,
+			const char *value);
 
 /* System ------------------------------------------------------------ */
 /* First line of a file, trimmed, dm-allocated, "" when unreadable. */

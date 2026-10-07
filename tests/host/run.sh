@@ -13,7 +13,8 @@
 #   run.sh fw              P6e Firewall in C: add/set/delete, faults, VALUESET revert
 #   run.sh p7              P7a/b operator X_AIS_* in C: writes, queued restarts, faults
 #   run.sh p7c             P7c UplinkSetup (hni.dualuplink), WiFiStatus reports, MLO
-#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw p7 p7c valgrind
+#   run.sh p8              P8a Device.IP (numbering, add/delete), DHCPv6 pools, TraceRoute hops, DOCSIS
+#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 valgrind
 # Needs build.sh, then setup.sh --yes (root, throwaway container).
 . "$(dirname "$0")/env.sh"
 
@@ -105,11 +106,12 @@ do_notify() {
 	sleep 1
 	echo 10 > "$RUN/epoch"		# every value one byte longer
 	$UBUS call tr069 notify >/dev/null 2>&1; sleep 2
-	# the object of the test is IGD.Device., still answered by the shell
-	# (fake_dm); its parameter count comes from fake_dm itself
-	want=$(printf '%s\n' '{"cmd":"get_value","param":"InternetGatewayDevice.Device."}' '{"cmd":"exit"}' |
+	# the object of the test is IGD.Services., still answered by the shell
+	# (fake_dm) -- IGD.Device. went to C in P8a; its parameter count comes
+	# from fake_dm itself
+	want=$(printf '%s\n' '{"cmd":"get_value","param":"InternetGatewayDevice.Services."}' '{"cmd":"exit"}' |
 		FAKE_DM_MATRIX=$MATRIX FAKE_DM_EPOCH=$RUN/epoch python3 "$HOST_DIR/fake_dm.py" | grep -c '"value"')
-	v10=$(grep -c '"value": "v10:InternetGatewayDevice.Device' /etc/tr098/.dm_enabled_notify)
+	v10=$(grep -c '"value": "v10:InternetGatewayDevice.Services' /etc/tr098/.dm_enabled_notify)
 	broken=$(python3 -c "
 import json
 n = 0
@@ -878,6 +880,153 @@ EOF
 	if [ $bad_n = 0 ]; then pass "p7c: UplinkSetup over hni.dualuplink, WiFiStatus reports, MLO groups, faults"; else bad "p7c: $bad_n mismatches above"; fi
 }
 
+# P8a in C (0097): IGD.Device.IP (numbering by ip_int_instance, given and
+# committed on a GET too; Add/Delete; restarts queued), Device.DHCPv6 pools,
+# Device.IP.Diagnostics.TraceRoute with RouteHops, DOCSIS.
+P8_CONFIGS="network wan dhcp"
+do_p8() {
+	for c in $P8_CONFIGS; do
+		if [ -f "/etc/config/$c" ]; then cp "/etc/config/$c" "$RUN/$c.p8saved"; else rm -f "${RUN:?}/${c:?}.p8saved"; fi
+	done
+	cat > /etc/config/network <<'EOF'
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+
+config interface 'lan'
+	option device 'br-lan'
+	option proto 'static'
+
+config interface 'if0'
+	option device 'eth1.100'
+	option proto 'pppoe'
+	option ip_int_instance '5'
+
+config interface 'if0_6'
+	option device '@if0'
+	option proto 'dhcpv6'
+
+config interface
+	option device 'lo'
+	option proto 'static'
+EOF
+	printf "config entry\n\toption active '1'\n\toption v6_active '0'\n\nconfig entry\n\toption active '1'\n\toption v6_active '1'\n" > /etc/config/wan
+	printf "config dhcp 'lan'\n\toption interface 'lan'\n\toption dhcpv6 'server'\n\nconfig dhcp 'wan'\n\toption interface 'if0'\n\nconfig dhcp 'ghost'\n\toption interface 'nosuch'\n" > /etc/config/dhcp
+	rm -rf /var/state/traceroute
+	rm -f "${RUN:?}/p8.calls"
+	mkdir -p "$RUN/p8bin"
+	printf '#!/bin/sh\necho "ifdown $*" >> %s/p8.calls\n' "$RUN" > "$RUN/p8bin/ifdown"
+	printf '#!/bin/sh\necho "ifup $*" >> %s/p8.calls\n' "$RUN" > "$RUN/p8bin/ifup"
+	printf '#!/bin/sh\ncase "$*" in *flush*) echo "ip $*" >> %s/p8.calls; exit 0 ;; esac\nexec /usr/sbin/ip "$@"\n' "$RUN" > "$RUN/p8bin/ip"
+	chmod +x "$RUN/p8bin/ifdown" "$RUN/p8bin/ifup" "$RUN/p8bin/ip"
+	if [ -e /usr/sbin/hni_wan_reload.sh ]; then p8_hni=kept; else p8_hni=made
+		printf '#!/bin/sh\necho "hni_wan_reload" >> %s/p8.calls\n' "$RUN" > /usr/sbin/hni_wan_reload.sh; chmod +x /usr/sbin/hni_wan_reload.sh; fi
+	printf '#!/bin/sh\necho "odhcpd $*" >> %s/p8.calls\n' "$RUN" > /etc/init.d/odhcpd; chmod +x /etc/init.d/odhcpd
+	if [ -d /usr/share/easycwmp/functions ]; then p8_fn=kept; else p8_fn=made; mkdir -p /usr/share/easycwmp/functions; fi
+	printf '#!/bin/sh\necho "traceroute_launch $*" >> %s/p8.calls\n' "$RUN" > /usr/share/easycwmp/functions/traceroute_launch
+	D=InternetGatewayDevice.Device
+	bad_n=0
+	# a GET numbers the interfaces without a number and commits them:
+	# lan 1, if0 keeps 5, if0_6 2, the anonymous one 3; loopback is out
+	start 1 "--readonly"
+	wait_done 30; sleep 1
+	expect "GET lists" "$($UBUS call tr069 dm '{"cmd":"get","path":"InternetGatewayDevice.Device.IP.Interface."}' 2>/dev/null | grep -o 'Interface\.[0-9]*\.Name' | tr '\n' ' ')" \
+		"Interface.1.Name Interface.2.Name Interface.3.Name Interface.5.Name "
+	expect "lan numbered, committed" "$(grep -A3 "interface 'lan'" /etc/config/network | grep -c "ip_int_instance '1'")" "1"
+	expect "if0_6 numbered" "$(uci -q get network.if0_6.ip_int_instance)" "2"
+	expect "anonymous numbered" "$(uci -q get network.@interface[4].ip_int_instance)" "3"
+	expect "loopback not numbered" "$(uci -q get network.loopback.ip_int_instance)" ""
+	expect "Interface.3.Name" "$(dm_value $D.IP.Interface.3.Name)" "@interface[4]"
+	expect "Interface.5.Name" "$(dm_value $D.IP.Interface.5.Name)" "if0"
+	expect "Interface.2.LowerLayers" "$(dm_value $D.IP.Interface.2.LowerLayers)" "if0"
+	expect "Interface.1.Status" "$(dm_value $D.IP.Interface.1.Status)" "Down"
+	expect "InterfaceNumberOfEntries" "$(dm_value $D.IP.InterfaceNumberOfEntries)" "4"
+	nh=$(cat /sys/class/net/lo/statistics/rx_nohandler 2>/dev/null || echo 0)
+	expect "Stats from sysfs" "$(dm_value $D.IP.Interface.3.Stats.UnknownProtoPacketsReceived)" "$nh"
+	expect "IPv6Enable (an entry has v6_active 1)" "$(dm_value $D.IP.IPv6Enable)" "true"
+	expect "IPv4Status" "$(dm_value $D.IP.IPv4Status)" "Enabled"
+	expect "DHCPv6 pools (ghost has no network section)" "$($UBUS call tr069 dm '{"cmd":"get","path":"InternetGatewayDevice.Device.DHCPv6."}' 2>/dev/null | grep -o 'Pool\.[0-9]*\.Status' | tr '\n' ' ')" \
+		"Pool.1.Status Pool.2.Status "
+	expect "dhcp.lan numbered" "$(uci -q get dhcp.lan.dhcpv6_int_instance)" "1"
+	expect "Pool.1.Status" "$(dm_value $D.DHCPv6.Server.Pool.1.Status)" "Enabled"
+	expect "Pool.2.Interface" "$(dm_value $D.DHCPv6.Server.Pool.2.Interface)" "$D.IP.Interface.5"
+	expect "DOCSIS version" "$(dm_value InternetGatewayDevice.DOCSIS.Interface.1.DOCSISVersion)" "3.0"
+	expect "DOCSIS upstream ID" "$(dm_value InternetGatewayDevice.DOCSIS.UpstreamChannel.1.ID)" "1"
+	expect "DOCSIS modulation" "$(dm_value InternetGatewayDevice.DOCSIS.UpstreamChannel.1.Status.ModulationType)" "default"
+	stop
+	start 1 "--set $D.IP.Interface.5.Enable=false --set $D.IP.Interface.5.IPv4Enable=false
+		--set $D.IP.Interface.1.IPv4Enable=false --set $D.IP.Interface.2.IPv6Enable=false
+		--set $D.DHCPv6.Server.Pool.1.Enable=false --set $D.DHCPv6.Server.Pool.2.Interface=$D.IP.Interface.1.
+		--set $D.IP.Diagnostics.TraceRoute.Host=example.com --set $D.IP.Diagnostics.TraceRoute.NumberOfTries=2
+		--set $D.IP.Diagnostics.TraceRoute.DiagnosticsState=Requested" env PATH="$RUN/p8bin:$PATH"
+	wait_done 60; sleep 3
+	expect "faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "0"
+	grep '^fault ' "$RUN/acs.log" | sed 's/^/  ACS: /'
+	expect "if0 auto" "$(uci -q get network.if0.auto)" "0"
+	expect "wan entry 0 active" "$(uci -q get wan.@entry[0].active)" "0"
+	expect "if0 ipv4 + noip" "$(uci -q get network.if0.ipv4) $(uci -q get network.if0.pppd_options)" "0 noip"
+	expect "wan entry 0 v4_active" "$(uci -q get wan.@entry[0].v4_active)" "0"
+	expect "lan ipv4" "$(uci -q get network.lan.ipv4)" "0"
+	expect "if0_6 ipv6, entry 0 v6_active" "$(uci -q get network.if0_6.ipv6) $(uci -q get wan.@entry[0].v6_active)" "0 0"
+	expect "dhcp.lan off" "$(uci -q get dhcp.lan.dhcpv6) $(uci -q get dhcp.lan.ra_slaac) $(uci -q get dhcp.lan.ra_dns) $(uci -q get dhcp.lan.ra_flags)" "disabled 1 1 none"
+	expect "dhcp.wan interface" "$(uci -q get dhcp.wan.interface)" "lan"
+	defdev=$(awk '$2 == "00000000" {print $1; exit}' /proc/net/route)
+	expect "traceroute store" "$(uci -q -P /var/state/traceroute get easycwmp.@local[0].Host) $(uci -q -P /var/state/traceroute get easycwmp.@local[0].NumberOfTries) $(uci -q -P /var/state/traceroute get easycwmp.@local[0].DiagnosticsState) $(uci -q -P /var/state/traceroute get easycwmp.@local[0].Interface)" \
+		"example.com 2 Requested $defdev"
+	want=$(printf '%s\n' "hni_wan_reload" "ifdown if0" "ifup if0" "ip -4 addr flush dev br-lan" "ip -4 route flush dev br-lan" \
+		"ifdown if0_6" "ifup if0_6" "odhcpd reload" "traceroute_launch run" | sort | tr '\n' '|')
+	expect "queued restarts, once each" "$(sort "$RUN/p8.calls" 2>/dev/null | tr '\n' '|')" "$want"
+	stop
+	rm -f "${RUN:?}/p8.calls"
+	start 1 "--set $D.IP.IPv6Enable=false" env PATH="$RUN/p8bin:$PATH"
+	wait_done 30; sleep 1
+	expect "IPv6Enable=false on every entry" "$(uci -q get wan.@entry[0].v6_active) $(uci -q get wan.@entry[1].v6_active)" "0 0"
+	expect "IPv6Status" "$(dm_value $D.IP.IPv6Status)" "Disabled"
+	expect "hni_wan_reload queued" "$(cat "$RUN/p8.calls" 2>/dev/null)" "hni_wan_reload"
+	stop
+	# AddObject: if1 (if0 is taken), static, auto 0, the first free number 4
+	start 1 "--add $D.IP.Interface."
+	wait_done 30; sleep 1
+	expect "AddObject" "$(grep '^added' "$RUN/acs.log")" "added 4"
+	expect "if1 added" "$(uci -q get network.if1) $(uci -q get network.if1.proto) $(uci -q get network.if1.auto) $(uci -q get network.if1.ip_int_instance)" "interface static 0 4"
+	stop
+	start 1 "--delete $D.IP.Interface.4."
+	wait_done 30; sleep 1
+	expect "DeleteObject faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "0"
+	expect "if1 removed" "$(uci -q get network.if1)" ""
+	stop
+	# RouteHops: listed for a request below RouteHops. only, while Complete
+	uci -q -P /var/state/traceroute set easycwmp.@local[0].DiagnosticsState=Complete
+	uci -q -P /var/state/traceroute set easycwmp.@local[0].RouteHopsNumberOfEntries=2
+	printf 'traceroute to example.com (93.184.216.34), 30 hops max, 38 byte packets\n 1  192.168.1.1 (192.168.1.1)  0.512 ms  0.401 ms  0.390 ms\n 2  * * *\n' > /var/state/trace_results.txt
+	T=$D.IP.Diagnostics.TraceRoute
+	start 1 "--readonly"
+	wait_done 30; sleep 1
+	expect "hops under RouteHops." "$($UBUS call tr069 dm "{\"cmd\":\"get\",\"path\":\"$T.RouteHops.\"}" 2>/dev/null | grep -o 'RouteHops\.[0-9]*\.HopHost"' | tr '\n' ' ')" \
+		'RouteHops.1.HopHost" RouteHops.2.HopHost" '
+	expect "no hops for TraceRoute." "$($UBUS call tr069 dm "{\"cmd\":\"get\",\"path\":\"$T.\"}" 2>/dev/null | grep -c 'RouteHops\.[0-9]')" "0"
+	expect "hop 1 host/address/rtt/error" "$(dm_value $T.RouteHops.1.HopHost) $(dm_value $T.RouteHops.1.HopHostAddress) $(dm_value $T.RouteHops.1.HopRTTTimes) $(dm_value $T.RouteHops.1.HopErrorCode)" \
+		"192.168.1.1 192.168.1.1 0.512,0.401,0.390 0"
+	expect "hop 2 error" "$(dm_value $T.RouteHops.2.HopHost) $(dm_value $T.RouteHops.2.HopErrorCode)" "* 1"
+	stop
+	for kv in $T.NumberOfTries=4 $T.DSCP=64 $T.Host=bad_host $T.DiagnosticsState=Complete \
+		  $D.DHCPv6.Server.Pool.1.Interface=$D.IP.Interface.99 $D.IP.Interface.1.Enable=maybe \
+		  InternetGatewayDevice.DOCSIS.Interface.1.Status=Up; do
+		start 1 "--set $kv" env PATH="$RUN/p8bin:$PATH"
+		wait_done 30; sleep 1
+		expect "$kv faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+		stop
+	done
+	for c in $P8_CONFIGS; do
+		if [ -f "$RUN/$c.p8saved" ]; then cp "$RUN/$c.p8saved" "/etc/config/$c"; else rm -f "/etc/config/${c:?}"; fi
+	done
+	[ "$p8_hni" = made ] && rm -f /usr/sbin/hni_wan_reload.sh
+	rm -f /etc/init.d/odhcpd /usr/share/easycwmp/functions/traceroute_launch /var/state/trace_results.txt
+	[ "$p8_fn" = made ] && rmdir -p /usr/share/easycwmp/functions 2>/dev/null
+	rm -rf /var/state/traceroute "${RUN:?}/p8bin"
+	if [ $bad_n = 0 ]; then pass "p8: Device.IP numbering/add/delete/queued restarts, DHCPv6 pools, TraceRoute hops, DOCSIS, faults"; else bad "p8: $bad_n mismatches above"; fi
+}
+
 # STUN leaves are the product's stunclient: stun.@stun[0], the reload flag
 # of the shell setter and one stuncd reload at the end of the session (K2).
 do_stun() {
@@ -1007,7 +1156,8 @@ case "$1" in
 	fw) do_fw ;;
 	p7) do_p7 ;;
 	p7c) do_p7c ;;
-	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_p7c; do_valgrind ;;
+	p8) do_p8 ;;
+	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_p7c; do_p8; do_valgrind ;;
 	*) sed -n '2,/^# Needs/p' "$0"; exit 1 ;;
 esac
 exit $fail

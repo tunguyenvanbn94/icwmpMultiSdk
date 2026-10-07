@@ -62,6 +62,30 @@ int mtk_uci_ensure_section(const char *package, const char *section, const char 
 	return (t && *t) ? 1 : -1;
 }
 
+int mtk_uci_set_persist(const char *package, const char *section, const char *option,
+			const char *value)
+{
+	struct uci_context *c;
+	struct uci_ptr ptr = {0};
+	char buf[512];
+	int rc = -1;
+
+	if (!package || !section || !option || !value)
+		return -1;
+	dmuci_set_value((char *)package, (char *)section, (char *)option, (char *)value);
+	if (snprintf(buf, sizeof(buf), "%s.%s.%s=%s", package, section, option, value) >= (int)sizeof(buf))
+		return -1;
+	c = uci_alloc_context();
+	if (!c)
+		return -1;
+	if (uci_lookup_ptr(c, &ptr, buf, true) == UCI_OK &&
+	    uci_set(c, &ptr) == UCI_OK && ptr.p &&
+	    uci_commit(c, &ptr.p, false) == UCI_OK)
+		rc = 0;
+	uci_free_context(c);
+	return rc;
+}
+
 int mtk_varstate_set(const char *package, const char *section, const char *option, const char *value)
 {
 	struct uci_ptr ptr = {0};
