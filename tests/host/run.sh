@@ -9,7 +9,8 @@
 #   run.sh msrv            ACS writes of ManagementServer.* land in easycwmp and cwmp (K1)
 #   run.sh stun            STUN leaves on stun.@stun[0], reload flag, stuncd reload (K2)
 #   run.sh ptime           PeriodicInformTime dateTime aligns the periodic Inform (K10)
-#   run.sh all             unit smoke notify rpc msrv stun ptime valgrind
+#   run.sh p6              P6 leaves in C: Account, CarrierLocking, X_AIS_WebUserInfo, hidden root objects
+#   run.sh all             unit smoke notify rpc msrv stun ptime p6 valgrind
 # Needs build.sh, then setup.sh --yes (root, throwaway container).
 . "$(dirname "$0")/env.sh"
 
@@ -220,6 +221,102 @@ do_msrv() {
 	if [ $bad_n = 0 ]; then pass "msrv: ACS writes of ManagementServer.* kept in easycwmp and cwmp, range fault"; else bad "msrv: $bad_n mismatches above"; fi
 }
 
+# P6 leaves ported to C (0089): Account.Web, UserInterface.CarrierLocking and
+# UserInterface.X_AIS_WebUserInfo on the product's configs (hmxwslbackend,
+# isplocking, account, remoteaccess, clay), the service restarts they queue,
+# and the root's objects that answer only when addressed.
+P6_CONFIGS="hmxwslbackend isplocking account remoteaccess clay"
+P6_INIT="isplocking remoteaccess"
+do_p6() {
+	for c in $P6_CONFIGS; do
+		if [ -f "/etc/config/$c" ]; then cp "/etc/config/$c" "$RUN/$c.p6saved"; else rm -f "$RUN/$c.p6saved"; fi
+	done
+	printf 'config hmxwslbackend\n\toption SessionTimeOut 900\n' > /etc/config/hmxwslbackend
+	: > /etc/config/isplocking		# no section: the setter must add one
+	printf "config account 'root'\n\toption username 'su0'\n" > /etc/config/account
+	: > /etc/config/remoteaccess
+	printf "config language 'language'\n\tlist available 'en'\n\tlist available 'th'\n\toption current 'en'\n" > /etc/config/clay
+	rm -f "$RUN/p6.calls"
+	for s in $P6_INIT; do
+		printf '#!/bin/sh\necho "%s $*" >> %s/p6.calls\n' "$s" "$RUN" > "/etc/init.d/$s"
+		chmod +x "/etc/init.d/$s"
+	done
+	mkdir -p /tmp/wsl
+	printf '#!/bin/sh\necho "wsl start" >> %s/p6.calls\n' "$RUN" > /tmp/wsl/start_wsl.sh
+	chmod +x /tmp/wsl/start_wsl.sh
+	P=InternetGatewayDevice.UserInterface
+	start 1 "--set InternetGatewayDevice.Account.Web.SessionMaxTime=600
+		--set $P.CarrierLocking.X_AIS_LockingEnable=1
+		--set $P.CarrierLocking.X_AIS_RoundNum=5
+		--set $P.CarrierLocking.X_AIS_Guard_URL=http://guard.example.net/
+		--set $P.X_AIS_WebUserInfo.AdminName=adm1
+		--set $P.X_AIS_WebUserInfo.RemoteAccess=true
+		--set $P.X_AIS_WebUserInfo.SuperAdminEnable=0
+		--set $P.X_AIS_WebUserInfo.Captcha_enable=true
+		--set $P.X_AIS_WebUserInfo.CurrentLanguage=th
+		--set InternetGatewayDevice.CaptivePortal.Enable=true
+		--set InternetGatewayDevice.XMPP.Connection.1.KeepAliveInterval=30"
+	wait_done 60; sleep 3
+	bad_n=0
+	expect "faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "0"
+	grep '^fault ' "$RUN/acs.log" | sed 's/^/  ACS: /'
+	expect "SessionTimeOut" "$(uci -q get hmxwslbackend.@hmxwslbackend[0].SessionTimeOut)" "600"
+	expect "isplocking enabled" "$(uci -q get isplocking.@isplocking[0].enabled)" "1"
+	expect "isplocking round_num" "$(uci -q get isplocking.@isplocking[0].round_num)" "5"
+	expect "isplocking ais_guard_url" "$(uci -q get isplocking.@isplocking[0].ais_guard_url)" "http://guard.example.net/"
+	expect "account.admin type" "$(uci -q get account.admin)" "account"
+	expect "account.admin.username" "$(uci -q get account.admin.username)" "adm1"
+	expect "account.root.superadminenable" "$(uci -q get account.root.superadminenable)" "0"
+	expect "account.root.username kept" "$(uci -q get account.root.username)" "su0"
+	expect "remoteaccess enabled" "$(uci -q get remoteaccess.remoteaccess.enabled)" "1"
+	expect "clay captcha" "$(uci -q get clay.captcha.enabled)" "1"
+	expect "clay language not switched" "$(uci -q get clay.language.current)" "en"
+	expect "restarts, once each" "$(sort "$RUN/p6.calls" 2>/dev/null | tr '\n' ' ')" "isplocking restart remoteaccess restart wsl start "
+	expect "GPV RoundNum" "$(dm_value $P.CarrierLocking.X_AIS_RoundNum)" "5"
+	expect "GPV RemoteAccess" "$(dm_value $P.X_AIS_WebUserInfo.RemoteAccess)" "true"
+	expect "GPV RemoteAccessTimeout default" "$(dm_value $P.X_AIS_WebUserInfo.RemoteAccessTimeout)" "3600"
+	expect "GPV AdminPassword" "$(dm_value $P.X_AIS_WebUserInfo.AdminPassword)" ""
+	expect "GPV AvailableLanguages" "$(dm_value $P.X_AIS_WebUserInfo.AvailableLanguages)" "en th"
+	expect "GPV SessionMaxTime" "$(dm_value InternetGatewayDevice.Account.Web.SessionMaxTime)" "600"
+	expect "GPV DeviceSummary" "$(dm_value InternetGatewayDevice.DeviceSummary)" "InternetGatewayDevice:1.0[](Baseline:1, EthernetLAN:1, WiFiLAN:1)"
+	expect "GPV CaptivePortal.Status" "$(dm_value InternetGatewayDevice.CaptivePortal.Status)" "Enabled"
+	expect "CaptivePortal.Enable stores nothing" "$(dm_value InternetGatewayDevice.CaptivePortal.Enable)" "false"
+	expect "GPV FAP.GPS.LockedLatitude" "$(dm_value InternetGatewayDevice.FAP.GPS.LockedLatitude)" "0.000000"
+	expect "XMPP KeepAliveInterval stores nothing" "$(dm_value InternetGatewayDevice.XMPP.Connection.1.KeepAliveInterval)" "60"
+	expect "GPV XMPP Server.1.Port" "$(dm_value InternetGatewayDevice.XMPP.Connection.1.Server.1.Port)" "5222"
+	expect "GPV LTE.RSRP0" "$(dm_value InternetGatewayDevice.LTE.RSRP0)" "-95"
+	expect "XMPP and LTE in a whole-tree get" \
+		"$($UBUS call tr069 dm '{"cmd":"get","path":"InternetGatewayDevice."}' 2>/dev/null | grep -c -e '\.XMPP\.Connection\.1\.' -e '\.LTE\.')" "27"
+	expect "hidden objects absent from a whole-tree get" \
+		"$($UBUS call tr069 dm '{"cmd":"get","path":"InternetGatewayDevice."}' 2>/dev/null | grep -c -e '\.CaptivePortal\.' -e '\.BulkData\.' -e '\.FAP\.')" "0"
+	alive || expect "agent" "dead" "alive"
+	stop
+	# values the shell refused: one session each, nothing written
+	long=$(printf 'a%.0s' $(seq 1 33))
+	for kv in Account.Web.SessionMaxTime=299 Account.Web.SessionMaxTime=3601 \
+		  UserInterface.CarrierLocking.X_AIS_LockingEnable=true \
+		  UserInterface.CarrierLocking.X_AIS_RoundNum=5a \
+		  UserInterface.X_AIS_WebUserInfo.CurrentLanguage=fr \
+		  UserInterface.X_AIS_WebUserInfo.SuperAdminEnable=2 \
+		  UserInterface.X_AIS_WebUserInfo.Captcha_enable=TRUE \
+		  UserInterface.X_AIS_WebUserInfo.AdminPassword=$long; do
+		start 1 "--set InternetGatewayDevice.$kv"
+		wait_done 30; sleep 1
+		expect "$kv faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+		stop
+	done
+	expect "SessionTimeOut after the faults" "$(uci -q get hmxwslbackend.@hmxwslbackend[0].SessionTimeOut)" "600"
+	expect "isplocking enabled after the faults" "$(uci -q get isplocking.@isplocking[0].enabled)" "1"
+	expect "isplocking round_num after the faults" "$(uci -q get isplocking.@isplocking[0].round_num)" "5"
+	expect "account.admin.password untouched" "$(uci -q get account.admin.password)" ""
+	for c in $P6_CONFIGS; do
+		if [ -f "$RUN/$c.p6saved" ]; then cp "$RUN/$c.p6saved" "/etc/config/$c"; else rm -f "/etc/config/$c"; fi
+	done
+	for s in $P6_INIT; do rm -f "/etc/init.d/$s"; done
+	rm -rf /tmp/wsl
+	if [ $bad_n = 0 ]; then pass "p6: Account, CarrierLocking, X_AIS_WebUserInfo writes, faults, hidden root objects, XMPP/LTE"; else bad "p6: $bad_n mismatches above"; fi
+}
+
 # STUN leaves are the product's stunclient: stun.@stun[0], the reload flag
 # of the shell setter and one stuncd reload at the end of the session (K2).
 do_stun() {
@@ -345,7 +442,8 @@ case "$1" in
 	msrv) do_msrv ;;
 	stun) do_stun ;;
 	ptime) do_ptime ;;
-	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_valgrind ;;
+	p6) do_p6 ;;
+	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_valgrind ;;
 	*) sed -n '2,/^# Needs/p' "$0"; exit 1 ;;
 esac
 exit $fail
