@@ -2,7 +2,7 @@
 # Host test of icwmp_tr098d + libtr098 (MTK build) against a test ACS.
 #   run.sh unit            data model unit test (pruned walk, Inform cache) + dmcmd sizes
 #   run.sh smoke [N]       N sessions (default 5), the agent must survive
-#   run.sh notify          value-change check: 100 values change length, all reported
+#   run.sh notify          value-change check: 24 C leaves (X_AIS_Logging) change, all reported
 #   run.sh rpc             malformed and valid transfer RPCs, the agent must survive
 #   run.sh valgrind [N]    memcheck over N sessions with downloads and ubus load
 #   run.sh soak [N]        N sessions (default 300), RSS/fd/thread samples
@@ -15,7 +15,8 @@
 #   run.sh p7c             P7c UplinkSetup (hni.dualuplink), WiFiStatus reports, MLO
 #   run.sh p8              P8a Device.IP (numbering, add/delete), DHCPv6 pools, TraceRoute hops, DOCSIS
 #   run.sh p8b             P8b Device.PPP, DynamicDNS, RouterAdvertisement
-#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b valgrind
+#   run.sh p8c             P8c Services: STBService, StorageService over /sys
+#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b p8c valgrind
 # Needs build.sh, then setup.sh --yes (root, throwaway container).
 . "$(dirname "$0")/env.sh"
 
@@ -102,24 +103,42 @@ do_smoke() {
 }
 
 do_notify() {
+	# the whole TR-098 tree is C since P8c (0099): the object of the test is
+	# IGD.X_AIS_Logging. (24 leaves of system.syslog), passive notification
+	# set by acs.py; every leaf is changed in the config between the two
+	# sessions
+	if [ -f /etc/config/system ]; then cp /etc/config/system "$RUN/system.ntsaved"; else rm -f "${RUN:?}/system.ntsaved"; fi
+	printf "config syslog 'syslog'\n\toption log_enable '0'\n\toption log_remote '0'\n\toption log_level '3'\n\toption log_ip '192.0.2.1'\n\toption log_port '514'\n\toption tftp_server '192.0.2.2'\n\toption tftp_response '0'\n\toption clean_logging '0'\n\toption selected_log_levels 'none'\n\toption selected_remote_levels 'none'\n" > /etc/config/system
 	start 1 "--readonly"
 	wait_done 60 || { bad "notify: first session"; stop; return; }
 	sleep 1
-	echo 10 > "$RUN/epoch"		# every value one byte longer
+	all='emerg|alert|crit|err|warn|notice|info|debug'
+	for kv in log_enable=1 log_remote=1 log_level=7 log_ip=192.0.2.11 log_port=1514 tftp_server=192.0.2.22 \
+		  tftp_response=2 clean_logging=2 "selected_log_levels=$all" "selected_remote_levels=$all"; do
+		uci set "system.syslog.$kv"
+	done
+	uci commit system
 	$UBUS call tr069 notify >/dev/null 2>&1; sleep 2
-	# the object of the test is IGD.Services., still answered by the shell
-	# (fake_dm) -- IGD.Device. went to C in P8a; its parameter count comes
-	# from fake_dm itself
-	want=$(printf '%s\n' '{"cmd":"get_value","param":"InternetGatewayDevice.Services."}' '{"cmd":"exit"}' |
-		FAKE_DM_MATRIX=$MATRIX FAKE_DM_EPOCH=$RUN/epoch python3 "$HOST_DIR/fake_dm.py" | grep -c '"value"')
-	v10=$(grep -c '"value": "v10:InternetGatewayDevice.Services' /etc/tr098/.dm_enabled_notify)
-	broken=$(python3 -c "
-import json
-n = 0
-for l in open('/etc/tr098/.dm_enabled_notify'):
-    try: json.loads(l)
-    except ValueError: n += 1
-print(n)")
+	want=24
+	# lines of the notify store under X_AIS_Logging. that carry the new
+	# value (the data model's own answer now), and lines that are not JSON
+	$UBUS call tr069 dm '{"cmd":"get","path":"InternetGatewayDevice.X_AIS_Logging."}' > "$RUN/notify.gpv" 2>/dev/null
+	set -- $(python3 - "$RUN/notify.gpv" <<'PY'
+import json, sys
+now = {p["parameter"]: p["value"] for p in json.load(open(sys.argv[1]))["parameters"]}
+kept = broken = 0
+for l in open("/etc/tr098/.dm_enabled_notify"):
+    try:
+        e = json.loads(l)
+    except ValueError:
+        broken += 1
+        continue
+    if e.get("parameter", "").startswith("InternetGatewayDevice.X_AIS_Logging.") and now.get(e["parameter"]) == e.get("value"):
+        kept += 1
+print(kept, broken)
+PY
+)
+	kept=$1; broken=$2
 	python3 - <<'PY'
 import urllib.request
 pm = urllib.request.HTTPPasswordMgrWithDefaultRealm(); pm.add_password(None, "http://127.0.0.1:7547/", "cr", "crpass")
@@ -127,12 +146,13 @@ urllib.request.build_opener(urllib.request.HTTPDigestAuthHandler(pm)).open("http
 PY
 	i=0; while [ $i -lt 30 ] && ! grep -q "^session 2" "$RUN/acs.log"; do sleep 1; i=$((i+1)); done
 	inform=$(grep "^session 2" "$RUN/acs.log" | sed 's/.*device_params=\([0-9]*\).*/\1/')
-	if [ "$want" -gt 0 ] && [ "$v10" = "$want" ] && [ "$broken" = 0 ] && [ "$inform" = "$want" ]; then
+	if [ "$kept" = "$want" ] && [ "$broken" = 0 ] && [ "$inform" = "$want" ]; then
 		pass "notify: $want/$want changes kept and sent in the Inform"
 	else
-		bad "notify: file $v10/$want updated, $broken broken lines, Inform carried ${inform:-0}/$want"
+		bad "notify: file $kept/$want updated, $broken broken lines, Inform carried ${inform:-0}/$want"
 	fi
 	stop
+	if [ -f "$RUN/system.ntsaved" ]; then cp "$RUN/system.ntsaved" /etc/config/system; else rm -f /etc/config/system; fi
 }
 
 do_rpc() {
@@ -1151,6 +1171,58 @@ EOF
 	if [ $bad_n = 0 ]; then pass "p8b: Device.PPP, DynamicDNS, RouterAdvertisement: numbering, add/delete, sets, faults"; else bad "p8b: $bad_n mismatches above"; fi
 }
 
+# P8c in C (0099): IGD.Services. -- STBService placeholders and
+# StorageService over /sys/class/block.  The container cannot mount: the
+# expectations are computed from this host's /sys the way the shell did,
+# and the mount / relabel paths are left to the board.
+do_p8c() {
+	S=InternetGatewayDevice.Services
+	bad_n=0
+	start 1 "--readonly"
+	wait_done 30; sleep 1
+	expect "STB ServiceType/Enable" "$(dm_value $S.STBService.1.ServiceMonitoring.ServiceType) $(dm_value $S.STBService.1.ServiceMonitoring.Enable)" "default false"
+	expect "STB counters" "$($UBUS call tr069 dm "{\"cmd\":\"get\",\"path\":\"$S.STBService.\"}" 2>/dev/null | grep -c '"value": "0"')" "11"
+	# storage_service_list_devices of the shell, on this host
+	disks=""
+	for dev in /sys/class/block/*; do
+		[ -e "$dev" ] || continue
+		[ -f "$dev/partition" ] && continue
+		case "${dev##*/}" in sd[a-z]|hd[a-z]|nvme[0-9]*n[0-9]*|mmcblk[0-9]*) disks="$disks ${dev##*/}" ;; esac
+	done
+	set -- $disks
+	n=$#; [ "$n" -gt 0 ] || n=1
+	expect "StorageService instances" "$($UBUS call tr069 dm "{\"cmd\":\"get\",\"path\":\"$S.StorageService.\"}" 2>/dev/null | grep -o 'StorageService\.[0-9]*\.Enable"' | wc -l)" "$n"
+	expect "Enable of a disk without /dev node" "$(dm_value $S.StorageService.1.Enable)" "false"
+	expect "UserAccountNumberOfEntries" "$(dm_value $S.StorageService.1.UserAccountNumberOfEntries)" "$(grep -c '^[^#]' /etc/passwd)"
+	fs=$(grep -v nodev /proc/filesystems | awk '{print $1}' | tr '\n' ',' | sed 's/,$//')
+	expect "SupportedFileSystemTypes" "$(dm_value $S.StorageService.1.Capabilities.SupportedFileSystemTypes)" "$fs"
+	expect "HTTPWritable" "$(dm_value $S.StorageService.1.Capabilities.HTTPWritable)" "false"
+	if [ $# -gt 0 ]; then
+		vols=0
+		for part in /sys/block/$1/*; do [ -f "$part/partition" ] && vols=$((vols + 1)); done
+		[ "$vols" -gt 0 ] || { [ -b "/dev/$1" ] && vols=1; }
+		expect "LogicalVolumeNumberOfEntries of $1" "$(dm_value $S.StorageService.1.LogicalVolumeNumberOfEntries)" "$vols"
+		if [ "$vols" -gt 0 ]; then
+			first=$(for part in /sys/block/$1/*; do [ -f "$part/partition" ] && echo "${part##*/}"; done | head -n 1)
+			ref=$(echo "$first" | sed 's/[0-9]*$//')
+			case "$first" in nvme[0-9]*n[0-9]*p[0-9]*|mmcblk[0-9]*p[0-9]*) ref="${first%p[0-9]*}" ;; esac
+			expect "LogicalVolume.1 Status/PhysicalReference" "$(dm_value $S.StorageService.1.LogicalVolume.1.Status) $(dm_value $S.StorageService.1.LogicalVolume.1.PhysicalReference)" "Error $ref"
+		fi
+	fi
+	stop
+	for kv in $S.StorageService.1.Enable=true $S.StorageService.1.Enable=maybe; do
+		start 1 "--set $kv"
+		wait_done 30; sleep 1
+		expect "$kv faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+		stop
+	done
+	start 1 "--add $S.StorageService."
+	wait_done 30; sleep 1
+	expect "AddObject StorageService" "$(grep '^fault ' "$RUN/acs.log")" "fault 9005 "
+	stop
+	if [ $bad_n = 0 ]; then pass "p8c: STBService, StorageService over /sys (mount paths: board), faults"; else bad "p8c: $bad_n mismatches above"; fi
+}
+
 # STUN leaves are the product's stunclient: stun.@stun[0], the reload flag
 # of the shell setter and one stuncd reload at the end of the session (K2).
 do_stun() {
@@ -1282,7 +1354,8 @@ case "$1" in
 	p7c) do_p7c ;;
 	p8) do_p8 ;;
 	p8b) do_p8b ;;
-	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_p7c; do_p8; do_p8b; do_valgrind ;;
+	p8c) do_p8c ;;
+	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_p7c; do_p8; do_p8b; do_p8c; do_valgrind ;;
 	*) sed -n '2,/^# Needs/p' "$0"; exit 1 ;;
 esac
 exit $fail

@@ -83,7 +83,7 @@ PLAN = [
     spv("k1", (IGD + "X_AIS_Telnet.Enable", "1"), (IGD + "Firewall.Config", "x")),
     spv("k2", (IGD + "ManagementServer.PeriodicInformInterval", "86400")),
     spv("k3", (IGD + "DeviceInfo.Nope", "1")),
-    spa(IGD + "Services.", 1),        # still the shell's: the notify test
+    spa(IGD + "X_AIS_Logging.", 1),   # the notify test (all C since P8c)
     spa(IGD + "Firewall.", 0),        # an object answered in C (K21)
     spa(IGD + "DeviceInfo.SoftwareVersion", 2),
     gpa(IGD + "DeviceInfo."),
@@ -135,7 +135,7 @@ class H(BaseHTTPRequestHandler):
                 if args.download_every and state["sessions"] % args.download_every == 0:
                     state["queue"].append(DOWNLOAD)
                 ev = ",".join(re.findall(r"<EventCode>([^<]*)</EventCode>", body))
-                dv = body.count("<Name>InternetGatewayDevice.Services.")
+                dv = body.count("<Name>InternetGatewayDevice.X_AIS_Logging.")
                 sys.stdout.write("session %d events=%s device_params=%d t=%.0fs\n" % (state["sessions"], ev, dv, time.time() - state["start"]))
                 sys.stdout.flush()
                 out = env("<cwmp:InformResponse><MaxEnvelopes>1</MaxEnvelopes></cwmp:InformResponse>")

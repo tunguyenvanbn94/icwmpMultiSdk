@@ -21,7 +21,7 @@ busybox valgrind libjson-c-dev libcurl4-openssl-dev libssl-dev zlib1g-dev`.
 ```sh
 tests/host/build.sh            # deps (pinned libubox/uci/ubus), microxml, libtr098, icwmp_tr098d
 sudo tests/host/setup.sh --yes # fake CPE: UCI config (cwmp, easycwmp, stun), ubusd, stuncd stand-in, data model shell, external script
-tests/host/run.sh all          # unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b valgrind, exit 1 on any FAIL
+tests/host/run.sh all          # unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b p8c valgrind, exit 1 on any FAIL
 ```
 
 Work files go to `$ICWMP_HOST_WORK` (default `/tmp/icwmp-host`); `build.sh`
@@ -39,7 +39,7 @@ too: use 24.04.
 |---|---|
 | `unit` | `dmplatform_mtk.c` + `dmscript.c` alone: pruned GPV walk returns what one plain `get_value` did (both with and without the `*_list` commands), Inform cache; `dmcmd()` with 0 B … 3 MB of output |
 | `smoke [N]` | N ACS sessions (GPV/GPN/SPV/SPA/GPA/Add/Delete/GetRPCMethods), agent alive after |
-| `notify` | passive notification on `IGD.Services.`, still the shell's until P8c (fake_dm; 34 parameters, the count read from fake_dm; `IGD.Device.` went to C in P8a), every value one byte longer: all written back and sent in the next Inform (the old loop lost some). The smoke plan also sets attributes on `IGD.Firewall.`, an object answered in C (K21) |
+| `notify` | value-change notification over C leaves since P8c (0099): passive notification on `IGD.X_AIS_Logging.` (24 leaves of `system.syslog`, set by acs.py), every option changed between two sessions: all 24 new values in `.dm_enabled_notify`, no broken line, all 24 in the Inform after a connection request |
 | `rpc` | Download/Upload/ScheduleDownload with empty FileType, 3 time windows, a valid single window: faults where due, agent alive |
 | `valgrind [N]` | memcheck over N sessions with Download and ubus load (`notify`, `dm`, `status`): 0 bytes definitely/indirectly lost, 0 errors |
 | `soak [N]` | N sessions with ubus load, RSS / fd / thread / process samples every 30 s |
@@ -52,6 +52,7 @@ too: use 24.04.
 | `p7c` | P7c in C (0095): UplinkSetup against a stand-in `hni.dualuplink` that commits dualuplink itself (mode3 Backup then Main in one SPV compares with what hni just wrote; a FAIL reply is 9003/9002 at VALUESET), UplinkStatus from a stand-in `blapi_cmd`; WiFiStatus reports from stand-in `mwctl`/`iw`, JSON equal to what the product's shell functions print for the same input under busybox (except the lease lookup and the escaped `"`, see `x_ais_wifistatus_mtk.c`); MLO groups and their `wifi reload` |
 | `p8` | P8a in C (0097): `IGD.Device.IP.Interface` numbered by `network.<sec>.ip_int_instance` (given and committed on a GET, loopback out, an anonymous section is `@interface[n]`), Add (`if<n>`, static, auto 0) / Delete, Enable/IPv4Enable/IPv6Enable writing network + `wan.@entry[n]` and queuing hni_wan_reload / ifdown-ifup / the IPv4 flush (stand-in tools on PATH); `IPv6Enable` over every anonymous wan entry; `Device.DHCPv6.Server.Pool` (own numbering, a section without a Device.IP number is out, odhcpd options); `Device.IP.Diagnostics.TraceRoute` (default route device, the shared store, RouteHops listed only below RouteHops. while Complete, parsed from trace_results.txt); DOCSIS constants; 7 faults |
 | `p8b` | P8b in C (0098): `Device.PPP.Interface` over the anonymous wan entries with conn_type 2, numbered max+1 and committed on a GET, Enable/LowerLayers/Username writing wan + network, AddObject as the shell meant (entry index, if<n>), Delete; `Device.DynamicDNS` (counts, SupportedServices fallback, positional clients, Interface as `Device.IP.Interface.<n>`, AddObject answering the real instance); `Device.RouterAdvertisement.InterfaceSetting` (own numbering, alias given on a GET, Max then Min in one SPV checked against each other, flag modes); 6 faults |
+| `p8c` | P8c in C (0099): STBService placeholders; StorageService instances, Capabilities and LogicalVolume figures computed from this host's `/sys` the way the shell did (the container cannot mount: mount, unmount and relabel are left to the board); Enable on a disk without a `/dev` node and an invalid value fault; AddObject 9005 |
 
 Logs: `$ICWMP_HOST_WORK/run/` (`acs.log`, `icwmpd.out`, `vg.log`,
 `fake_dm.cmds` = every request the data model shell got).

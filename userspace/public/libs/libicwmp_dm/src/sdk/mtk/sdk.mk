@@ -54,7 +54,8 @@ libtr098_la_SOURCES +=	\
 	../sdk/mtk/dm098/docsis_mtk.c	\
 	../sdk/mtk/dm098/device_ppp_mtk.c	\
 	../sdk/mtk/dm098/device_ddns_mtk.c	\
-	../sdk/mtk/dm098/device_ra_mtk.c
+	../sdk/mtk/dm098/device_ra_mtk.c	\
+	../sdk/mtk/dm098/services_mtk.c
 
 if DM_MTK_SCRIPT_COMPAT
 libtr098_la_SOURCES +=	\

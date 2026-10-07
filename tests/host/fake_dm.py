@@ -37,7 +37,9 @@ for n, line in enumerate(open(MATRIX)):
         if f[8] == "1":
             forced.add(p)
 if os.environ.get("FAKE_DM_INSTANCE_INFORM") == "1":
-    for p in expand("InternetGatewayDevice.Services.X_Fake.{i}.Forced"):
+    # under a root no C module claims: since P8c (0099) the whole product
+    # tree is C and the bridge drops every claimed path
+    for p in expand("InternetGatewayDevice.X_HNI_FakeShell.{i}.Forced"):
         params[p] = "v:" + p
         forced.add(p)
 objects = set()

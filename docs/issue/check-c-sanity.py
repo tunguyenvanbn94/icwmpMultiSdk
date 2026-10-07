@@ -82,7 +82,7 @@ COND_FALSE = {"UPNP_TR064", "!ICWMP_TR098"}
 EXTERNAL = set("""
 strcmp strncmp strcasecmp strncasecmp strcpy strncpy strcat strncat strlen strnlen
 strchr strrchr strstr strtok_r strdup strerror memcmp memcpy memmove memset
-snprintf sprintf vsnprintf printf fprintf sscanf
+snprintf sprintf vsnprintf printf fprintf sscanf fscanf
 malloc calloc realloc free abort exit qsort
 atoi atol atoll strtol strtoul strtoll strtod
 isdigit isxdigit isalpha isalnum isspace isupper islower toupper tolower
@@ -94,7 +94,7 @@ posix_spawn_file_actions_addclose posix_spawn_file_actions_adddup2
 tmpfile dup
 time localtime localtime_r gmtime mktime strftime strptime difftime gettimeofday
 socket bind connect send recv inet_ntop inet_pton htons htonl ntohs ntohl
-opendir readdir closedir glob globfree
+opendir readdir closedir glob globfree scandir alphasort
 json_object_object_get_ex json_object_get_string json_object_array_length
 json_object_array_get_idx json_object_get_type json_object_put json_object_get
 json_object_new_object json_object_new_string json_object_object_add
