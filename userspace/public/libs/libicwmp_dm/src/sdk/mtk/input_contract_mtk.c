@@ -285,6 +285,17 @@ int mtk_shell_valid_host(const char *v)
 	return v && (shell_domain(v) || shell_ipv4(v) || shell_ipv6(v));
 }
 
+/* is_valid_ipv4 / is_valid_ipv6 alone (firewall_mtk.c) */
+int mtk_shell_ipv4(const char *v)
+{
+	return v && shell_ipv4(v);
+}
+
+int mtk_shell_ipv6(const char *v)
+{
+	return v && shell_ipv6(v);
+}
+
 static int shell_type_ok(const char *type, const char *v)
 {
 	if (strcmp(type, "xsd:unsignedInt") == 0)

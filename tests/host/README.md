@@ -21,7 +21,7 @@ busybox valgrind libjson-c-dev libcurl4-openssl-dev libssl-dev zlib1g-dev`.
 ```sh
 tests/host/build.sh            # deps (pinned libubox/uci/ubus), microxml, libtr098, icwmp_tr098d
 sudo tests/host/setup.sh --yes # fake CPE: UCI config (cwmp, easycwmp, stun), ubusd, stuncd stand-in, data model shell, external script
-tests/host/run.sh all          # unit smoke notify rpc msrv stun ptime p6 valgrind, exit 1 on any FAIL
+tests/host/run.sh all          # unit smoke notify rpc msrv stun ptime p6 fw valgrind, exit 1 on any FAIL
 ```
 
 Work files go to `$ICWMP_HOST_WORK` (default `/tmp/icwmp-host`); `build.sh`
@@ -47,6 +47,7 @@ too: use 24.04.
 | `stun` | the ACS sets the STUN leaves: they must land in `stun.@stun[0]`, raise `/tmp/stunclient_reload_needed` and run `/etc/init.d/stuncd reload` once; GPV of UDPConnectionRequestAddress/NATDetected reads `stun.@stun[0]`; STUNServerPort=70000 faults. K2, fixed by 0078. STUNServerAddress must pass the shell's `is_valid_domain` or `is_valid_ip`: `localhost`, `-stun.example.net`, `stun..example.net`, `192.0.2.256` fault; an IPv4, an IPv6 and a name with a trailing dot are taken (K13, 0082) |
 | `ptime` | `easycwmp.@acs[0].periodic_time` as the product stores it (a dateTime): the next periodic Inform must fall on its minute and second. K10, fixed by 0079. Then SPVs of PeriodicInformTime that are not a real instant (29 February of a common year, 31 April, 24:17, :60, zone +15:00 or +0730) must fault and keep the stored time; a leap day and the unknown time are taken. K14, fixed by 0081 |
 | `p6` | the P6 leaves ported to C (0090) on the product's configs: Account.Web.SessionMaxTime (hmxwslbackend, 300..3600), UserInterface.CarrierLocking (isplocking, section added when missing, digits only, LockingEnable 0/1 only), UserInterface.X_AIS_WebUserInfo (account, remoteaccess, clay; CurrentLanguage only checked against the list); one queued restart per service (stub init scripts); refused values fault and write nothing; CaptivePortal/BulkData/FAP answer when addressed and are absent from a whole-tree get; K20: a refusal at VALUESET (no isplocking package) reaches the ACS as 9003 with the parameter's 9002 |
+| `fw` | Firewall in C (0092) on a firewall_clay of every kind: DisablePort, ServiceControl IPv4/IPv6 (packetfilter by ipversion), IPFilter (ipfilter2); AddObject defaults and instance numbers, an SPV setting IPVersion=6 and a v6 address together, Ingress/ServiceType/Protocol mappings, 6 refused values, an SPV whose second leaf faults at VALUESET leaving the first unwritten (K20), DeleteObject renumbering |
 
 Logs: `$ICWMP_HOST_WORK/run/` (`acs.log`, `icwmpd.out`, `vg.log`,
 `fake_dm.cmds` = every request the data model shell got).

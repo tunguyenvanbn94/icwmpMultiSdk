@@ -103,6 +103,9 @@ int mtk_input_contract(const char *path, const char *value);
 int mtk_shell_safe_input(const char *v);
 /* is_valid_domain || is_valid_ip of the shell: 1 when the value passes */
 int mtk_shell_valid_host(const char *v);
+/* is_valid_ipv4 / is_valid_ipv6 of the shell: 1 when the value passes */
+int mtk_shell_ipv4(const char *v);
+int mtk_shell_ipv6(const char *v);
 
 /* IPv4 --------------------------------------------------------------- */
 /* Dotted quad -> host order integer, mirroring is_valid_ipv4 + ipstr2int

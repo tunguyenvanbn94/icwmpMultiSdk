@@ -32,7 +32,8 @@ libtr098_la_SOURCES +=	\
 	../sdk/mtk/dm098/account_mtk.c	\
 	../sdk/mtk/dm098/x_ais_carrierlocking_mtk.c	\
 	../sdk/mtk/dm098/x_ais_webuserinfo_mtk.c	\
-	../sdk/mtk/dm098/xmpp_mtk.c
+	../sdk/mtk/dm098/xmpp_mtk.c	\
+	../sdk/mtk/dm098/firewall_mtk.c
 
 if DM_MTK_SCRIPT_COMPAT
 libtr098_la_SOURCES +=	\

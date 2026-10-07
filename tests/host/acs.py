@@ -2,7 +2,8 @@
 """Test ACS for the host test of icwmp_tr098d (tests/host).
 
 Answers Inform and TransferComplete, runs a fixed list of RPCs per session
-(PLAN, one RPC of BAD with --plan, or one SPV with --set), ends the session with 204 and sends
+(PLAN, one RPC of BAD with --plan, or the --add/--delete objects in order then one SPV of the
+--set values), ends the session with 204 and sends
 a Connection Request (digest cr/crpass) so the next session starts, until
 --sessions sessions.  One line per session on stdout, "DONE ..." at the end."""
 import argparse, re, sys, threading, time, urllib.request
@@ -127,8 +128,10 @@ class H(BaseHTTPRequestHandler):
                     k in r for k in ("SetParameterValues", "AddObject", "DeleteObject"))]
                 if args.plan:
                     state["queue"] = [BAD[args.plan]]
-                if args.set:
-                    state["queue"] = [spv("kset", *(tuple(a.split("=", 1)) for a in args.set))]
+                if args.ops or args.set:
+                    state["queue"] = [addobj(p) if op == "add" else delobj(p) for op, p in (args.ops or [])]
+                    if args.set:
+                        state["queue"].append(spv("kset", *(tuple(a.split("=", 1)) for a in args.set)))
                 if args.download_every and state["sessions"] % args.download_every == 0:
                     state["queue"].append(DOWNLOAD)
                 ev = ",".join(re.findall(r"<EventCode>([^<]*)</EventCode>", body))
@@ -146,6 +149,10 @@ class H(BaseHTTPRequestHandler):
                     pf = re.findall(r"<ParameterName>([^<]*)</ParameterName>\s*<FaultCode>([^<]*)</FaultCode>", body)
                     top = re.findall(r"<FaultCode>([^<]*)</FaultCode>", body)
                     sys.stdout.write("fault %s %s\n" % (top[0] if top else "?", " ".join("%s=%s" % x for x in pf)))
+                    sys.stdout.flush()
+                m = re.search(r"<InstanceNumber>([^<]*)</InstanceNumber>", body)
+                if m:
+                    sys.stdout.write("added %s\n" % m.group(1))
                     sys.stdout.flush()
                 if state["queue"]:
                     state["rpcs"] += 1
@@ -179,5 +186,9 @@ ap.add_argument("--readonly", action="store_true", help="no SPV/AddObject/Delete
 ap.add_argument("--plan", default="", choices=[""] + sorted(BAD), help="only this one RPC per session")
 ap.add_argument("--set", action="append", metavar="NAME=VALUE",
                 help="only one SetParameterValues of these per session")
+ap.add_argument("--add", action="append", dest="ops", metavar="OBJECT.", type=lambda p: ("add", p),
+                help="AddObject, before the --set SPV; repeatable, kept in order with --delete")
+ap.add_argument("--delete", action="append", dest="ops", metavar="OBJECT.N.", type=lambda p: ("del", p),
+                help="DeleteObject, before the --set SPV")
 args = ap.parse_args()
 ThreadingHTTPServer(("127.0.0.1", args.port), H).serve_forever()

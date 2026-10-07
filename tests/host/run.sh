@@ -10,7 +10,8 @@
 #   run.sh stun            STUN leaves on stun.@stun[0], reload flag, stuncd reload (K2)
 #   run.sh ptime           PeriodicInformTime dateTime aligns the periodic Inform (K10)
 #   run.sh p6              P6 leaves in C: Account, CarrierLocking, X_AIS_WebUserInfo, hidden root objects
-#   run.sh all             unit smoke notify rpc msrv stun ptime p6 valgrind
+#   run.sh fw              P6e Firewall in C: add/set/delete, faults, VALUESET revert
+#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw valgrind
 # Needs build.sh, then setup.sh --yes (root, throwaway container).
 . "$(dirname "$0")/env.sh"
 
@@ -124,7 +125,7 @@ PY
 	if [ "$want" -gt 0 ] && [ "$v10" = "$want" ] && [ "$broken" = 0 ] && [ "$inform" = "$want" ]; then
 		pass "notify: $want/$want changes kept and sent in the Inform"
 	else
-		bad "notify: file $v10/100 updated, $broken broken lines, Inform carried ${inform:-0}/100"
+		bad "notify: file $v10/$want updated, $broken broken lines, Inform carried ${inform:-0}/$want"
 	fi
 	stop
 }
@@ -329,6 +330,147 @@ do_p6() {
 	if [ $bad_n = 0 ]; then pass "p6: Account, CarrierLocking, X_AIS_WebUserInfo writes, faults, hidden root objects, XMPP/LTE"; else bad "p6: $bad_n mismatches above"; fi
 }
 
+# P6e Firewall in C (0092): firewall_clay disable_port / packetfilter (ServiceControl
+# by ipversion) / ipfilter2, positional instances, AddObject defaults, DeleteObject
+# renumbering, checks that need the rule's other values at VALUESET, and an SPV
+# whose second leaf faults at VALUESET leaving the first one unwritten.
+do_fw() {
+	for c in firewall_clay network; do
+		if [ -f "/etc/config/$c" ]; then cp "/etc/config/$c" "$RUN/$c.fwsaved"; else rm -f "$RUN/$c.fwsaved"; fi
+	done
+	cat > /etc/config/firewall_clay <<'EOC'
+config disable_port
+	option active '1'
+	option port '23'
+	option name 'TELNET'
+	option interface 'WAN_1'
+
+config disable_port
+	option active '0'
+	option port '22'
+	option name 'SSH'
+	option interface 'LAN'
+
+config packetfilter
+	option enabled '1'
+	option name 'SC4'
+	option action 'accept'
+	option interface 'wan'
+	option ipversion 'ipv4'
+	option start_ip '-'
+	option end_ip '-'
+	option service_type 'HTTP ICMP'
+	option other_port '-'
+	option other_protocol 'tcp'
+
+config packetfilter
+	option enabled '0'
+	option name 'NOT_SC'
+
+config packetfilter
+	option enabled '1'
+	option name 'SC6'
+	option action 'block'
+	option interface 'pppoe-if0'
+	option ipversion 'ipv6'
+	option start_ip '2001:db8::'
+	option end_ip '-'
+	option prefix_len '32'
+	option service_type '-'
+	option other_port '1000:2000'
+	option other_protocol 'tcp/udp'
+
+config ipfilter2
+	option active '1'
+	option name 'F1'
+	option target 'block'
+	option priority '1'
+	option ipversion '4'
+	option src_addr '10.0.0.0'
+	option src_mask '8'
+	option ingress_ifname 'pppoe-if0'
+	option protocol 'tcp_udp'
+EOC
+	printf "config interface 'if0'\n\toption device 'eth1.100'\n" > /etc/config/network
+	F=InternetGatewayDevice.Firewall
+	W=InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1
+	start 1 "--add $F.X_AIS_IPFilter. --add $F.X_AIS_ServiceControl.IPV6ServiceControl. --add $F.X_AIS_DisablePort.
+		--set $F.X_AIS_IPFilter.2.IPVersion=6
+		--set $F.X_AIS_IPFilter.2.SourceIP=2001:db8::1
+		--set $F.X_AIS_IPFilter.2.SourceMask=64
+		--set $F.X_AIS_DisablePort.3.Interface=WAN_2
+		--set $F.X_AIS_ServiceControl.IPV4ServiceControl.1.IPStart=192.0.2.1
+		--set $F.X_AIS_ServiceControl.IPV4ServiceControl.1.ServiceType=SSH,PING
+		--set $F.X_AIS_ServiceControl.IPV4ServiceControl.1.Ingress=$W.WANIPConnection.1"
+	wait_done 60; sleep 2
+	bad_n=0
+	expect "faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "0"
+	grep '^fault ' "$RUN/acs.log" | sed 's/^/  ACS: /'
+	expect "AddObject instances" "$(grep '^added ' "$RUN/acs.log" | tr '\n' ' ')" "added 2 added 2 added 3 "
+	expect "GPV Config" "$(dm_value $F.Config)" "High"
+	expect "GPV DisablePort.2.Name" "$(dm_value $F.X_AIS_DisablePort.2.Name)" "SSH"
+	expect "new DisablePort defaults" "$(uci -q get firewall_clay.@disable_port[2].active)/$(uci -q get firewall_clay.@disable_port[2].port)/$(uci -q get firewall_clay.@disable_port[2].name)" "0/NULL/FWIPF1"
+	expect "DisablePort.3.Interface" "$(uci -q get firewall_clay.@disable_port[2].interface)" "WAN_2"
+	S4=$F.X_AIS_ServiceControl.IPV4ServiceControl.1
+	S6=$F.X_AIS_ServiceControl.IPV6ServiceControl.1
+	expect "SC4 start_ip" "$(uci -q get firewall_clay.@packetfilter[0].start_ip)" "192.0.2.1"
+	expect "SC4 end_ip filled" "$(uci -q get firewall_clay.@packetfilter[0].end_ip)" "255.255.255.255"
+	expect "SC4 service_type" "$(uci -q get firewall_clay.@packetfilter[0].service_type)" "SSH ICMP"
+	expect "SC4 interface" "$(uci -q get firewall_clay.@packetfilter[0].interface)" "eth1.100"
+	expect "GPV SC4 Ingress" "$(dm_value $S4.Ingress)" "$W.WANIPConnection.1"
+	expect "GPV SC4 ServiceType" "$(dm_value $S4.ServiceType)" "SSH,PING"
+	expect "GPV SC4 OtherPort" "$(dm_value $S4.OtherPort)" "NULL"
+	expect "GPV SC4 Mode" "$(dm_value $S4.Mode)" "Accept"
+	expect "GPV SC6 Ingress" "$(dm_value $S6.Ingress)" "$W.WANPPPConnection.1"
+	expect "GPV SC6 Mode" "$(dm_value $S6.Mode)" "Drop"
+	expect "GPV SC6 ServiceType" "$(dm_value $S6.ServiceType)" "NULL"
+	expect "GPV SC6 OtherProtocol" "$(dm_value $S6.OtherProtocol)" "TCP/UDP"
+	expect "GPV SC6 PrefixLen" "$(dm_value $S6.PrefixLen)" "32"
+	expect "new SC6 rule" "$(uci show firewall_clay | grep -c "ipversion='ipv6'")" "2"
+	expect "new SC6 defaults" "$(dm_value $F.X_AIS_ServiceControl.IPV6ServiceControl.2.Name)/$(dm_value $F.X_AIS_ServiceControl.IPV6ServiceControl.2.Prefix)" "FWSC1/::"
+	I1=$F.X_AIS_IPFilter.1
+	expect "GPV IPF1 Target" "$(dm_value $I1.Target)" "Drop"
+	expect "GPV IPF1 Protocol" "$(dm_value $I1.Protocol)" "TCP and UDP"
+	expect "GPV IPF1 SourceInterface" "$(dm_value $I1.SourceInterface)" "$W.WANPPPConnection.1"
+	expect "GPV IPF1 DestMask" "$(dm_value $I1.DestMask)" "NULL"
+	expect "new IPF2 priority, name" "$(uci -q get firewall_clay.@ipfilter2[1].priority)/$(uci -q get firewall_clay.@ipfilter2[1].name)" "2/FWIPF2"
+	expect "IPF2 v6 address in the same SPV" "$(uci -q get firewall_clay.@ipfilter2[1].ipversion)/$(uci -q get firewall_clay.@ipfilter2[1].src_addr)/$(uci -q get firewall_clay.@ipfilter2[1].src_mask)" "6/2001:db8::1/64"
+	alive || expect "agent" "dead" "alive"
+	stop
+	# refused values: one session each, nothing written
+	for kv in "X_AIS_IPFilter.1.Order=2" "X_AIS_IPFilter.1.SourceIP=2001:db8::5" "X_AIS_IPFilter.1.SourceMask=33" \
+		  "X_AIS_ServiceControl.IPV4ServiceControl.1.OtherPort=2000:1000" \
+		  "X_AIS_ServiceControl.IPV4ServiceControl.1.ServiceType=HTTP,,SSH" \
+		  "X_AIS_DisablePort.1.Interface=WAN_7"; do
+		start 1 "--set $F.$kv"
+		wait_done 30; sleep 1
+		expect "$kv faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+		stop
+	done
+	# second leaf faults at VALUESET: the first one is reverted
+	start 1 "--set $F.X_AIS_IPFilter.2.IPVersion=4 --set $F.X_AIS_IPFilter.2.SourceIP=2001:db8::9"
+	wait_done 30; sleep 1
+	expect "IPVersion+v6 address faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+	stop
+	expect "IPF2 ipversion reverted" "$(uci -q get firewall_clay.@ipfilter2[1].ipversion)" "6"
+	expect "IPF1 priority after the faults" "$(uci -q get firewall_clay.@ipfilter2[0].priority)" "1"
+	expect "DisablePort.1 interface after the faults" "$(uci -q get firewall_clay.@disable_port[0].interface)" "WAN_1"
+	# DeleteObject: the next rule takes the deleted one's number
+	start 1 "--delete $F.X_AIS_IPFilter.1. --delete $F.X_AIS_DisablePort.1."
+	wait_done 30; sleep 1
+	expect "delete faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "0"
+	expect "ipfilter2 left" "$(uci show firewall_clay | grep -c '=ipfilter2$')" "1"
+	expect "disable_port left" "$(uci show firewall_clay | grep -c '=disable_port$')" "2"
+	expect "IPFilter.1 is the old 2" "$(dm_value $F.X_AIS_IPFilter.1.SourceIP)" "2001:db8::1"
+	expect "DisablePort.1 is the old 2" "$(dm_value $F.X_AIS_DisablePort.1.Name)" "SSH"
+	alive || expect "agent" "dead" "alive"
+	stop
+	for c in firewall_clay network; do
+		if [ -f "$RUN/$c.fwsaved" ]; then cp "$RUN/$c.fwsaved" "/etc/config/$c"; else rm -f "/etc/config/$c"; fi
+	done
+	if [ $bad_n = 0 ]; then pass "fw: DisablePort, ServiceControl v4/v6, IPFilter: get, add, set, faults, VALUESET revert, delete"; else bad "fw: $bad_n mismatches above"; fi
+}
+
 # STUN leaves are the product's stunclient: stun.@stun[0], the reload flag
 # of the shell setter and one stuncd reload at the end of the session (K2).
 do_stun() {
@@ -455,7 +597,8 @@ case "$1" in
 	stun) do_stun ;;
 	ptime) do_ptime ;;
 	p6) do_p6 ;;
-	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_valgrind ;;
+	fw) do_fw ;;
+	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_valgrind ;;
 	*) sed -n '2,/^# Needs/p' "$0"; exit 1 ;;
 esac
 exit $fail
