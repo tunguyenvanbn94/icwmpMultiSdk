@@ -146,13 +146,27 @@ do_rpc() {
 do_valgrind() {
 	command -v valgrind >/dev/null || { bad "valgrind not installed"; return; }
 	rm -f "$RUN"/vg.log
+	# --run-libc-freeres=no: K22.  valgrind runs glibc's __libc_freeres in
+	# the thread that called _exit after killing the others; its _IO_cleanup
+	# locks every FILE and hung on /etc/tr098/.dm_enabled_notify, whose lock
+	# the killed main thread held (value-change read loop).  Without valgrind
+	# _exit runs no freeres, so this is the tool, not the agent.
 	start "${1:-12}" "--download-every 3" valgrind --leak-check=full --errors-for-leak-kinds=definite \
-		--child-silent-after-fork=yes --num-callers=25 --log-file="$RUN/vg.log"
+		--run-libc-freeres=no --child-silent-after-fork=yes --num-callers=25 --log-file="$RUN/vg.log"
 	touch "$RUN/load.on"; load 1
 	wait_done 600
 	rm -f "$RUN/load.on"; sleep 3
 	kill -TERM "$(cat "$RUN/icwmpd.pid")"; sleep 10
 	stop
+	# K22: under valgrind the agent sometimes does not finish exiting ("Zl",
+	# one thread left in a glibc lock); it keeps /var/run/icwmpd.pid locked
+	# and every later agent exits at once.  Report it and clear it
+	# (ICWMP_KEEP_STUCK=1 leaves it for gdb).
+	stuck=$(ps -eo pid=,stat=,comm= | awk '$3 ~ /^memcheck/ && $2 != "Z" {print $1}')
+	if [ -n "$stuck" ]; then
+		echo "  K22: agent under valgrind still there after SIGTERM: $(ps -o pid=,stat=,nlwp= -p "$stuck" | tr -s ' ')"
+		[ -n "$ICWMP_KEEP_STUCK" ] || { kill -9 $stuck 2>/dev/null; sleep 1; }
+	fi
 	def=$(sed -n 's/.*definitely lost: \([0-9,]*\) bytes.*/\1/p' "$RUN/vg.log")
 	ind=$(sed -n 's/.*indirectly lost: \([0-9,]*\) bytes.*/\1/p' "$RUN/vg.log")
 	err=$(sed -n 's/.*ERROR SUMMARY: \([0-9]*\) errors.*/\1/p' "$RUN/vg.log")
