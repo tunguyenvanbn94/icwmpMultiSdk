@@ -58,7 +58,7 @@ flowchart LR
 | `apply --sdk-only` | Xong (0083) | MTK SDK build trên cây chỉ còn MTK |
 | BDK | Prototype; **build image đạt 06/10 tại 0088** (bundle một SDK, analysis §56) | SDK build BDK; board BDK chưa (PH7) |
 | Test host | Chạy được trên máy build: container `ubuntu:24.04` (§55) | **`run.sh all` PASS 06/10** trên repo (code 0086) và từ chính bundle MTK `e273359` |
-| **PH0 (đóng băng baseline)** | **Đang làm** | Còn G9 24 h (07/10 08:15), xem WebUI (G6), K15, rồi PH0.5 |
+| **PH0 (đóng băng baseline)** | **Đang làm** | Còn G9 24 h (07/10 08:15), rồi PH0.5 (user duyệt 07/10). K15 hoãn theo quyết định 07/10; xem WebUI (G6) chưa có tài khoản |
 
 ---
 
@@ -132,8 +132,8 @@ Runbook: [../plan/ph0_gate_runbook.md](../plan/ph0_gate_runbook.md).
 | K10 | HIGH | **Fixed, board** | PeriodicInformTime căn sai mốc |
 | K12 | LOW | Open | Download/Upload chờ mutex khi phiên nối tiếp liên tục |
 | K13, K14 | HIGH, MEDIUM | **Fixed, board** | Kiểm input ManagementServer |
-| K15 | MEDIUM | Cần quyết định sản phẩm | Agent sau controller: `icwmpd.init` network mặc định `if0`, không chạy khi `opermode=auto` |
-| K16 | MEDIUM | Open | `icwmp_stund` (không build trên MTK) đọc nhầm option mật khẩu |
+| K15 | MEDIUM | **Hoãn** (quyết định 07/10) | Agent sau controller: `icwmpd.init` network mặc định `if0`, không chạy khi `opermode=auto`. Giữ nguyên; STUN dùng app có sẵn của sản phẩm; làm khi có yêu cầu hoặc lỗi |
+| K16 | MEDIUM | **Hoãn** (07/10) | `icwmp_stund` đọc nhầm option mật khẩu; không build trên MTK vì dùng app STUN của sản phẩm |
 | K17 | HIGH | **Fixed, board** | Ghi ManagementServer làm procd restart icwmpd |
 
 Bảng đầy đủ: `python3 docs/issue/progress.py` hoặc JSON.
@@ -154,8 +154,8 @@ Bảng đầy đủ: `python3 docs/issue/progress.py` hoặc JSON.
 | 6 | G9: soak 24 h trên **image cuối của PH0** (0083) | dev | Đang chạy từ 06/10 08:14 (sau reboot G6); chu kỳ Inform 12 h nên đường session ít được thử |
 | 7 | ~~BDK: apply + build tại HEAD, chạy runbook §0.2~~ | — | **Xong 06/10** trên máy `192.168.100.38`: apply bundle `--sdk bdk` tại `9b75ed9`, component + image `MO77300EB` rc 0 (§56) |
 | 8 | ~~Test host: `tests/host/run.sh all`~~ | — | **Xong 06/10** trong container `ubuntu:24.04` trên máy build, cả repo lẫn bundle MTK (§55). Ghi chú cũ "không vào GitHub/Docker Hub" là sai |
-| 9 | K15: quyết định sản phẩm cho agent sau controller | product | — |
-| 10 | PH0.5: tag `baseline/ph0-mtk-tr098-<ngày>` trên `dev`, fast-forward `main`, JSON PH0 = DONE | sau khi 1–8 đạt, cần người duyệt | — |
+| 9 | ~~K15: quyết định sản phẩm~~ | — | **07/10:** STUN chưa cần, dùng app STUN đang có; ưu tiên icwmp chạy ổn định và đủ tham số theo kế hoạch; agent sau controller làm khi cần hoặc có lỗi |
+| 10 | PH0.5: tag `baseline/ph0-mtk-tr098-<ngày>` trên `dev`, fast-forward `main`, JSON PH0 = DONE | dev | **User duyệt 07/10** ("làm theo đề xuất"): làm khi G9 đạt |
 
 ### 3.2 Lộ trình PH1–PH8
 

@@ -101,8 +101,8 @@ và các crash do RPC (0077). `dev` trội hơn hẳn `main` về độ đúng r
 | K9 | đa SDK | `check-c-sanity` cho lib BDK/UCI có nhiễu (thiếu header vendor, danh sách libc chưa đủ); BDK chưa build với 0067–0077 | chạy 2026-10-04: lib/bdk 4, lib/uci 3 "vấn đề" đều là cảnh báo giả | PH0.1 build BDK thật; cổng tĩnh chỉ tính lib/mtk + app×3 | build BDK **xong 06/10** tại 0088 (analysis §56) |
 | **K13** | cao | 0078 bỏ một phần validation/side effect của shell sản phẩm: URL không kiểm scheme và không ghi `/usr/share/easycwmp/defaults` (shell `management_server:69,75`), STUNServerAddress không qua `is_valid_domain`/`is_valid_ip` (`:114`) | đọc shell SDK so với `managementserver_mtk.c`; chưa chạy board | test SPV URL không scheme, STUN address sai, GPV sau phiên/reboot; quyết định sản phẩm giữ hay bỏ từng side effect | PH0 |
 | **K14** | trung bình | PeriodicInformTime chỉ kiểm hình dạng: `ms_valid_datetime` không kiểm lịch/timezone, `config.c` `periodic_time_value` không kiểm ngày của tháng, giờ, suffix | source | thống nhất validation với parser; test leap day, ngày không tồn tại, giờ ≥24, timezone sai; fault 9007 không đổi mốc Inform | PH0 |
-| **K15** | trung bình | Agent/AP sau controller: `icwmpd.init:125` không chạy khi `opermode=auto`, `:139-140` network mặc định `if0`, `:167` không có IP thì chỉ chờ. `stuncd.init:26` (vendor) có cổng opmode riêng, biến không nháy: opmode rỗng → busybox `[ != auto ]` exit 2 → icwmpd chạy còn stuncd không | source icwmpd.init + stuncd.init + busybox 1.33.1 `test.c` | đổi cổng ở cả hai script cùng lúc, bọc nháy; chọn network theo opmode hay cấu hình; CR qua STUN (G7) hoặc port-forward + `cr_host` | PH0 quyết định sản phẩm, board |
-| **K16** | trung bình | `icwmp_stund` đọc `cwmp.cpe.password` (`stun/stun.c:439`) nhưng icwmp lưu `cwmp.cpe.passwd` (`inc/cwmp.h:69`): mật khẩu rỗng → bỏ qua kiểm chữ ký, nhận mọi UDP Connection Request. Không build hiện tại (MTK dùng `stunclient` vendor) | source | sửa tên option trước khi bật `--enable-icwmp_stun` cho SDK nào | PH3+ |
+| **K15** | trung bình | Agent/AP sau controller: `icwmpd.init:125` không chạy khi `opermode=auto`, `:139-140` network mặc định `if0`, `:167` không có IP thì chỉ chờ. `stuncd.init:26` (vendor) có cổng opmode riêng, biến không nháy: opmode rỗng → busybox `[ != auto ]` exit 2 → icwmpd chạy còn stuncd không | source icwmpd.init + stuncd.init + busybox 1.33.1 `test.c` | đổi cổng ở cả hai script cùng lúc, bọc nháy; chọn network theo opmode hay cấu hình; CR qua STUN (G7) hoặc port-forward + `cr_host` | **hoãn** (user 07/10: STUN chưa cần, dùng app STUN đang có; làm khi cần hoặc có lỗi) |
+| **K16** | trung bình | `icwmp_stund` đọc `cwmp.cpe.password` (`stun/stun.c:439`) nhưng icwmp lưu `cwmp.cpe.passwd` (`inc/cwmp.h:69`): mật khẩu rỗng → bỏ qua kiểm chữ ký, nhận mọi UDP Connection Request. Không build hiện tại (MTK dùng `stunclient` vendor) | source | sửa tên option trước khi bật `--enable-icwmp_stun` cho SDK nào | **hoãn** (MTK dùng app STUN của sản phẩm, quyết định 07/10) |
 
 ### 3.1 K1: cơ chế và bảng config of record
 
@@ -176,6 +176,10 @@ mỗi mức phải ghi rõ commit hoặc bundle tương ứng.
 
 Dùng ID phase của v2 (PH0–PH8). ID cũ (A0–A6, P1–P8, R8, R9) được giữ trong JSON để truy vết,
 và mỗi PH ghi rõ nó thay thế ID nào.
+
+**Ưu tiên của sản phẩm (user, 07/10/2026):** icwmp chạy ổn định và hỗ trợ đủ tham số theo kế hoạch, tức là đủ
+783 tham số TR-098 của sản phẩm, đúng hành vi, rồi đến full C. STUN và agent sau controller (K15, K16) để sau, khi
+có yêu cầu hoặc phát sinh lỗi; trước mắt dùng app STUN đang có của sản phẩm.
 
 | Phase | Mục tiêu | Thay cho | Trạng thái 2026-10-04 |
 |---|---|---|---|

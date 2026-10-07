@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-06T11:51:36+07:00",
+  "updated_at": "2026-10-07T15:35:20+07:00",
   "execution": "06/10 trên dev: 0080–0083 build SDK MTK và chạy board HP2236B (image 0083): gate PH0 G1–G7 phía router, G4/G6 qua GenieACS NBI, K10/K13/K14/K17 board. 0084–0086 dọn ghi chú, export.py --sdk mtk, K19, gỡ 27 hàm không dùng. 0087 bundle MTK mang source microxml cho test host. Test host chạy lại được trên máy build (container ubuntu:24.04): run.sh all PASS trên repo và từ chính bundle MTK.",
   "baseline": "overlay cd93685595d4a52302d5b14adc9cbf38ac82553c",
   "current": "repo dev 0034–0088. Data model C 458/783 (P1 65 + P2 70 + P3 67 + P4 173 + P5 83), còn lại qua compat shell. MTK: SDK build + board (image 0083); BDK: SDK build image đạt tại 0088; HOST_VERIFIED tại 0086/0087. Bản giao MTK-only release/icwmp_mtk_8dea75b.tar.gz. PH0 còn: G9 24 h (mốc 07/10 08:15), xem WebUI (G6), quyết định K15, rồi PH0.5.",
@@ -353,18 +353,18 @@
     {
       "id": "K15",
       "severity": "MEDIUM",
-      "status": "OPEN_SOURCE_VERIFIED",
+      "status": "DEFERRED_PRODUCT",
       "phase": "PH0 product decision; board G-agent",
       "title": "Agent/AP sau controller: icwmpd.init lấy IP trên easycwmp.@local[0].network (mặc định if0) và không chạy khi clay.opermode.mode=auto; stuncd.init có cổng opmode riêng, không nháy biến",
-      "evidence": "sdk/mtk/files/icwmpd.init:125 [ \"$opmode\" = \"auto\" ] && return; :139-140 network rỗng thì if0; :167 không có IP → chỉ chạy wan_interface_up và chờ. SDK stunclient/files/stuncd.init:26 if [ $stun_enable == \"1\" ] && [ $opmode != \"auto\" ] không nháy: busybox 1.33.1 coreutils/test.c — [ != auto ] → primary() check_emptiness true, test_main còn đối số dư → \"auto: unknown operand\", exit 2 → opmode rỗng thì icwmpd chạy còn stuncd không. Inform ra qua NAT controller được khi network trỏ interface có IP (thường lan); Connection Request vào cần STUN (K2/G7) hoặc port-forward + cwmp.cpe.cr_host/cr_port. Sửa thì đổi cổng ở cả hai script cùng lúc; stuncd.init là file vendor, không nằm trong repo. Giá trị opermode thật trên agent: chưa established. Board 2026-10-05 (agent HP2236B): clay.opermode.mode=ap → qua cả hai cổng opmode; easycwmp.@local[0].network=lan (192.168.1.104/24, gần chắc đặt tay — sản phẩm chỉ ghi if<id>/notused ở hal_gateway.c HalGateway_setInterfaceCwmp); stun_enable=0; stun.@stun[0].udpcontnreqaddr=192.168.1.104:3478 do stuncd.init:23 ghi trước cổng nên UDPConnectionRequestAddress báo IP LAN khi STUN tắt (giống shell cũ). Còn lại: network cho agent ap và G7 STUN trên agent."
+      "evidence": "sdk/mtk/files/icwmpd.init:125 [ \"$opmode\" = \"auto\" ] && return; :139-140 network rỗng thì if0; :167 không có IP → chỉ chạy wan_interface_up và chờ. SDK stunclient/files/stuncd.init:26 if [ $stun_enable == \"1\" ] && [ $opmode != \"auto\" ] không nháy: busybox 1.33.1 coreutils/test.c — [ != auto ] → primary() check_emptiness true, test_main còn đối số dư → \"auto: unknown operand\", exit 2 → opmode rỗng thì icwmpd chạy còn stuncd không. Inform ra qua NAT controller được khi network trỏ interface có IP (thường lan); Connection Request vào cần STUN (K2/G7) hoặc port-forward + cwmp.cpe.cr_host/cr_port. Sửa thì đổi cổng ở cả hai script cùng lúc; stuncd.init là file vendor, không nằm trong repo. Giá trị opermode thật trên agent: chưa established. Board 2026-10-05 (agent HP2236B): clay.opermode.mode=ap → qua cả hai cổng opmode; easycwmp.@local[0].network=lan (192.168.1.104/24, gần chắc đặt tay — sản phẩm chỉ ghi if<id>/notused ở hal_gateway.c HalGateway_setInterfaceCwmp); stun_enable=0; stun.@stun[0].udpcontnreqaddr=192.168.1.104:3478 do stuncd.init:23 ghi trước cổng nên UDPConnectionRequestAddress báo IP LAN khi STUN tắt (giống shell cũ). Còn lại: network cho agent ap và G7 STUN trên agent. | Quyết định user 07/10/2026: STUN chưa cần, dùng app STUN đang có của sản phẩm; ưu tiên icwmp chạy ổn định và đủ tham số theo kế hoạch; agent sau controller làm khi cần hoặc phát sinh lỗi. Giữ nguyên icwmpd.init."
     },
     {
       "id": "K16",
       "severity": "MEDIUM",
-      "status": "OPEN_SOURCE_VERIFIED",
+      "status": "DEFERRED",
       "phase": "trước khi bật --enable-icwmp_stun (PH3+)",
       "title": "icwmp_stund đọc cwmp.cpe.password nhưng icwmp lưu cwmp.cpe.passwd: mật khẩu rỗng → bỏ qua kiểm chữ ký, nhận mọi UDP Connection Request",
-      "evidence": "apps/icwmp/icwmp/stun/stun.c:438-440 suci_get_value(\"cwmp\",\"cpe\",\"password\") rồi if (*crusername && *crpassword); stun/config.c suci_get_value trả \"\" khi option không có → valid giữ 1; inc/cwmp.h:69 UCI_CPE_PASSWD_PATH \"cwmp.cpe.passwd\". Hiện không build (feed Makefile không có --enable-icwmp_stun); MTK dùng stunclient vendor. Lỗi có sẵn từ upstream."
+      "evidence": "apps/icwmp/icwmp/stun/stun.c:438-440 suci_get_value(\"cwmp\",\"cpe\",\"password\") rồi if (*crusername && *crpassword); stun/config.c suci_get_value trả \"\" khi option không có → valid giữ 1; inc/cwmp.h:69 UCI_CPE_PASSWD_PATH \"cwmp.cpe.passwd\". Hiện không build (feed Makefile không có --enable-icwmp_stun); MTK dùng stunclient vendor. Lỗi có sẵn từ upstream. | 07/10: hoãn cùng K15 — MTK dùng stunclient của sản phẩm, icwmp_stund không build."
     },
     {
       "id": "K17",
