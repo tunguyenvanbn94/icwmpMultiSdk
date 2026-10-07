@@ -3753,3 +3753,43 @@ Phân loại:
 - **Not established**: hàm glibc nào đang chờ. `vgdb` cần ptrace, container test không có `CAP_SYS_PTRACE`.
 - Không phải lỗi của agent trên board. Cần xác minh bằng stack (container có `--cap-add SYS_PTRACE`) và cách tránh trong
   test (`--run-libc-freeres=no`).
+
+**K22 — nguyên nhân đã xác minh (07/10 19:00, container có `--cap-add SYS_PTRACE`).**
+- Tái hiện ngay lượt 1 của `run.sh valgrind 6`: pid 2510 ở `Zl`, luồng 2536 trong `futex(0x64882c0, FUTEX_WAIT_PRIVATE, 2)`.
+- `vgdb` vẫn không attach được (luồng chính đã zombie), và memcheck đã bị strip nên gdb chỉ thấy địa chỉ. Vì vậy đọc
+  thẳng bộ nhớ qua `/proc/2536/mem`:
+  - tại `futex − 0xe0` là một glibc `FILE` (`_flags` = `0xfbad3c84`, magic `0xfbad`) có con trỏ `_lock` trỏ đúng vào từ
+    futex. Một FILE mở bằng `fopen` có lock đặt ngay sau `_IO_FILE_plus`;
+  - `_fileno` = 14, và `/proc/2536/fd/14` là `/etc/tr098/.dm_enabled_notify`;
+  - lock word = 2 (đang bị tranh chấp); owner `0x5d52440` nằm trong vùng TLS của luồng chính.
+- Chuỗi sự kiện:
+  1. Luồng chính đang đọc file trong vòng value-change (`dm_entry_enabled_notify_check_value_change`, `fgets`).
+  2. Luồng khác nhận SIGTERM; handler `close()` + `_exit()`.
+  3. Valgrind giết các luồng còn lại, rồi chạy `__libc_freeres` của glibc trong luồng đang thoát.
+  4. `_IO_cleanup` khóa từng FILE còn mở và chờ mãi lock mà luồng đã chết còn giữ.
+- **Kết luận:**
+  - Verified: chỉ xảy ra dưới valgrind. `_exit` trên kernel thật không chạy freeres hay `_IO_cleanup`, nên agent trên
+    board không bị.
+  - Test sửa bằng `--run-libc-freeres=no` (chỉ bỏ phần glibc tự dọn khi thoát, không ảnh hưởng việc đếm leak của agent).
+  - Nếu agent dưới valgrind vẫn không thoát, `do_valgrind` in dòng `K22: ...` và kill nó (`ICWMP_KEEP_STUCK=1` để giữ lại
+    cho gdb). Mục đích: tiến trình kẹt không giữ `/var/run/icwmpd.pid` làm hỏng các lượt sau.
+- Ghi chú phụ (Not established là có hại): `.dm_enabled_notify` được dựng lại bằng `remove()` rồi nhiều lần
+  `fopen("a")`. SIGTERM đến giữa lúc dựng lại sẽ để lại file thiếu dòng. Đây là thiết kế upstream; chưa kiểm agent có
+  dựng lại file này khi khởi động hay không.
+
+**MTK SDK build tại `7e7f9c6` (07/10 18:56–19:09):**
+- Export `--sdk mtk`, apply vào `1_src` (backup `.icwmp-backups/20261007-185618-4r8it51i`).
+- Lượt 1 (`20261007-p7-7e7f9c6.log`): gói rc 0, image rc 0, **nhưng `libtr098` không có khóa CPEagent**.
+  - OpenWrt build gói từ `openwrt-21.02.1_dev/feeds/airoha/`, là bản **copy** (`src-cpy`, ngày 25/09) của
+    `airoha_feeds/`. `apply` chỉ ghi vào `airoha_feeds/`.
+  - `apply` có in sẵn vòng `cmp || cp` để làm mới hai feed Makefile khi build gói lẻ. Script build của phiên này bỏ sót
+    vòng đó. Các lần build trước không bị gì vì feed Makefile không đổi.
+  - Bài học: build gói lẻ sau khi feed Makefile đổi thì phải chạy vòng đó trước.
+- Lượt 2 (`20261007-p7-7e7f9c6-key.log`):
+  - làm mới `feeds/airoha/.../libtr098/Makefile`;
+  - Build/Prepare sinh `cpeagent_key_mtk.h`; hash khóa trùng với khóa trong shell sản phẩm, và khóa không có trong log build;
+  - gói rc 0, không cảnh báo nào ở file P7, image rc 0;
+  - `tclinux.bin` 19:08:49, md5 `f303253d1baefee3c2a95a2ef69d2eba`;
+  - `libtr098.so.3.0.0` trong `root.squashfs` (19:08:25) có md5 `2c401049…`, trùng bản trong `root-airoha`, và có các
+    module P7.
+- Chưa nạp board (SSH vẫn đóng).

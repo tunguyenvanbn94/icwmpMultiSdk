@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-07T19:00:00+07:00",
+  "updated_at": "2026-10-07T18:58:00+07:00",
   "execution": "07/10 tối: P7 xong bằng C (0094 P7a+P7b: 11 object dịch vụ + Conf + Logging; 0095 P7c: UplinkSetup qua hni.dualuplink, WiFiStatus, MLO). 0093 sửa công cụ ma trận (dòng tiếp \"\\\", kiểu vendor HP2236BVA-384). Repo GitHub public: khóa CPEagent lấy lúc build, không vào source. Test host mới p7, p7c; run.sh all PASS. Board: SSH vẫn đóng, test board để sau.",
   "baseline": "overlay cd93685595d4a52302d5b14adc9cbf38ac82553c",
   "current": "repo dev 0034–0095. Data model C 646/783 (P1–P5 458 + P6 97 + P7 79 + P8 LTE 12), còn lại qua compat shell. MTK: SDK build + board (image 0083); BDK: SDK build image đạt tại 0088; HOST_VERIFIED tại 0086/0087. Bản giao MTK-only release/icwmp_mtk_8dea75b.tar.gz. PH0 còn: G9 24 h (mốc 07/10 08:15), xem WebUI (G6), quyết định K15, rồi PH0.5.",
@@ -79,9 +79,9 @@
     },
     {
       "id": "P7",
-      "status": "HOST_VERIFIED",
+      "status": "BUILD_PASS",
       "title": "Operator extensions — 79 param",
-      "note": "79/79: 0094 UPnP, 3rdAgent, CPEagent (khóa lấy lúc build), AutoWifiScan, DHCPClient, DnsLandingPage, Isolation, SSH, Telnet, MeshAPI, DDNS, Conf, Logging (TFTP/Clean trong setter); 0095 UplinkSetup (hni.dualuplink ở VALUESET, đọc lại từ file), WiFiStatus (mwctl/iw, JSON khớp shell dưới busybox), MLO. run.sh p7 + p7c + all PASS. SDK build/board chưa (analysis §60)"
+      "note": "79/79: 0094 UPnP, 3rdAgent, CPEagent (khóa lấy lúc build), AutoWifiScan, DHCPClient, DnsLandingPage, Isolation, SSH, Telnet, MeshAPI, DDNS, Conf, Logging (TFTP/Clean trong setter); 0095 UplinkSetup (hni.dualuplink ở VALUESET, đọc lại từ file), WiFiStatus (mwctl/iw, JSON khớp shell dưới busybox), MLO. run.sh p7 + p7c + all PASS. MTK SDK build gói + image đạt tại 7e7f9c6 (khóa CPEagent sinh lúc build, cần làm mới feeds/airoha khi build gói lẻ). Board chưa (analysis §60)"
     },
     {
       "id": "P8",
@@ -413,10 +413,10 @@
     {
       "id": "K22",
       "severity": "LOW",
-      "status": "OPEN_NOT_ESTABLISHED",
+      "status": "CLOSED_TEST_TOOL",
       "phase": "theo dõi",
-      "title": "Một lần agent dưới valgrind không thoát hẳn sau SIGTERM (một luồng chờ futex, giữ pid lock)",
-      "evidence": "07/10 run.sh all lần 1 tại 0092-dev: tiến trình Zl, luồng còn lại wchan futex_wait_queue, /var/run/icwmpd.pid còn khoá, vg.log không có tổng kết. Chạy lại valgrind 3, 12 phiên và all ×2: thoát sạch. Cần gdb attach lấy stack nếu gặp lại (analysis §59)"
+      "title": "Dưới valgrind, agent nhận SIGTERM đôi khi không thoát hẳn: __libc_freeres/_IO_cleanup của valgrind kẹt trên lock FILE .dm_enabled_notify mà luồng chính (đã bị valgrind giết) giữ",
+      "evidence": "07/10 run.sh all lần 1 tại 0092-dev: tiến trình Zl, luồng còn lại wchan futex_wait_queue, /var/run/icwmpd.pid còn khoá, vg.log không có tổng kết. Chạy lại valgrind 3, 12 phiên và all ×2: thoát sạch. Cần gdb attach lấy stack nếu gặp lại (analysis §59) | 07/10 18:53 lần 2 (run.sh all tại 0095): pid 32120 Zl, luồng chính zombie có SigPnd bit 63 (tín hiệu kill nội bộ của valgrind), luồng 32146 trong futex(addr, FUTEX_WAIT_PRIVATE, 2) = lll_lock_wait của glibc; handler SIGTERM chỉ close()+_exit() nên trên kernel thật exit_group kết thúc mọi luồng: chỉ xảy ra dưới valgrind. Hàm đang chờ chưa xác định (container không có CAP_SYS_PTRACE, analysis §60) | 07/10 19:00 xác minh (container SYS_PTRACE, pid 2510): đọc /proc/<tid>/mem: futex-0xe0 là FILE (_flags 0xfbad3c84, _lock = futex), fileno 14 = /etc/tr098/.dm_enabled_notify, owner trong TLS luồng chính. Chỉ dưới valgrind (_exit không chạy freeres). Test: --run-libc-freeres=no, K22 còn sót thì in và kill (ICWMP_KEEP_STUCK=1 giữ lại)"
     }
   ]
 }
