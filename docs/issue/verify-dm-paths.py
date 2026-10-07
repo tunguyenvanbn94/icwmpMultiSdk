@@ -28,6 +28,8 @@ DEFAULT_MATRIX = os.path.join(HERE, "tr098_coverage_matrix.tsv")
 TABLE_RE = re.compile(
     r"(static\s+)?(DMOBJ|DMLEAF)\s+(\w+)\s*\[\]\s*=\s*\{(.*?)\n\};", re.S)
 MODULE_RE = re.compile(r"\.objs\s*=\s*(\w+)")
+# struct dm_module.params: leaves merged at the root level (DeviceSummary)
+PARAMS_RE = re.compile(r"\.params\s*=\s*(\w+)")
 INSTANCE_RE = re.compile(r"\$\d+")
 # Bộ trích xuất giữ lại số instance viết cứng trong script shell
 # (IPInterface.1., WANDevice.1.).  Quy mọi segment toàn chữ số về {i}.
@@ -107,7 +109,7 @@ def literal(tok, defines):
 
 def parse_file(path, defines):
     src = open(path, encoding="utf-8", errors="replace").read()
-    tables, roots, shared = {}, [], set()
+    tables, roots, shared, params = {}, [], set(), []
     for is_static, kind, name, body in TABLE_RE.findall(src):
         rows = []
         # một hàng có thể trải nhiều dòng vật lý: gom tới khi ngoặc cân bằng
@@ -135,7 +137,9 @@ def parse_file(path, defines):
             shared.add(name)
     for m in MODULE_RE.finditer(src):
         roots.append(m.group(1))
-    return tables, roots, shared
+    for m in PARAMS_RE.finditer(src):
+        params.append(m.group(1))
+    return tables, roots, shared, params
 
 
 class Scope(dict):
@@ -283,12 +287,12 @@ def main():
     # build này và trùng tên bảng với module MTK.
     sources = collect_sources(args.src, args.sdk)
     defines = {"CUSTOM_PREFIX": "X_HNI_"}
-    all_tables, all_roots, per_file = {}, [], {}
+    all_tables, all_roots, all_params, per_file = {}, [], [], {}
     for rel in sources:
         full = os.path.join(args.src, rel)
         if not os.path.isfile(full):
             continue
-        tables, roots, shared = parse_file(full, defines)
+        tables, roots, shared, params = parse_file(full, defines)
         per_file[rel] = tables
         for k in shared:
             if k in all_tables and all_tables[k] != tables[k]:
@@ -297,6 +301,8 @@ def main():
             all_tables[k] = tables[k]
         for r in roots:
             all_roots.append((rel, r))
+        for r in params:
+            all_params.append((rel, r))
 
     tree = {}
     for fn, root in all_roots:
@@ -307,6 +313,14 @@ def main():
         merge(Scope(per_file[fn], all_tables), root, tree, frozenset())
     got = set()
     emit(tree, "InternetGatewayDevice.", got)
+    for fn, name in all_params:
+        kind, rows = Scope(per_file[fn], all_tables).get(name, (None, []))
+        if kind != "DMLEAF":
+            print("CẢNH BÁO: %s khai .params = %s nhưng không tìm thấy bảng DMLEAF"
+                  % (fn, name), file=sys.stderr)
+            continue
+        for lname, _ in rows:
+            got.add(("param", "InternetGatewayDevice." + lname))
     got = {(k, norm(p)) for k, p in got}
 
     want = set()

@@ -141,6 +141,11 @@ class H(BaseHTTPRequestHandler):
             else:
                 if "Fault" in body:
                     state["faults"] += 1
+                    # which parameter faulted, and with what: one line per fault
+                    pf = re.findall(r"<ParameterName>([^<]*)</ParameterName>\s*<FaultCode>([^<]*)</FaultCode>", body)
+                    top = re.findall(r"<FaultCode>([^<]*)</FaultCode>", body)
+                    sys.stdout.write("fault %s %s\n" % (top[0] if top else "?", " ".join("%s=%s" % x for x in pf)))
+                    sys.stdout.flush()
                 if state["queue"]:
                     state["rpcs"] += 1
                     out = env(state["queue"].pop(0), str(state["rpcs"]))
