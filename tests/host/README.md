@@ -21,7 +21,7 @@ busybox valgrind libjson-c-dev libcurl4-openssl-dev libssl-dev zlib1g-dev`.
 ```sh
 tests/host/build.sh            # deps (pinned libubox/uci/ubus), microxml, libtr098, icwmp_tr098d
 sudo tests/host/setup.sh --yes # fake CPE: UCI config (cwmp, easycwmp, stun), ubusd, stuncd stand-in, data model shell, external script
-tests/host/run.sh all          # unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 valgrind, exit 1 on any FAIL
+tests/host/run.sh all          # unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b valgrind, exit 1 on any FAIL
 ```
 
 Work files go to `$ICWMP_HOST_WORK` (default `/tmp/icwmp-host`); `build.sh`
@@ -51,6 +51,7 @@ too: use 24.04.
 | `p7` | P7a/P7b in C (0094) on fixture configs (sections missing on purpose): UPnP, 3rdAgent (AP mode clears client_id), CPEagent (SecretKey equal to the shell's `printf \| dd \| openssl enc \| openssl base64 \| cut` with the test key `CPEAGENT_TEST_KEY`; the product build takes the real key from the product tree), AutoWifiScan, DHCPClient, DnsLandingPage, Isolation, SSH/Telnet, MeshAPI, DDNS, Conf, Logging (level lists, TFTP upload through a stand-in `tftp`, CleanLogging); every restart / `ubus call hni` queued once (stand-in init scripts and `ubus` on PATH); same values again change nothing; 18 values the shell refused fault |
 | `p7c` | P7c in C (0095): UplinkSetup against a stand-in `hni.dualuplink` that commits dualuplink itself (mode3 Backup then Main in one SPV compares with what hni just wrote; a FAIL reply is 9003/9002 at VALUESET), UplinkStatus from a stand-in `blapi_cmd`; WiFiStatus reports from stand-in `mwctl`/`iw`, JSON equal to what the product's shell functions print for the same input under busybox (except the lease lookup and the escaped `"`, see `x_ais_wifistatus_mtk.c`); MLO groups and their `wifi reload` |
 | `p8` | P8a in C (0097): `IGD.Device.IP.Interface` numbered by `network.<sec>.ip_int_instance` (given and committed on a GET, loopback out, an anonymous section is `@interface[n]`), Add (`if<n>`, static, auto 0) / Delete, Enable/IPv4Enable/IPv6Enable writing network + `wan.@entry[n]` and queuing hni_wan_reload / ifdown-ifup / the IPv4 flush (stand-in tools on PATH); `IPv6Enable` over every anonymous wan entry; `Device.DHCPv6.Server.Pool` (own numbering, a section without a Device.IP number is out, odhcpd options); `Device.IP.Diagnostics.TraceRoute` (default route device, the shared store, RouteHops listed only below RouteHops. while Complete, parsed from trace_results.txt); DOCSIS constants; 7 faults |
+| `p8b` | P8b in C (0098): `Device.PPP.Interface` over the anonymous wan entries with conn_type 2, numbered max+1 and committed on a GET, Enable/LowerLayers/Username writing wan + network, AddObject as the shell meant (entry index, if<n>), Delete; `Device.DynamicDNS` (counts, SupportedServices fallback, positional clients, Interface as `Device.IP.Interface.<n>`, AddObject answering the real instance); `Device.RouterAdvertisement.InterfaceSetting` (own numbering, alias given on a GET, Max then Min in one SPV checked against each other, flag modes); 6 faults |
 
 Logs: `$ICWMP_HOST_WORK/run/` (`acs.log`, `icwmpd.out`, `vg.log`,
 `fake_dm.cmds` = every request the data model shell got).

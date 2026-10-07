@@ -14,7 +14,8 @@
 #   run.sh p7              P7a/b operator X_AIS_* in C: writes, queued restarts, faults
 #   run.sh p7c             P7c UplinkSetup (hni.dualuplink), WiFiStatus reports, MLO
 #   run.sh p8              P8a Device.IP (numbering, add/delete), DHCPv6 pools, TraceRoute hops, DOCSIS
-#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 valgrind
+#   run.sh p8b             P8b Device.PPP, DynamicDNS, RouterAdvertisement
+#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b valgrind
 # Needs build.sh, then setup.sh --yes (root, throwaway container).
 . "$(dirname "$0")/env.sh"
 
@@ -1027,6 +1028,129 @@ EOF
 	if [ $bad_n = 0 ]; then pass "p8: Device.IP numbering/add/delete/queued restarts, DHCPv6 pools, TraceRoute hops, DOCSIS, faults"; else bad "p8: $bad_n mismatches above"; fi
 }
 
+# P8b in C (0098): Device.PPP (numbering max+1 committed on a GET, the
+# AddObject the shell meant), Device.DynamicDNS (positional clients, the
+# instance AddObject really made), Device.RouterAdvertisement (own numbering,
+# alias given on a GET, interval order against this SPV's values, flags).
+P8B_CONFIGS="network wan ddns dhcp"
+do_p8b() {
+	for c in $P8B_CONFIGS; do
+		if [ -f "/etc/config/$c" ]; then cp "/etc/config/$c" "$RUN/$c.p8bsaved"; else rm -f "${RUN:?}/${c:?}.p8bsaved"; fi
+	done
+	printf "config interface 'lan'\n\toption device 'br-lan'\n\toption proto 'static'\n\nconfig interface 'if0'\n\toption device 'pon.10'\n\toption proto 'pppoe'\n\toption ip_int_instance '5'\n\nconfig interface 'if2'\n\toption device 'pon'\n\toption proto 'pppoe'\n" > /etc/config/network
+	cat > /etc/config/wan <<'EOF'
+config entry
+	option id '0'
+	option name 'if0'
+	option conn_type '2'
+	option active '1'
+	option ppp_username 'u0'
+	option vlan_active '1'
+	option vlan_id '10'
+
+config entry
+	option id '1'
+	option name 'if1'
+	option conn_type '1'
+
+config entry
+	option id '2'
+	option name 'if2'
+	option conn_type '2'
+	option ppp_int_instance '7'
+EOF
+	printf "config service 'service'\n\toption service_name 'dyndns.org'\n\toption enabled '1'\n\toption ip_network 'if0'\n\nconfig service\n\toption enabled '0'\n" > /etc/config/ddns
+	printf "config dhcp 'lan'\n\toption interface 'lan'\n\toption ra 'server'\n\toption ra_maxinterval '600'\n\toption ra_mininterval '200'\n\toption ra_flags 'managed-config'\n\nconfig dhcp 'wan'\n\toption interface 'if0'\n\toption ra 'disabled'\n" > /etc/config/dhcp
+	rm -f "${RUN:?}/p8b.calls" /var/run/ddns/service.result
+	if [ -e /usr/sbin/hni_wan_reload.sh ]; then p8b_hni=kept; else p8b_hni=made
+		printf '#!/bin/sh\necho "hni_wan_reload" >> %s/p8b.calls\n' "$RUN" > /usr/sbin/hni_wan_reload.sh; chmod +x /usr/sbin/hni_wan_reload.sh; fi
+	for s in ddns odhcpd; do
+		printf '#!/bin/sh\necho "%s $*" >> %s/p8b.calls\n' "$s" "$RUN" > "/etc/init.d/$s"; chmod +x "/etc/init.d/$s"
+	done
+	D=InternetGatewayDevice.Device
+	bad_n=0
+	start 1 "--readonly"
+	wait_done 30; sleep 1
+	# PPP: entry 0 gets max(7)+1 = 8, entry 2 keeps 7, the IPoE entry is out
+	# (the engine lists the answer in name order)
+	expect "PPP instances" "$($UBUS call tr069 dm '{"cmd":"get","path":"InternetGatewayDevice.Device.PPP."}' 2>/dev/null | grep -o 'Interface\.[0-9]*\.Name' | tr '\n' ' ')" \
+		"Interface.7.Name Interface.8.Name "
+	expect "entry 0 is 8" "$(dm_value $D.PPP.Interface.8.Name)" "if0"
+	expect "entry 0 numbered, committed" "$(grep -c "ppp_int_instance '8'" /etc/config/wan)" "1"
+	expect "PPP.8 Name/LowerLayers/Status" "$(dm_value $D.PPP.Interface.8.Name) $(dm_value $D.PPP.Interface.8.LowerLayers) $(dm_value $D.PPP.Interface.8.Status)" "if0 pon.10 Down"
+	expect "PPP.8 ConnectionStatus/LastConnectionError" "$(dm_value $D.PPP.Interface.8.ConnectionStatus) $(dm_value $D.PPP.Interface.8.LastConnectionError)" "Disconnected ERROR_UNKNOWN"
+	expect "PPP.8 Username, Password write only" "$(dm_value $D.PPP.Interface.8.Username)|$(dm_value $D.PPP.Interface.8.Password)" "u0|"
+	# DynamicDNS: two clients, the anonymous one is "@service[1]"
+	expect "DDNS counts" "$(dm_value $D.DynamicDNS.ClientNumberOfEntries) $(dm_value $D.DynamicDNS.ServerNumberOfEntries) $(dm_value $D.DynamicDNS.SupportedServices)" \
+		"2 2 dyndns.org,no-ip.com"
+	expect "DDNS.1 Interface/Status/LastError" "$(dm_value $D.DynamicDNS.Client.1.Interface) $(dm_value $D.DynamicDNS.Client.1.Status) $(dm_value $D.DynamicDNS.Client.1.LastError)" \
+		"Device.IP.Interface.5 Error ERROR_NONE"
+	expect "DDNS.2 Alias/Status/Interface" "$(dm_value $D.DynamicDNS.Client.2.Alias) $(dm_value $D.DynamicDNS.Client.2.Status)|$(dm_value $D.DynamicDNS.Client.2.Interface)|" \
+		"@service[1] Disabled||"
+	mkdir -p /var/run/ddns; echo "badauth" > /var/run/ddns/service.result
+	expect "DDNS.1 LastError from the result file" "$(dm_value $D.DynamicDNS.Client.1.LastError)" "ERROR_AUTHENTICATION"
+	# RouterAdvertisement: lan 1, wan 2, aliases given and committed
+	expect "RA listed" "$($UBUS call tr069 dm '{"cmd":"get","path":"InternetGatewayDevice.Device.RouterAdvertisement."}' 2>/dev/null | grep -o 'InterfaceSetting\.[0-9]*\.Alias' | tr '\n' ' ')" \
+		"InterfaceSetting.1.Alias InterfaceSetting.2.Alias "
+	expect "RA aliases committed" "$(grep -c "ra_alias 'cpe-" /etc/config/dhcp)" "2"
+	expect "RA.1 Status/Interface/flags" "$(dm_value $D.RouterAdvertisement.InterfaceSetting.1.Status) $(dm_value $D.RouterAdvertisement.InterfaceSetting.1.Interface) $(dm_value $D.RouterAdvertisement.InterfaceSetting.1.AdvManagedFlag)$(dm_value $D.RouterAdvertisement.InterfaceSetting.1.AdvOtherConfigFlag)" \
+		"Enabled $D.IP.Interface.1 10"
+	expect "RA.2 Status" "$(dm_value $D.RouterAdvertisement.InterfaceSetting.2.Status)" "Disabled"
+	stop
+	start 1 "--set $D.PPP.Interface.8.Enable=false --set $D.PPP.Interface.7.LowerLayers=pon --set $D.PPP.Interface.7.Username=user7
+		--set $D.DynamicDNS.Client.2.Interface=Device.IP.Interface.5 --set $D.DynamicDNS.Client.1.Enable=false
+		--set $D.RouterAdvertisement.InterfaceSetting.1.MaxRtrAdvInterval=800 --set $D.RouterAdvertisement.InterfaceSetting.1.MinRtrAdvInterval=700
+		--set $D.RouterAdvertisement.InterfaceSetting.1.AdvOtherConfigFlag=1 --set $D.RouterAdvertisement.InterfaceSetting.2.Enable=1"
+	wait_done 60; sleep 3
+	expect "faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "0"
+	grep '^fault ' "$RUN/acs.log" | sed 's/^/  ACS: /'
+	expect "PPP.8 off" "$(uci -q get wan.@entry[0].active) $(uci -q get network.if0.auto)" "0 0"
+	expect "PPP.7 on pon" "$(uci -q get wan.@entry[2].vlan_active)|$(uci -q get wan.@entry[2].vlan_id)|$(uci -q get network.if2.device)" "0||pon"
+	expect "PPP.7 username" "$(uci -q get wan.@entry[2].ppp_username) $(uci -q get network.if2.username)" "user7 user7"
+	expect "DDNS.2 interface" "$(uci -q get ddns.@service[1].ip_source) $(uci -q get ddns.@service[1].ip_network) $(uci -q get ddns.@service[1].interface)" "network if0 if0"
+	expect "DDNS.1 off" "$(uci -q get ddns.service.enabled)" "0"
+	expect "RA.1 intervals (max first, min checked against it)" "$(uci -q get dhcp.lan.ra_maxinterval) $(uci -q get dhcp.lan.ra_mininterval)" "800 700"
+	expect "RA.1 other flag on top of managed" "$(uci -q get dhcp.lan.ra_flags)|$(uci -q get dhcp.lan.stateless) $(uci -q get dhcp.lan.ra_slaac) $(uci -q get dhcp.lan.ra_dns) $(uci -q get dhcp.lan.dhcpv6)" \
+		"managed-config other-config|0 0 0 server"
+	expect "RA.2 on" "$(uci -q get dhcp.wan.ra)" "server"
+	want=$(printf '%s\n' "hni_wan_reload" "ddns restart" "odhcpd reload" | sort | tr '\n' '|')
+	expect "queued, once each" "$(sort "$RUN/p8b.calls" 2>/dev/null | tr '\n' '|')" "$want"
+	stop
+	# AddObject PPP: entry 3 (index 3), id 3, if3, the next number 9
+	start 1 "--add $D.PPP.Interface."
+	wait_done 30; sleep 1
+	expect "PPP AddObject" "$(grep '^added' "$RUN/acs.log")" "added 9"
+	expect "entry 3" "$(uci -q get wan.@entry[3].id) $(uci -q get wan.@entry[3].conn_type) $(uci -q get wan.@entry[3].name) $(uci -q get wan.@entry[3].ppp_int_instance) $(uci -q get wan.@entry[3].mtu)" "3 2 if3 9 1492"
+	expect "network.if3" "$(uci -q get network.if3) $(uci -q get network.if3.proto) $(uci -q get network.if3.device) $(uci -q get network.if3.auto)" "interface pppoe pon 0"
+	stop
+	start 1 "--delete $D.PPP.Interface.9."
+	wait_done 30; sleep 1
+	expect "PPP DeleteObject" "$(uci -q get wan.@entry[3].id)|$(uci -q get network.if3)" "|"
+	stop
+	# AddObject DynamicDNS: the new client is the third, not "1"
+	start 1 "--add $D.DynamicDNS.Client."
+	wait_done 30; sleep 1
+	expect "DDNS AddObject" "$(grep '^added' "$RUN/acs.log")" "added 3"
+	expect "new client" "$(uci -q get ddns.@service[2].enabled) $(uci -q get ddns.@service[2].ip_source) $(uci -q get ddns.@service[2].ip_network)" "0 network wan"
+	stop
+	R=$D.RouterAdvertisement.InterfaceSetting
+	for kv in $D.PPP.Interface.7.LowerLayers=eth0 $D.PPP.Interface.7.LowerLayers=pon.x \
+		  $D.DynamicDNS.Client.1.Interface=$D.IP.Interface.5 \
+		  $R.1.MinRtrAdvInterval=900 $R.1.Alias= $R.1.MaxRtrAdvInterval=abc; do
+		start 1 "--set $kv"
+		wait_done 30; sleep 1
+		expect "$kv faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+		stop
+	done
+	expect "RA.1 min after the faults" "$(uci -q get dhcp.lan.ra_mininterval)" "700"
+	for c in $P8B_CONFIGS; do
+		if [ -f "$RUN/$c.p8bsaved" ]; then cp "$RUN/$c.p8bsaved" "/etc/config/$c"; else rm -f "/etc/config/${c:?}"; fi
+	done
+	[ "$p8b_hni" = made ] && rm -f /usr/sbin/hni_wan_reload.sh
+	rm -f /etc/init.d/ddns /etc/init.d/odhcpd /var/run/ddns/service.result
+	if [ $bad_n = 0 ]; then pass "p8b: Device.PPP, DynamicDNS, RouterAdvertisement: numbering, add/delete, sets, faults"; else bad "p8b: $bad_n mismatches above"; fi
+}
+
 # STUN leaves are the product's stunclient: stun.@stun[0], the reload flag
 # of the shell setter and one stuncd reload at the end of the session (K2).
 do_stun() {
@@ -1157,7 +1281,8 @@ case "$1" in
 	p7) do_p7 ;;
 	p7c) do_p7c ;;
 	p8) do_p8 ;;
-	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_p7c; do_p8; do_valgrind ;;
+	p8b) do_p8b ;;
+	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_p7c; do_p8; do_p8b; do_valgrind ;;
 	*) sed -n '2,/^# Needs/p' "$0"; exit 1 ;;
 esac
 exit $fail
