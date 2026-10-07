@@ -140,6 +140,11 @@ static int mesh_enabled(void)
 	return strcmp(m2, "0") != 0 && strcmp(m5, "0") != 0;
 }
 
+int wlan_mesh_enabled(void)
+{
+	return mesh_enabled();
+}
+
 static const char *mapd_node_of_name(const char *iface)
 {
 	int i;

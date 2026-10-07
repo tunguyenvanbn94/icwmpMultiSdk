@@ -21,7 +21,7 @@ busybox valgrind libjson-c-dev libcurl4-openssl-dev libssl-dev zlib1g-dev`.
 ```sh
 tests/host/build.sh            # deps (pinned libubox/uci/ubus), microxml, libtr098, icwmp_tr098d
 sudo tests/host/setup.sh --yes # fake CPE: UCI config (cwmp, easycwmp, stun), ubusd, stuncd stand-in, data model shell, external script
-tests/host/run.sh all          # unit smoke notify rpc msrv stun ptime p6 fw p7 valgrind, exit 1 on any FAIL
+tests/host/run.sh all          # unit smoke notify rpc msrv stun ptime p6 fw p7 p7c valgrind, exit 1 on any FAIL
 ```
 
 Work files go to `$ICWMP_HOST_WORK` (default `/tmp/icwmp-host`); `build.sh`
@@ -49,6 +49,7 @@ too: use 24.04.
 | `p6` | the P6 leaves ported to C (0090) on the product's configs: Account.Web.SessionMaxTime (hmxwslbackend, 300..3600), UserInterface.CarrierLocking (isplocking, section added when missing, digits only, LockingEnable 0/1 only), UserInterface.X_AIS_WebUserInfo (account, remoteaccess, clay; CurrentLanguage only checked against the list); one queued restart per service (stub init scripts); refused values fault and write nothing; CaptivePortal/BulkData/FAP answer when addressed and are absent from a whole-tree get; K20: a refusal at VALUESET (no isplocking package) reaches the ACS as 9003 with the parameter's 9002 |
 | `fw` | Firewall in C (0092) on a firewall_clay of every kind: DisablePort, ServiceControl IPv4/IPv6 (packetfilter by ipversion), IPFilter (ipfilter2); AddObject defaults and instance numbers, an SPV setting IPVersion=6 and a v6 address together, Ingress/ServiceType/Protocol mappings, 6 refused values, an SPV whose second leaf faults at VALUESET leaving the first unwritten (K20), DeleteObject renumbering |
 | `p7` | P7a/P7b in C (0094) on fixture configs (sections missing on purpose): UPnP, 3rdAgent (AP mode clears client_id), CPEagent (SecretKey equal to the shell's `printf \| dd \| openssl enc \| openssl base64 \| cut` with the test key `CPEAGENT_TEST_KEY`; the product build takes the real key from the product tree), AutoWifiScan, DHCPClient, DnsLandingPage, Isolation, SSH/Telnet, MeshAPI, DDNS, Conf, Logging (level lists, TFTP upload through a stand-in `tftp`, CleanLogging); every restart / `ubus call hni` queued once (stand-in init scripts and `ubus` on PATH); same values again change nothing; 18 values the shell refused fault |
+| `p7c` | P7c in C (0095): UplinkSetup against a stand-in `hni.dualuplink` that commits dualuplink itself (mode3 Backup then Main in one SPV compares with what hni just wrote; a FAIL reply is 9003/9002 at VALUESET), UplinkStatus from a stand-in `blapi_cmd`; WiFiStatus reports from stand-in `mwctl`/`iw`, JSON equal to what the product's shell functions print for the same input under busybox (except the lease lookup and the escaped `"`, see `x_ais_wifistatus_mtk.c`); MLO groups and their `wifi reload` |
 
 Logs: `$ICWMP_HOST_WORK/run/` (`acs.log`, `icwmpd.out`, `vg.log`,
 `fake_dm.cmds` = every request the data model shell got).

@@ -26,6 +26,8 @@ char *wlan_opt(void *data, char *option);
 void wlan_mapd_set(const char *iface, char *option, char *value);
 /* queue "wifi reload" for the end of the session */
 void wlan_reload(void);
+/* is_mesh_enabled(): both radios run EasyMesh (map_mode not 0) */
+int wlan_mesh_enabled(void);
 
 /* Number of stations associated to this interface right now.  Lives in
  * wlanassoc_mtk.c because it is one ubus call shared with the instance browse. */

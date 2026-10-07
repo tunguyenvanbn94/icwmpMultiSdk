@@ -83,7 +83,7 @@ EXTERNAL = set("""
 strcmp strncmp strcasecmp strncasecmp strcpy strncpy strcat strncat strlen strnlen
 strchr strrchr strstr strtok_r strdup strerror memcmp memcpy memmove memset
 snprintf sprintf vsnprintf printf fprintf sscanf
-malloc calloc realloc free abort exit
+malloc calloc realloc free abort exit qsort
 atoi atol atoll strtol strtoul strtoll strtod
 isdigit isxdigit isalpha isalnum isspace isupper islower toupper tolower
 open close read write lseek unlink access stat lstat mkdir rmdir rename truncate mkstemp symlink

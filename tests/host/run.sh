@@ -12,7 +12,8 @@
 #   run.sh p6              P6 leaves in C: Account, CarrierLocking, X_AIS_WebUserInfo, hidden root objects
 #   run.sh fw              P6e Firewall in C: add/set/delete, faults, VALUESET revert
 #   run.sh p7              P7a/b operator X_AIS_* in C: writes, queued restarts, faults
-#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw p7 valgrind
+#   run.sh p7c             P7c UplinkSetup (hni.dualuplink), WiFiStatus reports, MLO
+#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw p7 p7c valgrind
 # Needs build.sh, then setup.sh --yes (root, throwaway container).
 . "$(dirname "$0")/env.sh"
 
@@ -653,6 +654,216 @@ do_p7() {
 	if [ $bad_n = 0 ]; then pass "p7: operator X_AIS_* writes, queued restarts/hni calls, log upload/clean, unchanged values, faults"; else bad "p7: $bad_n mismatches above"; fi
 }
 
+# P7c in C (0095): X_AIS_UplinkSetup against a stand-in of hni.dualuplink
+# that writes and commits dualuplink itself, as hni does (the setters must
+# compare with the files, not with the session's copy), X_AIS_WiFiStatus
+# reports on fixed mwctl/iw output (the expected JSON is what the product's
+# shell functions printed for the same input under busybox, with the two
+# differences documented in x_ais_wifistatus_mtk.c), X_AIS_MLO groups.
+P7C_CONFIGS="dualuplink clay wireless"
+p7c_fixtures() {
+	F=${RUN:?}/p7fix
+	rm -rf "${RUN:?}/p7fix"; mkdir -p "$F"
+	cat > "$F/scan_ra0.txt" <<'EOF'
+Total=0012
+No  Ch  SSID          BSSID              Security     Signal  W-Mode
+0   1   HomeNet       aa:bb:cc:00:00:01  WPA2PSK/AES  -45     11b/g/n
+1   6   Cafe_Free     aa:bb:cc:00:00:02  NONE         -70     11b/g/n
+2   11                aa:bb:cc:00:00:03  WPA2PSK/AES  -60     11ax
+3   3   My"Net        AA:BB:CC:00:00:04  WPA3SAE      -60     11ax
+4   9   NoSignal      aa:bb:cc:00:00:05  WPA2PSK/AES  weak    11ax
+5   1   Net6          aa:bb:cc:00:00:06  WPA2PSK/AES  -81     11n
+6   1   Net7          aa:bb:cc:00:00:07  WPA2PSK/AES  -82     11n
+7   1   Net8          aa:bb:cc:00:00:08  WPA2PSK/AES  -83     11n
+8   1   Net9          aa:bb:cc:00:00:09  WPA2PSK/AES  -84     11n
+9   1   Net10         aa:bb:cc:00:00:0a  WPA2PSK/AES  -85     11n
+10  1   Net11         aa:bb:cc:00:00:0b  WPA2PSK/AES  -86     11n
+11  1   Net12         aa:bb:cc:00:00:0c  WPA2PSK/AES  -87     11n
+EOF
+	cat > "$F/scan_rai0.txt" <<'EOF'
+Total=0001
+No  Ch  SSID          BSSID              Security     Signal  W-Mode
+0   36  Office5G      aa:bb:cc:00:01:01  WPA2PSK/AES  -55     11ax
+EOF
+	printf 'Station aa:bb:cc:11:22:33 (on ra0)\n\tinactive time:\t1000 ms\n\tsignal:  \t-51 [-51, -53] dBm\n\tsignal avg:\t-52 dBm\nStation aa:bb:cc:11:22:44 (on ra0)\n\tinactive time:\t10 ms\n\tlast ack signal:\t-40 dBm\n' > "$F/sta_ra0.txt"
+	printf 'Station aa:bb:cc:11:22:55 (on rai0)\n\tsignal:  \t-66 [-66, -70] dBm\n' > "$F/sta_rai0.txt"
+	printf '1700000000 aa:bb:cc:11:22:33 192.168.1.101 phone-a *\n1700000001 aa:bb:cc:11:22:55 192.168.1.102 laptop-b 01:aa:bb:cc:11:22:55\n' > "$F/dhcp.leases"
+	# the shell's report for scan_*.txt, '"' escaped
+	cat > "$F/neighbor.json" <<'EOF'
+{
+  "WiFi_Neighbor": {
+    "2.4GHz": [
+      {"SSID":"NoSignal","BSSID":"aa:bb:cc:00:00:05","Ch":"9","Signal":"NO"},
+      {"SSID":"HomeNet","BSSID":"aa:bb:cc:00:00:01","Ch":"1","Signal":"-45"},
+      {"SSID":"My\"Net","BSSID":"AA:BB:CC:00:00:04","Ch":"3","Signal":"-60"},
+      {"SSID":"11","BSSID":"aa:bb:cc:00:00:03","Ch":"11","Signal":"-60"},
+      {"SSID":"Cafe_Free","BSSID":"aa:bb:cc:00:00:02","Ch":"6","Signal":"-70"},
+      {"SSID":"Net6","BSSID":"aa:bb:cc:00:00:06","Ch":"1","Signal":"-81"},
+      {"SSID":"Net7","BSSID":"aa:bb:cc:00:00:07","Ch":"1","Signal":"-82"},
+      {"SSID":"Net8","BSSID":"aa:bb:cc:00:00:08","Ch":"1","Signal":"-83"},
+      {"SSID":"Net9","BSSID":"aa:bb:cc:00:00:09","Ch":"1","Signal":"-84"},
+      {"SSID":"Net10","BSSID":"aa:bb:cc:00:00:0a","Ch":"1","Signal":"-85"}
+    ],
+    "5GHz": [
+      {"SSID":"Office5G","BSSID":"aa:bb:cc:00:01:01","Ch":"36","Signal":"-55"}
+    ]
+  }
+}
+EOF
+	# the shell's report for sta_*.txt with the lease lookup it meant
+	cat > "$F/client.json" <<'EOF'
+{
+  "WiFi_Client": {
+    "2.4GHz": [
+      {"Hostname":"phone-a","MAC":"aa:bb:cc:11:22:33","IP":"192.168.1.101","RSSI":"-51"},
+      {"Hostname":"","MAC":"aa:bb:cc:11:22:44","IP":"","RSSI":"NO"}
+    ],
+    "5GHz": [
+      {"Hostname":"laptop-b","MAC":"aa:bb:cc:11:22:55","IP":"192.168.1.102","RSSI":"-66"}
+    ]
+  }
+}
+EOF
+	mkdir -p "$RUN/p7bin"
+	cat > "$RUN/p7bin/ubus" <<'EOF'
+#!/bin/sh
+# hni.dualuplink stand-in: writes and commits dualuplink like hni, main2=eth2 fails
+if [ "$1 $2" = "call hni.dualuplink" ]; then
+	p=$(echo "$4" | sed -n 's/.*"param": *"\([^"]*\)".*/\1/p')
+	v=$(echo "$4" | sed -n 's/.*"value": *"\([^"]*\)".*/\1/p')
+	echo "hni.dualuplink $p=$v" >> @CALLS@
+	case "$p" in
+		enable) o=common.enabled ;; mode) o=common.mode ;; vlan) o=common.tagged ;;
+		backup1) o=@uplink[0].backup ;; main2) o=@uplink[1].main ;;
+		main3) o=@uplink[2].main ;; backup3) o=@uplink[2].backup ;;
+		*) echo '{"result":"FAIL"}'; exit 0 ;;
+	esac
+	[ "$p=$v" = main2=eth2 ] && { echo '{"result":"FAIL"}'; exit 0; }
+	uci set "dualuplink.$o=$v" && uci commit dualuplink && echo '{ "result": "SUCCESS" }'
+	exit 0
+fi
+exec /usr/bin/ubus "$@"
+EOF
+	printf '#!/bin/sh\necho "killall $*" >> @CALLS@\n' > "$RUN/p7bin/killall"
+	printf '#!/bin/sh\n[ "$2 $3" = "scan type=partial" ] && cat @FIX@/scan_$1.txt\nexit 0\n' > "$RUN/p7bin/mwctl"
+	printf '#!/bin/sh\n[ "$1 $3 $4" = "dev station dump" ] && exec cat @FIX@/sta_$2.txt\nexit 1\n' > "$RUN/p7bin/iw"
+	sed -i "s|@CALLS@|$RUN/p7.calls|g; s|@FIX@|$F|g" "$RUN/p7bin/ubus" "$RUN/p7bin/killall" "$RUN/p7bin/mwctl" "$RUN/p7bin/iw"
+	chmod +x "$RUN/p7bin/ubus" "$RUN/p7bin/killall" "$RUN/p7bin/mwctl" "$RUN/p7bin/iw"
+}
+do_p7c() {
+	for c in $P7C_CONFIGS; do
+		if [ -f "/etc/config/$c" ]; then cp "/etc/config/$c" "$RUN/$c.p7csaved"; else rm -f "${RUN:?}/${c:?}.p7csaved"; fi
+	done
+	[ -f /tmp/dhcp.leases ] && cp /tmp/dhcp.leases "$RUN/dhcp.leases.p7csaved"
+	p7c_fixtures
+	cp "$F/dhcp.leases" /tmp/dhcp.leases
+	rm -f /tmp/ais_neighborap_state /tmp/ais_neighborap_response.json /tmp/ais_wificlient_state /tmp/ais_wificlient_response.json
+	cat > /etc/config/dualuplink <<'EOF'
+config common 'common'
+	option enabled '0'
+	option allow_admin '0'
+	option tagged '1'
+	option mode '0'
+	option flag '0'
+
+config uplink
+	option main 'pon'
+	option backup 'eth3'
+
+config uplink
+	option main 'eth3'
+	option backup 'pon'
+
+config uplink
+	option main 'eth3'
+	option backup 'eth4'
+
+config timer 'timer'
+	option backup_over_time '86400'
+	option no_wanip_time '180'
+	option delay_before_switch '30'
+	option increase_time '1800'
+EOF
+	printf "config opermode 'opermode'\n\toption uplink 'eth2'\n" > /etc/config/clay
+	{ for r in MT7993_1_1 MT7993_1_2; do printf "config wifi-device '%s'\n\toption map_mode '0'\n\n" $r; done
+	  for i in apmld1 apmld2 ra4 rai4 ra5 rai5; do printf "config wifi-iface '%s'\n\toption disabled '0'\n\n" $i; done; } > /etc/config/wireless
+	mkdir -p /userfs/bin
+	printf '#!/bin/sh\nprintf "LAN1=DOWN,0\\nLAN2=UP,1000,FULL\\n"\n' > /userfs/bin/blapi_cmd
+	chmod +x /userfs/bin/blapi_cmd
+	if [ -e /sbin/wifi ]; then p7c_wifi=kept; else p7c_wifi=made
+		printf '#!/bin/sh\necho "wifi $*" >> %s/p7.calls\n' "$RUN" > /sbin/wifi; chmod +x /sbin/wifi; fi
+	rm -f "${RUN:?}/p7.calls"
+	U=InternetGatewayDevice.X_AIS_UplinkSetup
+	W=InternetGatewayDevice.X_AIS_WiFiStatus
+	M=InternetGatewayDevice.X_AIS_MLO
+	start 1 "--set $U.mode=1 --set $U.AllowAdmin=1 --set $U.DualUplink.mode=2
+		--set $U.DualUplink.mode3.BackupUplink=lan1 --set $U.DualUplink.mode3.MainUplink=lan4
+		--set $U.DualUplink.BackupOver=3600 --set $U.DualUplink.VlanTaggingEnable=1
+		--set $U.DualUplink.mode1.BackupUplink=lan3
+		--set $M.Fronthaul.Enable=0 --set $M.Backhaul.Enable=0
+		--set $W.X_AIS_WiFiClient=1 --set $W.X_AIS_NeighborAP=1" env PATH="$RUN/p7bin:$PATH"
+	wait_done 90; sleep 3
+	bad_n=0
+	expect "faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "0"
+	grep '^fault ' "$RUN/acs.log" | sed 's/^/  ACS: /'
+	expect "dualuplink enabled (hni)" "$(uci -q get dualuplink.common.enabled)" "1"
+	expect "dualuplink mode (hni)" "$(uci -q get dualuplink.common.mode)" "2"
+	expect "mode3 backup (hni)" "$(uci -q get dualuplink.@uplink[2].backup)" "eth1"
+	expect "mode3 main (hni, compared with the backup hni had just written)" "$(uci -q get dualuplink.@uplink[2].main)" "eth4"
+	expect "allow_admin, committed over hni's writes" "$(uci -q get dualuplink.common.allow_admin)" "1"
+	expect "backup_over_time" "$(uci -q get dualuplink.timer.backup_over_time)" "3600"
+	expect "wireless apmld1/ra5/rai5" "$(uci -q get wireless.apmld1.disabled)$(uci -q get wireless.ra5.disabled)$(uci -q get wireless.rai5.disabled)" "111"
+	expect "wireless apmld2/ra4/rai4" "$(uci -q get wireless.apmld2.disabled)$(uci -q get wireless.ra4.disabled)$(uci -q get wireless.rai4.disabled)" "110"
+	want=$(printf '%s\n' "hni.dualuplink enable=1" "hni.dualuplink mode=2" "hni.dualuplink backup3=eth1" \
+		"hni.dualuplink main3=eth4" "killall -USR1 dualuplink" "wifi reload" "wifi reload" | sort | tr '\n' '|')
+	expect "hni calls (unchanged leaves none), signals, reloads" "$(p7_calls)" "$want"
+	expect "GPV mode" "$(dm_value $U.mode)" "1"
+	expect "GPV CurrentUplinkType" "$(dm_value $U.CurrentUplinkType)" "lan2"
+	expect "GPV UplinkStatus" "$(dm_value $U.UplinkStatus)" "up"
+	expect "GPV mode1.BackupUplink" "$(dm_value $U.DualUplink.mode1.BackupUplink)" "lan3"
+	expect "GPV mode2.MainUplink" "$(dm_value $U.DualUplink.mode2.MainUplink)" "lan3"
+	expect "GPV mode3.MainUplink" "$(dm_value $U.DualUplink.mode3.MainUplink)" "lan4"
+	expect "GPV DualUplinkFlag" "$(dm_value $U.DualUplink.DualUplinkFlag)" "0"
+	expect "GPV MLO Fronthaul" "$(dm_value $M.Fronthaul.Enable)" "0"
+	expect "GPV MLO Backhaul" "$(dm_value $M.Backhaul.Enable)" "0"
+	expect "GPV NeighborAP state" "$(dm_value $W.X_AIS_NeighborAP)" "2"
+	expect "GPV WiFiClient state" "$(dm_value $W.X_AIS_WiFiClient)" "2"
+	expect "GPV NeighborAPResponse" "$(dm_value $W.X_AIS_NeighborAPResponse)" "$(cat "$F/neighbor.json")"
+	expect "GPV WiFiClientResponse" "$(dm_value $W.X_AIS_WiFiClientResponse)" "$(cat "$F/client.json")"
+	alive || expect "agent" "dead" "alive"
+	stop
+	# refused values, one session each; the two VALUESET ones reach the ACS
+	# as 9003 with the leaf's own code
+	for kv in mode=2 DualUplink.mode=3 DualUplink.mode1.BackupUplink=optic DualUplink.BackupOver=0 \
+		  DualUplink.NoWANIPTime=1a DualUplink.mode3.MainUplink=lan1 DualUplink.mode2.MainUplink=lan2; do
+		start 1 "--set $U.$kv" env PATH="$RUN/p7bin:$PATH"
+		wait_done 30; sleep 1
+		expect "$kv faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+		case $kv in
+			DualUplink.mode3.MainUplink=*) expect "$kv at VALUESET" "$(grep '^fault ' "$RUN/acs.log")" "fault 9003 $U.${kv%%=*}=9007" ;;
+			DualUplink.mode2.MainUplink=*) expect "$kv hni refusal" "$(grep '^fault ' "$RUN/acs.log")" "fault 9003 $U.${kv%%=*}=9002" ;;
+		esac
+		stop
+	done
+	expect "mode3 after the faults" "$(uci -q get dualuplink.@uplink[2].main)" "eth4"
+	for kv in $M.Fronthaul.Enable=true $W.X_AIS_NeighborAP=4; do
+		start 1 "--set $kv" env PATH="$RUN/p7bin:$PATH"
+		wait_done 30; sleep 1
+		expect "$kv faults" "$(grep -c 'Preparing the Fault message' /var/log/icwmpd.log)" "1"
+		stop
+	done
+	for c in $P7C_CONFIGS; do
+		if [ -f "$RUN/$c.p7csaved" ]; then cp "$RUN/$c.p7csaved" "/etc/config/$c"; else rm -f "/etc/config/${c:?}"; fi
+	done
+	if [ -f "$RUN/dhcp.leases.p7csaved" ]; then mv "$RUN/dhcp.leases.p7csaved" /tmp/dhcp.leases; else rm -f /tmp/dhcp.leases; fi
+	[ "$p7c_wifi" = made ] && rm -f /sbin/wifi
+	rm -rf /userfs "${RUN:?}/p7bin" "${RUN:?}/p7fix"
+	rm -f /tmp/ais_neighborap_state /tmp/ais_neighborap_response.json /tmp/ais_wificlient_state \
+		/tmp/ais_wificlient_response.json /tmp/ais_scan_24g.tmp /tmp/ais_scan_5g.tmp \
+		/tmp/ais_sta_24g.tmp /tmp/ais_sta_5g.tmp
+	if [ $bad_n = 0 ]; then pass "p7c: UplinkSetup over hni.dualuplink, WiFiStatus reports, MLO groups, faults"; else bad "p7c: $bad_n mismatches above"; fi
+}
+
 # STUN leaves are the product's stunclient: stun.@stun[0], the reload flag
 # of the shell setter and one stuncd reload at the end of the session (K2).
 do_stun() {
@@ -781,7 +992,8 @@ case "$1" in
 	p6) do_p6 ;;
 	fw) do_fw ;;
 	p7) do_p7 ;;
-	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_valgrind ;;
+	p7c) do_p7c ;;
+	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_p7c; do_valgrind ;;
 	*) sed -n '2,/^# Needs/p' "$0"; exit 1 ;;
 esac
 exit $fail

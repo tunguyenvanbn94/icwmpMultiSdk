@@ -44,7 +44,10 @@ libtr098_la_SOURCES +=	\
 	../sdk/mtk/dm098/x_ais_meshapi_mtk.c	\
 	../sdk/mtk/dm098/x_ais_ddns_mtk.c	\
 	../sdk/mtk/dm098/x_ais_conf_mtk.c	\
-	../sdk/mtk/dm098/x_ais_logging_mtk.c
+	../sdk/mtk/dm098/x_ais_logging_mtk.c	\
+	../sdk/mtk/dm098/x_ais_uplinksetup_mtk.c	\
+	../sdk/mtk/dm098/x_ais_wifistatus_mtk.c	\
+	../sdk/mtk/dm098/x_ais_mlo_mtk.c
 
 if DM_MTK_SCRIPT_COMPAT
 libtr098_la_SOURCES +=	\
