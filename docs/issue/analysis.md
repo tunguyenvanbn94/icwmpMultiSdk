@@ -3870,3 +3870,86 @@ riêng, cần test board trước.
   - có `etc/init.d/dev_access` và `etc/rc.d/S11dev_access`, tức SSH/telnet tự mở sau boot (patch dev-access v1);
   - `libtr098.so.3.0.0` md5 `20914d44…`, trùng bản trong `root-airoha`, có các module P8 và khóa CPEagent.
 - Chưa nạp board (SSH vẫn đóng).
+
+## 62. K8: AddObject/DeleteObject của WAN connection sang C, lỗi merge quyền ghi trong registry (`0100`, 07/10 23:37–)
+
+**Kết luận:**
+- AddObject/DeleteObject của `WANIPConnection.` và `WANPPPConnection.` giờ do `wanip_mtk.c` trả lời, không qua compat
+  shell nữa. **K8 đóng (host).**
+- Rà cả 30 object có Add/Delete trong ma trận: 26 object khác đã đi C từ trước, 4 path còn lại đều thuộc K8. Sau `0100`
+  không còn RPC nào của cây TR-098 cần đến shell. Compat chỉ còn trả các hàng container (`InternetGatewayDevice.`,
+  `LANDevice.`, `Device.`…), mà C cũng trả các hàng này.
+- **Lỗi engine tìm thấy khi làm:** `merge_entry()` (`dm_registry.c`) luôn lấy `permission` của module merge sau, vì
+  trường này là con trỏ nên không bao giờ NULL.
+  - Các module chỉ thêm nhánh con (`mtk-wanipv6`, xếp sau `mtk-wanip` theo tên) khai `&DMREAD` làm chỗ trống, nên
+    `WANIPConnection.` / `WANPPPConnection.` thành read-only trong cây C. AddObject trên đường C trả 9005.
+  - Trước đây lỗi không lộ: hai object chưa được claim nên shell trả lời, và trong GPN dòng của shell đến trước (writable 1).
+  - **Sửa:** permission thuộc module browse/add/delete instance; module chỉ mở rộng thì không đổi được.
+  - **Kiểm:** so cờ writable của mọi object trong cây C với cột perm của shell. Sau khi sửa chỉ còn `WLANConfiguration`
+    khác, và đó là khác biệt có chủ đích (xem dưới).
+
+| File | Thay đổi |
+|---|---|
+| `wan_mtk.c` | Claim cả nhánh `InternetGatewayDevice.WANDevice.` (một claim thay cho 92 claim lá/object cũ) |
+| `wanip_mtk.c`, `wanipv6_mtk.c`, `portmapping_mtk.c`, `servicelist_mtk.c` | Bỏ `.paths`, cây merge vào claim trên (pattern của `managementserver_core_mtk.c`) |
+| `wanip_mtk.c` | Hai hàm add dùng chung `add_conn_instance()`; số entry đếm trên một context UCI mới |
+| `dm_registry.c`, `dm_registry.h` | Quy tắc permission khi merge |
+| `wlan_mtk.c` | Header ghi lý do `WLANConfiguration` read-only; bỏ câu cũ "P3b còn ở shell" |
+
+**Hành vi, so với shell (`functions/tr098/wan_device`):**
+- **AddObject:**
+  - gọi `ubus call hni.wan set {"action":"add","param":"IP"|"PPP"}`;
+  - nếu `result` là `SUCCESS`, trả số entry của `wan`, đếm như `uci show wan | grep -c '=entry$'` của
+    `wan_device_add_instance_ip/_ppp`, và không reload;
+  - nếu không, trả 9002.
+  - Đếm trên context mới vì entry do hni (một process khác) ghi; context của engine có thể còn giữ package từ trước lúc add.
+- **DeleteObject:**
+  - tìm theo instance (`id + 1`), rồi gọi `hni.wan set {"index":<vị trí>,"action":"delete"}`;
+  - nếu `SUCCESS`, xếp `hni_wan_reload.sh` vào cuối phiên (`wan_device_del_instance`);
+  - không có instance thì 9005, "xoá tất cả" cũng 9005 (shell không có thao tác này).
+- **Hệ quả phụ:** compat walk không đi xuống `WANDevice.` nữa. GPV toàn cây không còn hỏi shell bất cứ gì của nhánh WAN.
+
+**`WLANConfiguration` read-only, khác biệt có chủ đích:** có từ P3, đến giờ mới ghi lại. Chi tiết ở `other-findings`
+mục 5 của issue trong workspace.
+- Shell đăng ký object writable, với `lan_device_add_wlan_iface` / `lan_device_delete_wlan_iface`. Cả hai hỏng trên sản phẩm này.
+- **Add:**
+  - tính `max instance` qua `wireless.@wifi-iface[N].instance`, không khớp section có tên (`wireless.ra0`…), nên lần
+    đầu trả instance 1, trùng `ra0`;
+  - để lại một `wifi-iface` vô danh trên `wl0`, radio không có trên board;
+  - browse bảng cố định 12 interface nên section mới không thành instance.
+- **Delete:** chạy `uci delete wireless.<ra0…rai5>`, xoá một interface thật.
+- **Bản C:** AddObject/DeleteObject trả 9005, GPN báo `writable 0` (shell báo 1).
+- **Phạm vi:** image từ P3 tới nay đã trả như vậy, vì object được claim từ 0039.
+
+**Test host:**
+- **`run.sh wan` (mới)** dùng một stub `hni.wan`, kiểm:
+  - add IP/PPP trả `3`/`4`;
+  - entry mới đúng `conn_type`;
+  - số entry và danh sách instance;
+  - add không reload;
+  - delete theo instance xoá đúng vị trí, mỗi delete một reload;
+  - hni `FAIL` → 9002, instance không có → 9005;
+  - shell giả không nhận lệnh `add`/`delete` nào và không bị hỏi path nào dưới `WANDevice.`;
+  - cờ writable của mọi object khớp shell, trừ `WLANConfiguration`.
+- **`fake_dm.py`** ghi thêm path của mỗi lệnh vào `FAKE_DM_LOG`.
+- **`smoke`:** fault từ 20 lên 25, thêm 1 mỗi phiên. Một phiên `smoke 1` cho 5 fault: GPV `Nope.X` 9005, SPV k1 9003
+  (`Firewall.Config` 9008), SPV k3 9003, AddObject 9002, DeleteObject 9005.
+  - `DeleteObject WANIPConnection.2.` của plan nay vào C, mà `wan` của host không có instance 2, nên 9005. Trước đây
+    shell giả nhận mọi path.
+  - `AddObject` vốn đã 9002 từ trước (shell giả trả status mà không có instance); nay 9002 vì host không có `hni.wan`.
+- **`run.sh all` tại cây cuối (container `ubuntu:24.04`, xong 08/10 00:06):** EXIT 0, mọi test PASS:
+  - unit 3/3 (GPV gốc: 0 getter shell);
+  - smoke 5 phiên, notify 24/24, rpc 5/5, msrv, stun, ptime 2/2;
+  - p6, fw, p7, p7c, p8, p8b, p8c, wan;
+  - valgrind 12 phiên, 196 RPC, 0 lost, 0 lỗi.
+
+**Gate tĩnh:**
+- verify-dm-paths: thiếu 0, dôi 19 (`X_HNI_Icwmp`, như trước);
+- claims: 82 claim, 45 module, 0 cặp chồng (trước 173 claim);
+- check-c-sanity lib 68 file 0 vấn đề; check-automake-conds 0;
+- cross-gcc SDK: lib 68 + app 17 file, 0 lỗi; cảnh báo chỉ ở file cũ (`dmcommon.c`, `dmjson.c`, `dmtr098.c`, `sdk.h`,
+  `softwaremodules.c`), không có ở file sửa.
+- Quét mọi SDK: 32 dòng object `&DMWRITE` đều có browse/add/delete. Không module nào dựa vào luật merge cũ để làm object
+  writable, nên luật mới chỉ trả lại quyền của module chủ. BDK chưa build lại.
+
+**Board:** chưa. SSH vẫn đóng (image P8 chưa nạp).
