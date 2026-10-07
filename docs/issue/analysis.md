@@ -3793,3 +3793,69 @@ Phân loại:
   - `libtr098.so.3.0.0` trong `root.squashfs` (19:08:25) có md5 `2c401049…`, trùng bản trong `root-airoha`, và có các
     module P7.
 - Chưa nạp board (SSH vẫn đóng).
+
+## 61. P8: 132 tham số còn lại sang C, toàn cây TR-098 bằng C (`0097`–`0099`, 07/10 22:35–)
+
+**Kết luận:** `verify-dm-paths --phase 1..8` đều **thiếu 0**: cả **783/783** tham số của cây sản phẩm đã do C phục vụ.
+Shell compat (`sdk/mtk/compat`) không còn tham số nào để phục vụ. Gỡ hẳn nó (`--disable-dm-script-compat`) là việc
+riêng, cần test board trước.
+
+| Commit | Nhánh | Tham số | File |
+|---|---|---|---|
+| `0097` | `Device.IP` (biến toàn cục, `Interface.{i}` + Stats, Add/Delete), `Device.IP.Diagnostics.TraceRoute` + RouteHops, `Device.DHCPv6.Server.Pool`, DOCSIS | 68 | `device_ip_mtk.c`, `device_traceroute_mtk.c`, `device_dhcpv6_mtk.c`, `docsis_mtk.c` |
+| `0098` | `Device.PPP.Interface`, `Device.DynamicDNS`, `Device.RouterAdvertisement.InterfaceSetting` | 30 | `device_ppp_mtk.c`, `device_ddns_mtk.c`, `device_ra_mtk.c` |
+| `0099` | `Services.StorageService` (+ LogicalVolume), `Services.STBService` | 34 | `services_mtk.c` |
+
+**Đánh số instance khi GET:**
+- Shell gán số instance ngay lúc trả lời GET rồi `uci commit` luôn:
+  - `network.<sec>.ip_int_instance`;
+  - `dhcp.<sec>.dhcpv6_int_instance` và `ra_int_instance`;
+  - `wan.@entry[n].ppp_int_instance`;
+  - và cả `ra_alias`.
+- Nhờ vậy số mà ACS đã thấy không bao giờ đổi.
+- `mtk_uci_set_persist()` làm y như vậy: ghi vào bản của phiên để getter cùng RPC thấy, và commit riêng option đó bằng
+  một context UCI mới, không commit kèm các thay đổi SPV đang dở.
+- Cách cấp số:
+  - IP/DHCPv6/RA: số trống nhỏ nhất;
+  - PPP: số lớn nhất cộng 1, như shell.
+
+**Lỗi shell không mang sang (sửa có chủ đích):**
+- `Device.PPP.Interface.` AddObject: shell lấy output của `uci add wan entry` làm chỉ số, nhưng đó là **tên section**
+  (`cfgXXXXXX`).
+  - Mọi `uci set wan.@entry[cfgXXXXXX]...` hỏng: entry rỗng, không phải PPP; sinh ra `network.ifcfgXXXXXX`; instance trả
+    cho ACS không tồn tại.
+  - C ghi đúng ý định: `id`/`name if<n>` theo chỉ số thật, PPPoE, số tiếp theo.
+- `Device.DynamicDNS.Client.` AddObject: shell luôn trả instance **"1"**, nên ACS đặt `Client.1.*` sẽ sửa nhầm client có
+  sẵn. C trả số thật của client mới.
+
+**Khác shell, có chủ đích:**
+- `ifdown`/`ifup`, flush IPv4 và launcher traceroute được xếp hàng cuối phiên. Shell chạy chúng trong setter (có
+  `sleep 1`), có thể cắt WAN đang mang chính phiên CWMP.
+- 12 bộ đếm `xsd:unsignedLong` ra dây là `xsd:string`, như khi đi qua shell bridge (engine không có kiểu này, §17.5).
+
+**Giữ nguyên quirk của shell:**
+- `Device.DynamicDNS.Client.{i}.Interface` đọc ra `Device.IP.Interface.<n>`, thiếu `InternetGatewayDevice.` ở đầu. Khi
+  set, chỉ nhận đường dẫn mà trường thứ 4 (tách theo dấu chấm) là số. Vì vậy đường dẫn đầy đủ bị 9007, như trên shell.
+- RouteHops chỉ liệt kê khi request trỏ vào dưới `RouteHops.`.
+- StorageService có một instance 1 "không có đĩa" khi không có disk.
+- `FolderNumberOfEntries` có thể ra -1.
+- Engine trả tên tham số theo thứ tự tên (cả object C), không theo thứ tự config như shell. Thứ tự trong RPC không mang
+  nghĩa.
+
+**Hệ quả cho test host:**
+- `notify` từng dựa vào nhánh shell giả: `IGD.Device.` cho tới 0096, rồi `IGD.Services.` ở 0097–0098.
+- Từ 0099 test chạy trên tham số C: passive notification trên `IGD.X_AIS_Logging.`, đổi cả 24 option của
+  `system.syslog` giữa hai phiên. Kết quả: 24/24 giá trị mới nằm trong `.dm_enabled_notify` và trong Inform.
+- Test mới: `p8` (0097), `p8b` (0098), `p8c` (0099).
+- `p8c` không mount được trong container. Kỳ vọng tính từ `/sys` của chính host như shell làm; đường mount/umount và đổi
+  nhãn để board.
+
+**Kiểm (host, ubuntu:24.04):**
+- `run.sh all` tại 0097: rc 0 (notify 34/34 trên `Services.`).
+- `run.sh all` trên cây cuối (0099):
+  - mọi test PASS: smoke, notify 24/24 trên C, rpc, msrv, stun, ptime, p6, fw, p7, p7c, p8, p8b, p8c, valgrind 12 phiên
+    0 lost 0 lỗi;
+  - riêng `unit` lần đầu FAIL vì tham số forced-inform giả của harness (có instance) nằm dưới `IGD.Services.`, nay đã
+    do C claim nên bridge bỏ qua. Đã chuyển sang `IGD.X_HNI_FakeShell.`, chạy lại `unit` PASS.
+- Gate tĩnh: cross-gcc lib 68 file 0 lỗi, 14 cảnh báo thường như trước; check-c-sanity 0 (thêm `scandir`, `alphasort`,
+  `fscanf`); claims 0 chồng.

@@ -52,7 +52,7 @@ flowchart LR
 | Hạng mục | Trạng thái | Mức bằng chứng cao nhất |
 |---|---|---|
 | Layout source multi-SDK, plugin `sdk/<tên>/`, apply có backup | Xong | MTK SDK build + board |
-| Data model TR-098 bằng C trên MTK | **646/783** param (P1–P7: P6 ở 0090 + 0092, P7 ở 0094 + 0095; LTE của P8). Còn 132 tham số P8 qua shell compat | MTK board: GPV toàn cây 1768 dòng / 15–16 s |
+| Data model TR-098 bằng C trên MTK | **783/783** param — toàn cây (P6 ở 0090 + 0092, P7 ở 0094 + 0095, P8 ở 0090 LTE + 0097–0099). Compat shell không còn tham số nào | MTK board: GPV toàn cây 1768 dòng / 15–16 s |
 | Sửa lỗi runtime 0062–0080 (treo, leak, crash từ ACS, procd restart) | Xong | Board MTK (0080, K17 hết); host `run.sh all` PASS lại 06/10 tại 0086 |
 | K13, K14 (kiểm input ManagementServer) | Xong (0081, 0082) | **Board** (image 0083, 06/10, analysis §53) |
 | `apply --sdk-only` | Xong (0083) | MTK SDK build trên cây chỉ còn MTK |

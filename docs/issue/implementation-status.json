@@ -1,9 +1,9 @@
 {
-  "updated_at": "2026-10-07T18:58:00+07:00",
-  "execution": "07/10 tối: P7 xong bằng C (0094 P7a+P7b: 11 object dịch vụ + Conf + Logging; 0095 P7c: UplinkSetup qua hni.dualuplink, WiFiStatus, MLO). 0093 sửa công cụ ma trận (dòng tiếp \"\\\", kiểu vendor HP2236BVA-384). Repo GitHub public: khóa CPEagent lấy lúc build, không vào source. Test host mới p7, p7c; run.sh all PASS. Board: SSH vẫn đóng, test board để sau.",
+  "updated_at": "2026-10-07T23:04:00+07:00",
+  "execution": "07/10 tối: P8 xong bằng C (0097 Device.IP/DHCPv6/TraceRoute/DOCSIS, 0098 PPP/DynamicDNS/RouterAdvertisement, 0099 Services) -- toàn cây TR-098 783/783 bằng C, verify-dm-paths phase 1..8 thiếu 0. Lỗi shell không mang sang: AddObject PPP (uci add trả tên section) và DynamicDNS (luôn trả 1). notify test chuyển sang tham số C (X_AIS_Logging). Board: SSH vẫn đóng.",
   "baseline": "overlay cd93685595d4a52302d5b14adc9cbf38ac82553c",
-  "current": "repo dev 0034–0095. Data model C 646/783 (P1–P5 458 + P6 97 + P7 79 + P8 LTE 12), còn lại qua compat shell. MTK: SDK build + board (image 0083); BDK: SDK build image đạt tại 0088; HOST_VERIFIED tại 0086/0087. Bản giao MTK-only release/icwmp_mtk_8dea75b.tar.gz. PH0 còn: G9 24 h (mốc 07/10 08:15), xem WebUI (G6), quyết định K15, rồi PH0.5.",
-  "next": "P8 (132 tham số còn lại: Storage/STB/DOCSIS/IGD.Device lai), theo ưu tiên của user. Khi board mở SSH: nạp image mới (P6 + P7), test board P6/P7, G9 24 h, rồi PH0.5 (tag baseline, fast-forward main).",
+  "current": "repo dev 0034–0099. Data model C 783/783 (P1–P8, toàn cây), compat shell không còn tham số nào, còn lại qua compat shell. MTK: SDK build + board (image 0083); BDK: SDK build image đạt tại 0088; HOST_VERIFIED tại 0086/0087. Bản giao MTK-only release/icwmp_mtk_8dea75b.tar.gz. PH0 còn: G9 24 h (mốc 07/10 08:15), xem WebUI (G6), quyết định K15, rồi PH0.5.",
+  "next": "Board: nạp image có dev-access (P6–P8), test board P6/P7/P8 + G9 24 h, rồi PH0.5. Sau đó: tắt hẳn compat shell (--disable-dm-script-compat) khi board đạt.",
   "phases": [
     {
       "id": "A0",
@@ -85,9 +85,9 @@
     },
     {
       "id": "P8",
-      "status": "PARTIAL",
+      "status": "HOST_VERIFIED",
       "title": "Remaining domains — 144 param",
-      "note": "0090: LTE 12/144 (hằng). Còn 132"
+      "note": "144/144: LTE (0090), 0097 Device.IP + TraceRoute + DHCPv6 + DOCSIS, 0098 PPP + DynamicDNS + RouterAdvertisement, 0099 Services (StorageService, STBService). Số instance gán và commit khi GET như shell (mtk_uci_set_persist). run.sh p8/p8b/p8c PASS (analysis §61). SDK build/board chưa"
     },
     {
       "id": "A6",
@@ -136,10 +136,10 @@
       "P7": 79,
       "P8": 144
     },
-    "note": "Đếm leaf không phải độ sẵn sàng: P4 Add/Delete WAN connection vẫn compat (K8); 11 leaf ManagementServer dôi so với cây sản phẩm (K3). | 07/10 (0090): +46 P6 (trừ Firewall) +12 P8 (LTE) = 516 C; còn Firewall 51, P7 79, P8 132. | 07/10 (0092): Firewall 51 → P6 97/97; 567 C; còn P7 79, P8 132. | 07/10 (0095): P7 79/79 → 646 C; còn P8 132.",
-    "native_c": 646,
+    "note": "Đếm leaf không phải độ sẵn sàng: P4 Add/Delete WAN connection vẫn compat (K8); 11 leaf ManagementServer dôi so với cây sản phẩm (K3). | 07/10 (0090): +46 P6 (trừ Firewall) +12 P8 (LTE) = 516 C; còn Firewall 51, P7 79, P8 132. | 07/10 (0092): Firewall 51 → P6 97/97; 567 C; còn P7 79, P8 132. | 07/10 (0095): P7 79/79 → 646 C; còn P8 132. | 07/10 (0099): P8 144/144 → 783/783 C, compat không còn tham số.",
+    "native_c": 783,
     "native_c_p6": 97,
-    "native_c_p8": 12,
+    "native_c_p8": 144,
     "native_c_p7": 79
   },
   "roadmap": [
