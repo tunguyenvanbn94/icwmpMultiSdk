@@ -3641,3 +3641,115 @@ Setter từ chối ở bước đó thì SPV vẫn báo thành công mà không 
   - Log: `1_src/2025q3/.icwmp-build-logs/20261007-p6e-e576b0b.log`.
 
 **Chưa làm:** nạp image lên board (board mất WAN và SSH từ 15:34).
+
+## 60. P7: 79 tham số `X_AIS_*` của operator sang C (`0093`–`0095`, 07/10 18:05–)
+
+**Kết luận:** P7 xong **79/79** (`verify-dm-paths --phase 7`: thiếu 0, dôi 0). Tổng tham số bằng C: **646/783**
+(P1–P5 458, P6 97, P7 79, LTE của P8 12). Còn 132 tham số P8 qua compat shell.
+
+**Repo GitHub `tunguyenvanbn94/icwmpMultiSdk` là public** (API GitHub trả `"visibility": "public"`, 07/10 18:10).
+- Khóa AES-256 mà shell `X_AIS_CPEagent` dùng để mã hoá `SecretKey` khi đọc **không** được đưa vào source.
+- Lúc build, `tools/mtk-cpeagent-key.sh` lấy khóa từ file shell của sản phẩm trong cây SDK (`Build/Prepare` của
+  `feeds/libtr098`) và sinh `cpeagent_key_mtk.h`. File này có trong `.gitignore`, và khóa không xuất hiện trong log build.
+- Build không có header (gate tĩnh, test host không có khóa test) thì `SecretKey` đọc ra `""`, đúng như shell khi
+  `openssl` lỗi. Test host dùng khóa test cố định (`tests/host/env.sh`).
+- Repo public thì cũng công khai code port từ shell của sản phẩm và các ghi chú trong `docs/`. Đây là quyết định của
+  chủ repo, chưa đổi gì.
+
+**0093, lỗi công cụ:** `gen-coverage-matrix.py` không nối dòng tiếp `\`.
+- `X_AIS_Conf` viết mỗi lời gọi trên hai dòng, nên 8 tham số có perm `\`, không có type/getter/setter.
+- Bảng kiểu của input contract (`shelltypes_mtk.h`, sinh từ ma trận) vì thế thiếu kiểu boolean/int của Conf.
+- Ma trận cũng cũ so với commit vendor `a920c7fe8` (HP2236BVA-384, 23/09). Commit đó đổi
+  `X_AIS_SSH.Enable`, `X_AIS_Telnet.Enable` và `UserInterface.X_AIS_WebUserInfo.SuperAdminSecurity` sang
+  `xsd:boolean`.
+- Hệ quả từ 0090: input contract của C không chặn `TRUE` cho `SuperAdminSecurity` như shell chặn.
+- Sửa:
+  - nối dòng `\` như shell;
+  - sinh lại TSV (vẫn 783 tham số), sinh lại `shelltypes_mtk.h` (186 → 193 dòng).
+
+**Object và nơi lưu (giống shell, trừ phần ghi ở mục khác biệt):**
+
+| Object | Tham số | Nơi lưu | Áp dụng |
+|---|---|---|---|
+| `X_AIS_UPnP` | 1 | `upnpd.config.enabled` | `miniupnpd reload` |
+| `X_AIS_3rdAgent` | 3 | `3rdpartyagent.3rdpartyagent` (AP mode: URL mới thì xoá `client_id`) | `3rdpartyagent restart` |
+| `X_AIS_CPEagent` | 2 | `secret_key` (≤256, đọc ra bản mã), `secret_key_version` (≤64) | `3rdpartyagent restart` |
+| `X_AIS_AutoWifiScan` | 3 | `autowifiscan.@autowifiscan[0]`, mặc định 1/300/120 | Enable=1: `running \|\| start` |
+| `X_AIS_DHCPClient` | 3 | `lanhost.common.total_hosts` (đọc); Session/Clean chỉ nhận 1 | Clean: dnsmasq stop, xoá lease, start |
+| `X_AIS_DnsLandingPage` | 1 | `landingpage.@landingpage[0]` (thêm section khi thiếu) | `landingpage restart` |
+| `X_AIS_Isolation` | 1 | `dhcp.lan.isolation` (thêm `dhcp.lan` khi thiếu) | `ubus call hni doLanIsolation` |
+| `X_AIS_SSH`, `X_AIS_Telnet` | 1 + 3 | `account.ssh/telnet`; Enable qua `hni setSshAccess/setTelnetAccess`; user/pass ghi cả telnet và ssh | account reload, telnet restart, dropbear killclients + reload |
+| `X_AIS_MeshAPI` | 3 | `meshapi.meshapi` | `meshapi restart` |
+| `X_AIS_DDNS` | 5 | `ddns.service` (Provider DynDNS ↔ dyndns.org, No-IP ↔ no-ip.com) | `ddns restart` |
+| `X_AIS_Conf` | 8 | `aisbackup.params` (thêm khi thiếu), cờ lưu `true`/`false` đọc `1`/`0` | không |
+| `X_AIS_Logging` | 24 | `system.syslog`; level là danh sách `\|`, rỗng là `none` | `log restart`; TFTP/Clean làm trong setter |
+| `X_AIS_UplinkSetup` | 15 | `dualuplink`; mode/uplink/vlan qua `ubus call hni.dualuplink set` | timer đổi: `killall -USR1 dualuplink` |
+| `X_AIS_WiFiStatus` | 4 | file trạng thái/JSON dưới `/tmp` | quét `mwctl`, `iw station dump` |
+| `X_AIS_MLO` | 2 | `wireless.apmld1` + ra5/rai5, `apmld2` + ra4/rai4 (backhaul tắt vẫn để rai4 bật) | `wifi reload`, mapd khi mesh bật |
+
+**Khác shell, có chủ đích:**
+- Restart dịch vụ và lời gọi hni không cần kết quả (SSH/Telnet Enable, `doLanIsolation`, flush lease DHCP) được xếp
+  hàng cuối phiên, sau commit của engine, như các phase trước. SPV bị từ chối thì không chạy (K20).
+- **UplinkSetup** gọi `hni.dualuplink set` ngay trong setter ở VALUESET, vì fault (9002) phụ thuộc vào reply.
+  - hni tự ghi và commit `dualuplink`. Vì vậy giá trị "hiện tại" để so sánh được đọc bằng `uci -q get` từ file, như
+    shell, chứ không đọc từ bản package của phiên.
+  - Bản của phiên đã cũ nếu hni vừa ghi trong cùng SPV. Ví dụ đặt `mode3.BackupUplink=lan1` rồi
+    `mode3.MainUplink=lan4` khi backup đang là lan4: đọc bản cũ sẽ báo trùng (9007) sai.
+- **Logging:** `TFTPUploadResponse=1` (tar + `tftp -p`) và `CleanLogging=1` làm ngay trong setter như shell, rồi lưu 2 hoặc 3.
+  - Lá sau trong SPV bị lỗi thì hoàn tác trạng thái, không hoàn tác việc upload.
+  - Shell xoá `/backup/log/messages` sau khi tar, kể cả khi `ln -s` thất bại vì ở đó có file thật. C chỉ xoá link do
+    chính nó tạo.
+- **WiFiStatus:**
+  - quét neighbour trong setter như shell (7–21 giây);
+  - danh sách station chạy trong setter thay vì nền (`&`), vì chỉ mất vài ms;
+  - escape `"` và `\` trong SSID.
+- **MeshAPI:** thiếu `meshapi.meshapi` thì thêm section có tên đó, như config mặc định của sản phẩm.
+- **Conf:** kiểm giá trị trước khi thêm section. Shell thêm section trước, nên giá trị bị từ chối vẫn để lại section rỗng.
+
+**Lỗi của shell sản phẩm (đang chạy trên board hiện tại):**
+- `X_AIS_WiFiStatus.X_AIS_WiFiClientResponse` luôn trả `Hostname` và `IP` rỗng.
+  - awk thứ hai chạy với `-F'|'`, và `getline < /tmp/dhcp.leases` tách dòng lease theo `|`, nên `$2` không bao giờ là MAC.
+  - Kiểm bằng chính hàm shell dưới busybox trong container với cùng đầu vào: cả ba station ra `"Hostname":"","IP":""`.
+  - C tra lease theo MAC như shell định làm.
+- `X_AIS_MeshAPI` khi thiếu `meshapi.meshapi`: `uci add meshapi meshapi` tạo section vô danh, sau đó
+  `uci set meshapi.meshapi.<opt>` hỏng. Giá trị mất nhưng setter vẫn báo thành công.
+- `sort -nr` đặt dòng `"NO"` (không có RSSI, giá trị 0) lên **đầu** danh sách neighbour. C giữ y như vậy (không phải
+  lỗi crash, chỉ là thứ tự lạ).
+
+**Helper mới:**
+- `dmmtk.c`: `mtk_uci_ensure_section()` (ensure_*_section của shell, -1 thì 9002) và `mtk_run()` (lấy exit status).
+- `input_contract_mtk.c`: `mtk_shell_getn()` (toán hạng số của `test` busybox).
+- `wlan_mtk.c`: `wlan_mesh_enabled()`.
+
+**Kiểm (dev, chưa commit lúc chạy):**
+- Gate tĩnh: phase 7 thiếu 0, dôi 0; claims 158, 0 chồng; check-c-sanity 60 file, 0 vấn đề (thêm `mkstemp`, `symlink`,
+  `localtime_r`, `qsort` vào whitelist libc); cross-gcc lib 60 file và app 17 file 0 lỗi, 14 cảnh báo thường như trước.
+- Test host (ubuntu:24.04, container dùng một lần):
+  - `run.sh p7`: ghi đúng option, mỗi restart/lời gọi hni đúng một lần, giá trị không đổi thì không ghi, 18 giá trị
+    shell từ chối đều fault;
+  - `SecretKey` trùng từng ký tự với pipeline `printf | dd | openssl enc | openssl base64 | cut` của shell (khóa test);
+  - upload TFTP qua `tftp` giả: archive có `messages`, link và tar.gz được xoá;
+  - `run.sh p7c`: stub `hni.dualuplink` tự commit như hni; JSON neighbour/client khớp kết quả hàm shell dưới busybox
+    (trừ hai khác biệt nêu trên); 9 fault, trong đó 2 ở VALUESET tới ACS là 9003 kèm 9007/9002;
+  - `run.sh all` tại 0093 + P7a: rc 0, valgrind 12 phiên 0 lost, 0 lỗi.
+  - `run.sh all` trên cây cuối (0095): mọi test PASS, gồm unit, smoke, notify, rpc, msrv, stun, ptime, p6, fw, p7, p7c.
+    Riêng bước valgrind **không có tổng kết**: K22 lặp lại (lần thứ hai), xem bên dưới.
+
+**K22 lặp lại, đã bắt được trạng thái (07/10 18:53).** Agent dưới valgrind (pid 32120) sau SIGTERM còn `Zl`, 2 luồng:
+- Luồng chính là zombie, có `SigPnd` bit 63 (tín hiệu valgrind dùng để "giết" luồng khác khi tiến trình thoát).
+- Luồng 32146 ngủ trong `futex(0xcad6fd0, FUTEX_WAIT_PRIVATE, 2)`, đúng chữ ký `lll_lock_wait` của glibc (một lock
+  đang bị tranh chấp).
+- SIGTERM thứ hai còn pending và bị chặn.
+- Tiến trình còn giữ `/var/run/icwmpd.pid`, nên lần chạy lại test valgrind cũng hỏng theo.
+
+Diễn giải:
+- Handler SIGTERM của agent chỉ `close()` + `_exit()` ([cwmp.c](../../userspace/public/apps/icwmp/icwmp/cwmp.c),
+  `signal_handler`). Trên kernel thật đó là `exit_group`: mọi luồng chết ngay, không có trạng thái này.
+- Dưới valgrind, luồng nhận tín hiệu (32146) giết luồng chính rồi chạy phần dọn cuối của valgrind (mặc định có
+  `__libc_freeres` của glibc trong chính tiến trình). Nó kẹt ở một lock glibc mà luồng vừa bị giết còn giữ.
+
+Phân loại:
+- **Conditional (chỉ dưới valgrind)**: Verified ở mức trạng thái luồng và tham số futex.
+- **Not established**: hàm glibc nào đang chờ. `vgdb` cần ptrace, container test không có `CAP_SYS_PTRACE`.
+- Không phải lỗi của agent trên board. Cần xác minh bằng stack (container có `--cap-add SYS_PTRACE`) và cách tránh trong
+  test (`--run-libc-freeres=no`).

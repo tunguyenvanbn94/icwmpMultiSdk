@@ -161,7 +161,7 @@ backend SDK chung. Hiện code chưa đạt hết điều này, xem phần 8.
 | Reboot, factory reset, áp firmware | `external.c` gọi action | Script `/usr/sbin/icwmp` của SDK (MTK `sdk/mtk/scripts/icwmp.sh`), BDK làm bằng C |
 | Init/procd, value monitoring | — | MTK `sdk/mtk/files/` (`icwmpd.init`, `value_monitoring`, `easycwmpd` shim) |
 | Engine data model, transaction, registry | `dmentry.c`, `dmtr098.c`, `dm_registry.c` | Hook `dm_platform_commit/revert/restart_services` |
-| Getter/setter tham số | `tr098/` (khi semantic giống nhau) | `sdk/mtk/dm098/` (29 file C, 567 param của sản phẩm), `sdk/bdk/dm098/` (TR-098 chiếu lên TR-181 MDM) |
+| Getter/setter tham số | `tr098/` (khi semantic giống nhau) | `sdk/mtk/dm098/` (43 file C, 646 param của sản phẩm), `sdk/bdk/dm098/` (TR-098 chiếu lên TR-181 MDM) |
 | Path chưa port | — | MTK: `sdk/mtk/compat/` gọi thư viện shell của sản phẩm qua `icwmp_dm.sh` |
 | Hợp đồng input trước setter | — | MTK `input_contract_mtk.c`: `is_safe_input` + kiểm theo kiểu shell |
 
