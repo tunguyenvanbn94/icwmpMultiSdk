@@ -989,37 +989,14 @@ static DMOBJ tWanDeviceV6Root[] = {
 {0}
 };
 
-static const char *const wanipv6_mtk_paths[] = {
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6.",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6AutoModeEnable",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6AddressingType",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6ExternalAddress",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6GatewayType",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6GatewayAddress",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6DNSType",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6DNSServers1",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6DNSServers2",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6PrefixDelegationType",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6PrefixDelegationAddress",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6GUAFromPrefixEnable",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6ConnStatus",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6.",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6AutoModeEnable",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6AddressingType",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6ExternalAddress",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6DNSServers1",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6DNSServers2",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6PrefixDelegationAddress",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6PdEnable",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6ConnectionStatus",
-	NULL
-};
-
+/*
+ * No .paths: wan_mtk.c claims the whole WANDevice branch (K8), dm_registry
+ * merges this tree into it.
+ */
 static const struct dm_module wanipv6_mtk_module = {
 	.name  = "mtk-wanipv6",
 	.model = DM_MODEL_TR098,
 	.order = DM_ORDER_SDK,
 	.objs  = tWanDeviceV6Root,
-	.paths = wanipv6_mtk_paths,
 };
 DM_MODULE_REGISTER(wanipv6_mtk_module);

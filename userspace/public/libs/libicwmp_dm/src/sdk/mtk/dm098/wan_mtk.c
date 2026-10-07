@@ -15,9 +15,9 @@
  *	Ported from functions/tr098/wan_device (entry_execute_method_root_WANDevice
  *	and everything below wancommoninterfaceconfig_execute_params).  The
  *	WANIPConnection / WANPPPConnection instances under WANConnectionDevice.1
- *	are the modules after this one (wanip_mtk.c and the P4b-P4f files); only
- *	what this file serves is claimed in .paths at the bottom.  AddObject and
- *	DeleteObject of the two connection objects still go to the shell (K8).
+ *	are the modules after this one (wanip_mtk.c and the P4b-P4f files).  This
+ *	file claims the whole WANDevice branch for all of them (.paths at the
+ *	bottom), the others declare no .paths and dm_registry merges their trees.
  *
  *	Three things of the product are kept verbatim because the ACS has been
  *	reading them for years:
@@ -299,9 +299,8 @@ static DMLEAF tWanDslLinkParam[] = {
 };
 
 /*
- * WANIPConnection / WANPPPConnection are deliberately absent: they are the
- * shell's until the next step of the port.  dm_registry merges whatever a
- * later module registers under the same object names.
+ * WANIPConnection / WANPPPConnection are not here: wanip_mtk.c declares them
+ * under the same object names and dm_registry merges the two tables.
  */
 static DMOBJ tWanConnectionDeviceObj[] = {
 {"WANDSLLinkConfig", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tWanDslLinkParam, NULL},
@@ -321,17 +320,15 @@ static DMOBJ tWanDeviceRoot[] = {
 };
 
 /*
- * Claimed object by object, not the WANDevice branch: the connection
- * instances below WANConnectionDevice.1 are still answered by
- * sdk/mtk/compat/, and claiming the branch would silence them.
- * The WANDevice. / WANDevice.1. / WANConnectionDevice. / .1. rows are left
- * unclaimed on purpose -- both sides emit them and add_list_paramameter()
- * (dmtr098.c:673) drops the second one by name.
+ * The whole branch, for this file and the four merged into it (wanip_mtk.c,
+ * wanipv6_mtk.c, servicelist_mtk.c, portmapping_mtk.c): every leaf below
+ * WANDevice. is C since P4, and the object paths are what sends AddObject /
+ * DeleteObject of WANIPConnection / WANPPPConnection to wanip_mtk.c instead
+ * of sdk/mtk/compat/ (K8).  With the branch claimed the compat walk never
+ * descends into WANDevice. either.
  */
 static const char *const wan_mtk_paths[] = {
-	"InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.",
-	"InternetGatewayDevice.WANDevice.{i}.WANEthernetInterfaceConfig.",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANDSLLinkConfig.",
+	"InternetGatewayDevice.WANDevice.",
 	NULL
 };
 

@@ -493,23 +493,13 @@ static DMOBJ tWanDevicePmRoot[] = {
 };
 
 /*
- * The PortMapping object path IS claimed here, unlike the connection objects
- * above it: AddObject and DeleteObject on a port mapping now go to this
- * module instead of sdk/mtk/compat/, because both are implemented here.
+ * No .paths: wan_mtk.c claims the whole WANDevice branch (K8), dm_registry
+ * merges this tree into it.
  */
-static const char *const portmapping_mtk_paths[] = {
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PortMapping.",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PortMappingNumberOfEntries",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PortMapping.",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PortMappingNumberOfEntries",
-	NULL
-};
-
 static const struct dm_module portmapping_mtk_module = {
 	.name  = "mtk-portmapping",
 	.model = DM_MODEL_TR098,
 	.order = DM_ORDER_SDK,
 	.objs  = tWanDevicePmRoot,
-	.paths = portmapping_mtk_paths,
 };
 DM_MODULE_REGISTER(portmapping_mtk_module);

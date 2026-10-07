@@ -65,10 +65,12 @@
  *	   with 9007 instead of being written to UCI.  The shell's "[ $v -lt 1 ]"
  *	   errors out on a non-number and falls through to the write.
  *
- *	X_AIS_ServiceList is NOT here and NOT claimed: its setter is a state
- *	machine over easycwmp.@acs[0].enablecwmp, the firewall internet-access
- *	rules and easycwmpd (re)configuration.  It stays with sdk/mtk/compat/
- *	until it gets its own step.
+ *	X_AIS_ServiceList is NOT here: its setter is a state machine over
+ *	easycwmp.@acs[0].enablecwmp, the firewall internet-access rules and
+ *	easycwmpd (re)configuration, ported on its own in servicelist_mtk.c.
+ *
+ *	AddObject / DeleteObject of both connection objects are here too, and
+ *	reach this file since wan_mtk.c claims the WANDevice branch (K8).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -1193,32 +1195,56 @@ static int get_ipconn_entries(char *refparam, struct dmctx *ctx, void *data, cha
 }
 
 /*
- * AddObject / DeleteObject.  They are dormant while sdk/mtk/compat/ still owns
- * the WANIPConnection object path (dm_registry_owns() is false for it, so
- * dmplatform_mtk.c routes the RPC to the shell); they exist so the object
- * keeps working when the branch is fully claimed and the compat layer goes.
+ * AddObject / DeleteObject, wan_device_add_instance_ip / _ppp and
+ * wan_device_del_instance of the shell.  hni.wan writes the entry; the add
+ * queues no reload (the shell did not), the delete does.
  *
  * The instance the product reports after an add is the NUMBER OF ENTRIES, not
- * id+1 -- that is what the shell echoed and what the ACS has been told.
+ * id+1 -- that is what the shell echoed and what the ACS has been told.  It
+ * is counted like the shell's `uci show wan | grep -c '=entry$'`, on a fresh
+ * UCI context: hni is another process, and the engine's context may hold the
+ * package as it was before the add.
  */
-static int add_ipconn_instance(char *refparam, struct dmctx *ctx, void *data, char **instance)
+static int wan_entry_count_fresh(void)
 {
-	struct uci_section *s;
-	char buf[16];
-	json_object *res = NULL;
-	char *result;
+	struct uci_context *c = uci_alloc_context();
+	struct uci_package *p = NULL;
+	struct uci_element *e;
 	int n = 0;
 
+	if (!c)
+		return 0;
+	if (uci_load(c, "wan", &p) == UCI_OK && p) {
+		uci_foreach_element(&p->sections, e) {
+			if (strcmp(uci_to_section(e)->type, "entry") == 0)
+				n++;
+		}
+	}
+	uci_free_context(c);
+	return n;
+}
+
+static int add_conn_instance(const char *kind, char **instance)
+{
+	json_object *res = NULL;
+	char *result;
+	int n;
+
 	dmubus_call("hni.wan", "set",
-		    UBUS_ARGS{{"action", "add", String}, {"param", "IP", String}}, 2, &res);
+		    UBUS_ARGS{{"action", "add", String}, {"param", (char *)kind, String}}, 2, &res);
 	result = res ? dmjson_get_value(res, 1, "result") : NULL;
 	if (!result || strcmp(result, "SUCCESS") != 0)
 		return FAULT_9002;
-	uci_foreach_sections("wan", "entry", s)
-		n++;
-	snprintf(buf, sizeof(buf), "%d", n);
-	*instance = dmstrdup(buf);
+	n = wan_entry_count_fresh();
+	if (n <= 0)
+		return FAULT_9002;	/* the shell's "echo 0" */
+	dmasprintf(instance, "%d", n);
 	return 0;
+}
+
+static int add_ipconn_instance(char *refparam, struct dmctx *ctx, void *data, char **instance)
+{
+	return add_conn_instance("IP", instance);
 }
 
 static int del_conn_instance(char *refparam, struct dmctx *ctx, void *data, char *instance, unsigned char del_action)
@@ -1474,25 +1500,9 @@ static int get_pppconn_entries(char *refparam, struct dmctx *ctx, void *data, ch
 	return 0;
 }
 
-/* wan_device_add_instance_ppp(): same ubus action with "param":"PPP" */
 static int add_pppconn_instance(char *refparam, struct dmctx *ctx, void *data, char **instance)
 {
-	struct uci_section *s;
-	char buf[16];
-	json_object *res = NULL;
-	char *result;
-	int n = 0;
-
-	dmubus_call("hni.wan", "set",
-		    UBUS_ARGS{{"action", "add", String}, {"param", "PPP", String}}, 2, &res);
-	result = res ? dmjson_get_value(res, 1, "result") : NULL;
-	if (!result || strcmp(result, "SUCCESS") != 0)
-		return FAULT_9002;
-	uci_foreach_sections("wan", "entry", s)
-		n++;
-	snprintf(buf, sizeof(buf), "%d", n);
-	*instance = dmstrdup(buf);
-	return 0;
+	return add_conn_instance("PPP", instance);
 }
 
 static int browseWanPppConnInst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
@@ -1658,82 +1668,13 @@ static DMOBJ tWanDeviceIpRoot[] = {
 };
 
 /*
- * Claimed leaf by leaf, not as a branch.  Three things below each connection
- * object are still the shell's and claiming the branch would silence them:
- * X_AIS_ServiceList, the X_AIS_IPv6 subtree and PortMapping.  The object paths
- * themselves stay unclaimed too, which is what keeps AddObject / DeleteObject
- * with sdk/mtk/compat/ for now.
+ * No .paths: wan_mtk.c claims the whole WANDevice branch (K8), dm_registry
+ * merges this tree into it.
  */
-static const char *const wanip_mtk_paths[] = {
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnectionNumberOfEntries",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Enable",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.ConnectionStatus",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PossibleConnectionTypes",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.ConnectionType",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Name",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Alias",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Uptime",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.LastConnectionError",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.NATEnabled",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.AddressingType",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.ExternalIPAddress",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.SubnetMask",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.DefaultGateway",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.DNSEnabled",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.DNSOverrideAllowed",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.DNSServers",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.MaxMTUSize",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.MACAddress",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.MACAddressOverride",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_VLANEnable",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_VLANID",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_VLAN8021P",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_DefaultRoute",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPMode",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_LanInterface",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnectionNumberOfEntries",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Stats.",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Enable",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.ConnectionStatus",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PossibleConnectionTypes",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.ConnectionType",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Name",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Alias",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Uptime",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.LastConnectionError",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.NATEnabled",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.AddressingType",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.TransportType",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Username",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Password",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.ExternalIPAddress",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.SubnetMask",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.DefaultGateway",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.RemoteIPAddress",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.DNSEnabled",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.DNSOverrideAllowed",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.DNSServers",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.MaxMTUSize",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.MaxMRUSize",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.CurrentMRUSize",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.MACAddress",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.MACAddressOverride",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_VLANEnable",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_VLANID",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_VLAN8021P",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_DefaultRoute",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPMode",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_LanInterface",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Reset",
-	NULL
-};
-
 static const struct dm_module wanip_mtk_module = {
 	.name  = "mtk-wanip",
 	.model = DM_MODEL_TR098,
 	.order = DM_ORDER_SDK,
 	.objs  = tWanDeviceIpRoot,
-	.paths = wanip_mtk_paths,
 };
 DM_MODULE_REGISTER(wanip_mtk_module);

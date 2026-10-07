@@ -6,7 +6,7 @@ get_value_list / get_name_list.  Values are "v<epoch>:<path>", the epoch
 read from $FAKE_DM_EPOCH (default 1) on every get.
 
 Test hooks: {"cmd":"stats"} / {"cmd":"reset"} (getters run, requests),
-{"cmd":"forget","param":P}; FAKE_DM_LOG=<file> logs every command;
+{"cmd":"forget","param":P}; FAKE_DM_LOG=<file> logs every command and its paths;
 FAKE_DM_NO_LIST=1 behaves like a driver without the *_list commands;
 FAKE_DM_INSTANCE_INFORM=1 adds a forced-inform parameter with an instance."""
 import json, os, sys, itertools
@@ -99,7 +99,7 @@ for line in sys.stdin:
     cmd = req.get("cmd")
     if os.environ.get("FAKE_DM_LOG"):
         with open(os.environ["FAKE_DM_LOG"], "a") as lf:
-            lf.write("%s\n" % cmd)
+            lf.write("%s %s\n" % (cmd, " ".join([req.get("param", "")] + req.get("params", [])).strip()))
     if cmd not in ("stats", "reset"):
         requests += 1
     if cmd == "get_value":

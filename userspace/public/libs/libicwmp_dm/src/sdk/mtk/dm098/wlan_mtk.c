@@ -24,8 +24,18 @@
  *	wireless from its config on the next reload and would otherwise win.
  *
  *	Security leaves (BeaconType, the authentication and encryption modes,
- *	KeyPassphrase, PreSharedKey, WEP) are phase P3b and still served by the
- *	shell bridge -- they are merged into this same object when ported.
+ *	KeyPassphrase, PreSharedKey, WEP) are wlansec_mtk.c, merged into this
+ *	same object.
+ *
+ *	WLANConfiguration. is read only, a deliberate difference: the shell
+ *	registered it writable with lan_device_add_wlan_iface /
+ *	lan_device_delete_wlan_iface, and neither works on this product.  The
+ *	add takes the next instance from "wireless.@wifi-iface[N].instance",
+ *	which never matches the named sections (wireless.ra0 ...), so it answers
+ *	1, 2 ... -- instances the fixed map above already has -- and leaves an
+ *	anonymous wifi-iface on "wl0", a radio this board does not have.  The
+ *	delete runs "uci delete wireless.<iface>" on one of the twelve product
+ *	interfaces.  AddObject / DeleteObject answer 9005 instead.
  */
 #include <stdio.h>
 #include <stdlib.h>

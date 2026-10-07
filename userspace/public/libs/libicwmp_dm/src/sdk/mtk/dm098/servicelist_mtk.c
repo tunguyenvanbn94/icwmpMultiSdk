@@ -353,17 +353,14 @@ static DMOBJ tWanDeviceSvcRoot[] = {
 {0}
 };
 
-static const char *const servicelist_mtk_paths[] = {
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_ServiceList",
-	"InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_ServiceList",
-	NULL
-};
-
+/*
+ * No .paths: wan_mtk.c claims the whole WANDevice branch (K8), dm_registry
+ * merges this tree into it.
+ */
 static const struct dm_module servicelist_mtk_module = {
 	.name  = "mtk-servicelist",
 	.model = DM_MODEL_TR098,
 	.order = DM_ORDER_SDK,
 	.objs  = tWanDeviceSvcRoot,
-	.paths = servicelist_mtk_paths,
 };
 DM_MODULE_REGISTER(servicelist_mtk_module);

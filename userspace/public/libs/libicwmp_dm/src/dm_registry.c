@@ -170,14 +170,26 @@ static DMLEAF *merge_leaf(DMLEAF *a, DMLEAF *b)
 
 static DMOBJ *merge_obj(DMOBJ *a, DMOBJ *b);
 
+/* the object makes its own instances: browses, adds or deletes them */
+static int has_lifecycle(const DMOBJ *o)
+{
+	return o->browseinstobj || o->addobj || o->delobj;
+}
+
 static void merge_entry(DMOBJ *dst, DMOBJ *src)
 {
+	/* The permission is the one of the module that makes the instances.  A
+	 * module that only hangs leaves or children on an object another module
+	 * browses spells it &DMREAD as a placeholder; taking that from the later
+	 * module made WANIPConnection. read only and AddObject a 9005 (K8). */
+	int src_owns = has_lifecycle(src) || !has_lifecycle(dst);
+
 	dst->nextobj = merge_obj(dst->nextobj, src->nextobj);
 	dst->leaf = merge_leaf(dst->leaf, src->leaf);
 	dst->container_leaf = merge_leaf(dst->container_leaf, src->container_leaf);
 	if (src->addressed_only)
 		dst->addressed_only = src->addressed_only;
-	if (src->permission)
+	if (src->permission && src_owns)
 		dst->permission = src->permission;
 	if (src->addobj)
 		dst->addobj = src->addobj;

@@ -16,7 +16,8 @@
 #   run.sh p8              P8a Device.IP (numbering, add/delete), DHCPv6 pools, TraceRoute hops, DOCSIS
 #   run.sh p8b             P8b Device.PPP, DynamicDNS, RouterAdvertisement
 #   run.sh p8c             P8c Services: STBService, StorageService over /sys
-#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b p8c valgrind
+#   run.sh wan             K8: WANIP/WANPPPConnection AddObject/DeleteObject in C (hni.wan stand-in)
+#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b p8c wan valgrind
 # Needs build.sh, then setup.sh --yes (root, throwaway container).
 . "$(dirname "$0")/env.sh"
 
@@ -1223,6 +1224,134 @@ do_p8c() {
 	if [ $bad_n = 0 ]; then pass "p8c: STBService, StorageService over /sys (mount paths: board), faults"; else bad "p8c: $bad_n mismatches above"; fi
 }
 
+# K8 (0100): AddObject / DeleteObject of WANIPConnection / WANPPPConnection
+# in C.  wan_mtk.c claims the whole WANDevice branch, so the compat walk no
+# longer asks the shell anything below it either.  hni.wan is a stand-in that
+# writes and commits wan like hni; the add returns the number of entries
+# (what the shell echoed), the delete queues hni_wan_reload.sh.
+do_wan() {
+	if [ -f /etc/config/wan ]; then cp /etc/config/wan "$RUN/wan.wansaved"; else rm -f "${RUN:?}/wan.wansaved"; fi
+	printf "config entry\n\toption id '0'\n\toption name 'if0'\n\toption switch_mode '0'\n\toption conn_type '0'\n\toption service_type '2'\n\nconfig entry\n\toption id '1'\n\toption name 'if1'\n\toption switch_mode '0'\n\toption conn_type '2'\n" > /etc/config/wan
+	rm -f "${RUN:?}/wan.calls" "${RUN:?}/wan.fail" "${RUN:?}/wan.shell"
+	if [ -e /usr/sbin/hni_wan_reload.sh ]; then wan_hni=kept; else wan_hni=made
+		printf '#!/bin/sh\necho "hni_wan_reload" >> %s/wan.calls\n' "$RUN" > /usr/sbin/hni_wan_reload.sh; chmod +x /usr/sbin/hni_wan_reload.sh; fi
+	mkdir -p "$RUN/wanbin"
+	cat > "$RUN/wanbin/ubus" <<'UBUS'
+#!/bin/sh
+# hni.wan stand-in for the engine's "ubus -S -t N call hni.wan set <json>":
+# add appends an entry with the next id, delete removes wan.@entry[index]
+a="$*"
+case "$a" in
+*"call hni.wan set "*)
+	j=${a#*call hni.wan set }
+	act=$(echo "$j" | sed -n 's/.*"action": *"\([^"]*\)".*/\1/p')
+	par=$(echo "$j" | sed -n 's/.*"param": *"\([^"]*\)".*/\1/p')
+	idx=$(echo "$j" | sed -n 's/.*"index": *\([0-9]*\).*/\1/p')
+	echo "hni.wan $act $par$idx" >> @CALLS@
+	[ -e @FAIL@ ] && { echo '{ "result": "FAIL" }'; exit 0; }
+	case "$act" in
+	add)
+		n=$(uci show wan 2>/dev/null | grep -c '=entry$')
+		[ "$par" = PPP ] && ct=2 || ct=0
+		s=$(uci add wan entry) && uci set "wan.$s.id=$n" && uci set "wan.$s.name=if$n" &&
+		uci set "wan.$s.switch_mode=0" && uci set "wan.$s.conn_type=$ct" && uci commit wan &&
+		echo '{ "result": "SUCCESS" }' ;;
+	delete)
+		uci delete "wan.@entry[$idx]" && uci commit wan && echo '{ "result": "SUCCESS" }' ;;
+	esac
+	exit 0 ;;
+esac
+exec /usr/bin/ubus "$@"
+UBUS
+	sed -i "s|@CALLS@|$RUN/wan.calls|g; s|@FAIL@|$RUN/wan.fail|g" "$RUN/wanbin/ubus"
+	chmod +x "$RUN/wanbin/ubus"
+	W=InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1
+	bad_n=0
+	# the read-only plan walks IGD. and gets WANDevice.: the shell must not
+	# see a path below WANDevice.
+	start 1 "--readonly"
+	wait_done 60; sleep 1
+	expect "instances before" "$(wan_conns $W)" "WANIPConnection.1 WANPPPConnection.2 "
+	# the writable flag of every object against the shell's: dm_registry
+	# took &DMREAD of a merged extension over the owner's &DMWRITE (K8);
+	# WLANConfiguration is read only on purpose (wlan_mtk.c)
+	expect "object writable flags unlike the shell's" "$(obj_writable_diff)" \
+		"InternetGatewayDevice.LANDevice.{i}.WLANConfiguration. InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}."
+	cp "$RUN/fake_dm.cmds" "$RUN/wan.shell" 2>/dev/null
+	stop
+	expect "shell asked below WANDevice." "$(grep -c 'WANDevice\.' "$RUN/wan.shell" 2>/dev/null)" "0"
+	expect "shell asked at all (the IGD. walk)" "$([ -s "$RUN/wan.shell" ] && echo yes)" "yes"
+	# AddObject IP, then PPP: the count of entries after hni wrote them
+	start 1 "--add $W.WANIPConnection." env PATH="$RUN/wanbin:$PATH"
+	wait_done 30; sleep 1
+	expect "IP AddObject" "$(grep '^added' "$RUN/acs.log")" "added 3"
+	cat "$RUN/fake_dm.cmds" >> "$RUN/wan.shell" 2>/dev/null
+	stop
+	start 1 "--add $W.WANPPPConnection." env PATH="$RUN/wanbin:$PATH"
+	wait_done 30; sleep 1
+	expect "PPP AddObject" "$(grep '^added' "$RUN/acs.log")" "added 4"
+	expect "entries" "$(wan_ids) $(uci -q get wan.@entry[2].conn_type)$(uci -q get wan.@entry[3].conn_type)" "0 1 2 3 02"
+	expect "counts" "$(dm_value $W.WANIPConnectionNumberOfEntries) $(dm_value $W.WANPPPConnectionNumberOfEntries)" "2 2"
+	expect "instances after the adds" "$(wan_conns $W)" "WANIPConnection.1 WANIPConnection.3 WANPPPConnection.2 WANPPPConnection.4 "
+	expect "the adds queued no reload" "$(grep -c hni_wan_reload "$RUN/wan.calls")" "0"
+	cat "$RUN/fake_dm.cmds" >> "$RUN/wan.shell" 2>/dev/null
+	stop
+	# DeleteObject by instance (id + 1), hni deletes by position
+	start 1 "--delete $W.WANIPConnection.3." env PATH="$RUN/wanbin:$PATH"
+	wait_done 30; sleep 1
+	expect "IP DeleteObject" "$(wan_ids)" "0 1 3"
+	cat "$RUN/fake_dm.cmds" >> "$RUN/wan.shell" 2>/dev/null
+	stop
+	start 1 "--delete $W.WANPPPConnection.4." env PATH="$RUN/wanbin:$PATH"
+	wait_done 30; sleep 1
+	expect "PPP DeleteObject" "$(wan_ids)" "0 1"
+	cat "$RUN/fake_dm.cmds" >> "$RUN/wan.shell" 2>/dev/null
+	stop
+	expect "hni.wan calls" "$(grep '^hni\.wan ' "$RUN/wan.calls" | tr '\n' '|')" "hni.wan add IP|hni.wan add PPP|hni.wan delete 2|hni.wan delete 2|"
+	expect "one reload per delete" "$(grep -c hni_wan_reload "$RUN/wan.calls")" "2"
+	# faults: hni refuses the add (9002), no such instance (9005)
+	touch "$RUN/wan.fail"
+	start 1 "--add $W.WANIPConnection." env PATH="$RUN/wanbin:$PATH"
+	wait_done 30; sleep 1
+	expect "AddObject hni FAIL" "$(grep '^fault ' "$RUN/acs.log")" "fault 9002 "
+	stop
+	rm -f "${RUN:?}/wan.fail"
+	start 1 "--delete $W.WANIPConnection.9." env PATH="$RUN/wanbin:$PATH"
+	wait_done 30; sleep 1
+	expect "DeleteObject no instance" "$(grep '^fault ' "$RUN/acs.log")" "fault 9005 "
+	cat "$RUN/fake_dm.cmds" >> "$RUN/wan.shell" 2>/dev/null
+	stop
+	expect "entries after the faults" "$(wan_ids)" "0 1"
+	expect "shell add/delete" "$(grep -c -E '^(add|delete) ' "$RUN/wan.shell")" "0"
+	if [ -f "$RUN/wan.wansaved" ]; then cp "$RUN/wan.wansaved" /etc/config/wan; else rm -f /etc/config/wan; fi
+	[ "$wan_hni" = made ] && rm -f /usr/sbin/hni_wan_reload.sh
+	rm -rf "${RUN:?}/wanbin"
+	if [ $bad_n = 0 ]; then pass "wan: WANIP/WANPPPConnection AddObject/DeleteObject in C, the shell never asked below WANDevice. (K8)"; else bad "wan: $bad_n mismatches above"; fi
+}
+
+# objects whose GPN writable flag is not the one of the coverage matrix
+obj_writable_diff() {
+	$UBUS call tr069 dm '{"cmd":"names","path":"InternetGatewayDevice.","next_level":false}' 2>/dev/null |
+	python3 -c '
+import json, re, sys
+c = {re.sub(r"\.\d+\.", ".{i}.", re.sub(r"\.\d+\.", ".{i}.", x["parameter"])): x["writable"]
+     for x in json.load(sys.stdin)["parameters"] if x["parameter"].endswith(".")}
+s = {}
+for line in open(sys.argv[1]):
+    f = line.rstrip("\n").split("\t")
+    if len(f) > 4 and f[2] == "obj":
+        s[re.sub(r"\$\d", "{i}", f[3])] = f[4]
+print(" ".join(p for p in sorted(s) if p in c and c[p] != s[p]))' "$MATRIX"
+}
+
+# ids of wan.@entry[] in file order
+wan_ids() { echo $(uci -q show wan | sed -n "s/^wan\.@entry\[[0-9]*\]\.id='\([0-9]*\)'$/\1/p"); }
+# the connection instances below WANConnectionDevice $1, in name order
+wan_conns() {
+	$UBUS call tr069 dm "{\"cmd\":\"get\",\"path\":\"$1.\"}" 2>/dev/null |
+		grep -o 'WAN[IP]*Connection\.[0-9]*\.Enable' | sed 's/\.Enable$//' | tr '\n' ' '
+}
+
 # STUN leaves are the product's stunclient: stun.@stun[0], the reload flag
 # of the shell setter and one stuncd reload at the end of the session (K2).
 do_stun() {
@@ -1355,7 +1484,8 @@ case "$1" in
 	p8) do_p8 ;;
 	p8b) do_p8b ;;
 	p8c) do_p8c ;;
-	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_p7c; do_p8; do_p8b; do_p8c; do_valgrind ;;
+	wan) do_wan ;;
+	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_p7c; do_p8; do_p8b; do_p8c; do_wan; do_valgrind ;;
 	*) sed -n '2,/^# Needs/p' "$0"; exit 1 ;;
 esac
 exit $fail

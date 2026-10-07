@@ -33,6 +33,9 @@
  *	    an SDK module can add DeviceInfo.X_VENDOR_Foo without touching it,
  *	  - a later module (higher .order) wins on a field both modules set:
  *	    that is how an SDK overrides one getter of a portable object,
+ *	  - except the permission of an object: it stays with the module that
+ *	    browses, adds or deletes its instances when the later one does none
+ *	    of these (an extension writes &DMREAD there as a placeholder),
  *	  - a leaf declared twice keeps the later module's row.
  *
  *	The merged tree is built once, on first use, and never freed.  It uses
