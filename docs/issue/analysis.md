@@ -3952,4 +3952,15 @@ mục 5 của issue trong workspace.
 - Quét mọi SDK: 32 dòng object `&DMWRITE` đều có browse/add/delete. Không module nào dựa vào luật merge cũ để làm object
   writable, nên luật mới chỉ trả lại quyền của module chủ. BDK chưa build lại.
 
-**Board:** chưa. SSH vẫn đóng (image P8 chưa nạp).
+**MTK SDK build tại `d3f7459` (08/10 00:07–00:13):**
+- Export `--sdk mtk` (356 file, sha256 `d1cb2612…`) rồi apply vào `1_src` (backup `.icwmp-backups/20261008-000738-jvfc05b2`).
+- Gói và image: rc 0. Log có `Enabling dev_access`; không có cảnh báo nào ở các file sửa.
+- `tclinux.bin` 00:13:26, md5 `bc032690e2e4e883bfd4e4a7ef33859b`, chép ra
+  `1_src/2025q3/.icwmp-images/tclinux_k8_d3f7459_devaccess.bin`.
+- `root.squashfs`:
+  - có `etc/init.d/dev_access` và `etc/rc.d/S11dev_access`;
+  - `libtr098.so.3.0.0` md5 `27ee9edd…`, trùng bản trong `root-airoha`;
+  - có chuỗi claim `InternetGatewayDevice.WANDevice.`, không còn claim cũ `WANDevice.{i}.WANCommonInterfaceConfig.`.
+- Image này thay `tclinux_p8_2ea7c00_devaccess.bin` để nạp: cùng P8, thêm 0100.
+
+**Board:** chưa. SSH vẫn đóng (chưa nạp image nào có dev-access).
