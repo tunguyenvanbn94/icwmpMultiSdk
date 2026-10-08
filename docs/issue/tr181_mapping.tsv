@@ -134,7 +134,44 @@ new	-	Device.DHCPv4.Server.Pool.{i}.Interface	A	lan_mtk.c, Device.IP.Interface o
 new	-	Device.Ethernet.Interface.{i}.Upstream	A	laneth_mtk.c, false
 new	-	Device.Hosts.Host.{i}.Layer3Interface	A	lanhosts_mtk.c, Device.IP.Interface of network.lan
 prefix	InternetGatewayDevice.Layer2Bridging.	-	D	objects only, no parameter in the product; TR-181 Bridging.Bridge built when an ACS needs it (T7)
-prefix	InternetGatewayDevice.WANDevice.	?	T4	IP.Interface WAN, PPP, DHCPv4/v6 Client, NAT, Routing, DNS, Ethernet/Optical
+prefix	InternetGatewayDevice.WANDevice.	?	T4	WANDevice rows no rule below maps (none expected after T4)
+prefix	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PortMapping.{i}.	Device.NAT.PortMapping.{pm:i3:i4}.	A	portmapping_mtk.c: every firewall_clay port_forwarding rule, global position; the Jth rule of a connection is the Jth NAT.PortMapping with its Interface
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PortMapping.{i}.PortMappingEnabled	Device.NAT.PortMapping.{pm:i3:i4}.Enable	A	TR-181 leaf name
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PortMapping.{i}.PortMappingLeaseDuration	Device.NAT.PortMapping.{pm:i3:i4}.LeaseDuration	A	TR-181 leaf name
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PortMapping.{i}.PortMappingDescription	Device.NAT.PortMapping.{pm:i3:i4}.Description	A	TR-181 leaf name (same option as X_AIS_Name)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PortMapping.{i}.PortMappingProtocol	Device.NAT.PortMapping.{pm:i3:i4}.Protocol	B	TR-181 enumeration in capitals (TCP, UDP; tcp/udp -> TCP/UDP)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PortMapping.{i}.X_AIS_Name	Device.NAT.PortMapping.{pm:i3:i4}.X_AIS_Name	C	operator leaf
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PortMapping.{i}.X_AIS_InternalPortEndRange	Device.NAT.PortMapping.{pm:i3:i4}.X_AIS_InternalPortEndRange	C	operator leaf
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PortMapping.{i}.X_AIS_RemoteHostEndRange	Device.NAT.PortMapping.{pm:i3:i4}.X_AIS_RemoteHostEndRange	C	operator leaf
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.PortMappingNumberOfEntries	-	D	per connection; TR-181 NAT.PortMappingNumberOfEntries counts every rule
+prefix	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PortMapping.{i}.	Device.NAT.PortMapping.{pm:i3:i4}.	A	portmapping_mtk.c: every firewall_clay port_forwarding rule, global position; the Jth rule of a connection is the Jth NAT.PortMapping with its Interface
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PortMapping.{i}.PortMappingEnabled	Device.NAT.PortMapping.{pm:i3:i4}.Enable	A	TR-181 leaf name
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PortMapping.{i}.PortMappingLeaseDuration	Device.NAT.PortMapping.{pm:i3:i4}.LeaseDuration	A	TR-181 leaf name
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PortMapping.{i}.PortMappingDescription	Device.NAT.PortMapping.{pm:i3:i4}.Description	A	TR-181 leaf name (same option as X_AIS_Name)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PortMapping.{i}.PortMappingProtocol	Device.NAT.PortMapping.{pm:i3:i4}.Protocol	B	TR-181 enumeration in capitals (TCP, UDP; tcp/udp -> TCP/UDP)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PortMapping.{i}.X_AIS_Name	Device.NAT.PortMapping.{pm:i3:i4}.X_AIS_Name	C	operator leaf
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PortMapping.{i}.X_AIS_InternalPortEndRange	Device.NAT.PortMapping.{pm:i3:i4}.X_AIS_InternalPortEndRange	C	operator leaf
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PortMapping.{i}.X_AIS_RemoteHostEndRange	Device.NAT.PortMapping.{pm:i3:i4}.X_AIS_RemoteHostEndRange	C	operator leaf
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.PortMappingNumberOfEntries	-	D	per connection; TR-181 NAT.PortMappingNumberOfEntries counts every rule
+new	-	Device.NAT.PortMappingNumberOfEntries	A	portmapping_mtk.c, every rule
+new	-	Device.NAT.PortMapping.{i}.Status	A	portmapping_mtk.c (Error_Misconfigured without a connection)
+new	-	Device.NAT.PortMapping.{i}.Interface	A	portmapping_mtk.c, the connection's IP.Interface
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_VLANEnable	Device.IP.Interface.{wanif:i3}.X_AIS_VLANEnable	C	operator leaf on the connection's IP.Interface (wanip_mtk.c)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_VLANID	Device.IP.Interface.{wanif:i3}.X_AIS_VLANID	C	operator leaf on the connection's IP.Interface (wanip_mtk.c)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_VLAN8021P	Device.IP.Interface.{wanif:i3}.X_AIS_VLAN8021P	C	operator leaf on the connection's IP.Interface (wanip_mtk.c)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_DefaultRoute	Device.IP.Interface.{wanif:i3}.X_AIS_DefaultRoute	C	operator leaf on the connection's IP.Interface (wanip_mtk.c)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPMode	Device.IP.Interface.{wanif:i3}.X_AIS_IPMode	C	operator leaf on the connection's IP.Interface (wanip_mtk.c)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_LanInterface	Device.IP.Interface.{wanif:i3}.X_AIS_LanInterface	B	TR-181 paths in the list (Device.Ethernet.Interface.n, Device.WiFi.SSID.n), same numbers
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_ServiceList	Device.IP.Interface.{wanif:i3}.X_AIS_ServiceList	C	servicelist_mtk.c, same getter/setter
+prefix	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.X_AIS_IPv6	Device.IP.Interface.{wanif:i3}.X_AIS_IPv6	C	wanipv6_mtk.c: the flat X_AIS_IPv6* leaves and the X_AIS_IPv6 subtree, same names
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_VLANEnable	Device.IP.Interface.{wanif:i3}.X_AIS_VLANEnable	C	operator leaf on the connection's IP.Interface (wanip_mtk.c)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_VLANID	Device.IP.Interface.{wanif:i3}.X_AIS_VLANID	C	operator leaf on the connection's IP.Interface (wanip_mtk.c)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_VLAN8021P	Device.IP.Interface.{wanif:i3}.X_AIS_VLAN8021P	C	operator leaf on the connection's IP.Interface (wanip_mtk.c)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_DefaultRoute	Device.IP.Interface.{wanif:i3}.X_AIS_DefaultRoute	C	operator leaf on the connection's IP.Interface (wanip_mtk.c)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPMode	Device.IP.Interface.{wanif:i3}.X_AIS_IPMode	C	operator leaf on the connection's IP.Interface (wanip_mtk.c)
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_LanInterface	Device.IP.Interface.{wanif:i3}.X_AIS_LanInterface	B	TR-181 paths in the list (Device.Ethernet.Interface.n, Device.WiFi.SSID.n), same numbers
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_ServiceList	Device.IP.Interface.{wanif:i3}.X_AIS_ServiceList	C	servicelist_mtk.c, same getter/setter
+prefix	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6	Device.IP.Interface.{wanif:i3}.X_AIS_IPv6	C	wanipv6_mtk.c: the flat X_AIS_IPv6* leaves and the X_AIS_IPv6 subtree, same names
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Alias	Device.IP.Interface.{wanif:i3}.Alias	A	wanip_mtk.c through device_ip_mtk.c (wan181_get): the IP.Interface of the connection's network section
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Uptime	Device.IP.Interface.{wanif:i3}.LastChange	A	the same netifd uptime of if<id>
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.MaxMTUSize	Device.IP.Interface.{wanif:i3}.MaxMTUSize	A	the connection's getter/setter

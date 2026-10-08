@@ -1533,7 +1533,7 @@ PY
 # must be one of them.
 # T2 (LAN) fixtures: a LAN, a WAN, four switch ports, a DHCP pool and two
 # hosts, one on Wi-Fi and one on a LAN port.  Saved and put back like p8's.
-TR181_CONFIGS="network dhcp lanhost wireless wan"
+TR181_CONFIGS="network dhcp lanhost wireless wan firewall_clay"
 tr181_fixtures() {
 	for c in $TR181_CONFIGS; do
 		if [ -f "/etc/config/$c" ]; then cp "/etc/config/$c" "$RUN/$c.t181saved"; else rm -f "${RUN:?}/${c:?}.t181saved"; fi
@@ -1635,6 +1635,12 @@ config entry
 	option active '1'
 	option v4_mode '0'
 	option v4_static_dns '0'
+	option vlan_active '1'
+	option vlan_id '10'
+	option lan1 '1'
+	option ssid2 '1'
+	option v6_active '1'
+	option v6_mode '0'
 
 config entry
 	option id '1'
@@ -1650,6 +1656,36 @@ config entry
 	option name 'iptv'
 	option switch_mode '1'
 	option active '1'
+EOF2
+	# T4d: port forwarding rules, two on the IPoE connection (pon.<vlan>),
+	# one on the PPP one
+	cat > /etc/config/firewall_clay <<'EOF2'
+config port_forwarding
+	option enabled '1'
+	option interface 'pon.10'
+	option service_type 'web'
+	option protocol 'tcp'
+	option ext_start_port '8080'
+	option local_start_port '80'
+	option ip_address '192.168.1.120'
+
+config port_forwarding
+	option enabled '0'
+	option interface 'pppoe-if1'
+	option service_type 'game'
+	option protocol 'tcp/udp'
+	option ext_start_port '3074'
+	option local_start_port '3074'
+	option ip_address '192.168.1.101'
+
+config port_forwarding
+	option enabled '1'
+	option interface 'pon.10'
+	option service_type 'ssh'
+	option protocol 'udp'
+	option ext_start_port '2222'
+	option local_start_port '22'
+	option ip_address '192.168.1.120'
 EOF2
 	mkdir -p "$RUN/t181bin"
 	cat > "$RUN/t181bin/ubus" <<'UBUS'
@@ -1803,6 +1839,34 @@ for x in json.load(open(sys.argv[1]))["parameters"]:
 	expect "set PPP default route gateway (9008)" "$(dm_set_fault $F.66.GatewayIPAddress 1.2.3.4 "$key")" "9008"
 	expect "delete a default route (9001)" "$($UBUS call tr069 dm '{"cmd":"del","path":"Device.Routing.Router.1.IPv4Forwarding.65."}' 2>/dev/null |
 		python3 -c 'import json, sys; print(json.load(sys.stdin).get("fault"))')" "9001"
+	# T4c: the operator leaves of a connection on its IP.Interface
+	w1=$(uci -q get network.if1.ip_int_instance)
+	expect "IPoE X_AIS_VLANEnable/VLANID" "$(dm_value $I.$w0.X_AIS_VLANEnable) $(dm_value $I.$w0.X_AIS_VLANID)" "true 10"
+	expect "IPoE X_AIS_LanInterface (TR-181 paths)" "$(dm_value $I.$w0.X_AIS_LanInterface)" "Device.Ethernet.Interface.1,Device.WiFi.SSID.2"
+	expect "LAN X_AIS_VLANID empty" "$(dm_value $I.$lan.X_AIS_VLANID)" ""
+	expect "PPP has no X_AIS_IPv6GatewayType" "$(dm_value $I.$w1.X_AIS_IPv6GatewayType)" ""
+	expect "set X_AIS_IPv6GatewayType on PPP (9008)" "$(dm_set_fault $I.$w1.X_AIS_IPv6GatewayType Static "$key")" "9008"
+	expect "set X_AIS_VLANID on the LAN (9008)" "$(dm_set_fault $I.$lan.X_AIS_VLANID 5 "$key")" "9008"
+	rm -f "${RUN:?}/t181.hni"
+	expect "set X_AIS_LanInterface" "$(dm_set_fault $I.$w0.X_AIS_LanInterface Device.Ethernet.Interface.3,Device.WiFi.SSID.5 "$key")" "0"
+	expect "  hni.wan binding_ports" "$(cat "$RUN/t181.hni" 2>/dev/null)" "modify 0 binding_ports= lan3=1 ssid5=1,"
+	expect "set X_AIS_VLANID 5000 (9007)" "$(dm_set_fault $I.$w0.X_AIS_VLANID 5000 "$key")" "9007"
+	# T4d: every rule in NAT.PortMapping, Interface = the connection's IP.Interface
+	M=Device.NAT.PortMapping
+	expect "PortMapping count" "$(dm_value Device.NAT.PortMappingNumberOfEntries)" "3"
+	expect "PortMapping 1/2/3 Interface" "$(dm_value $M.1.Interface) $(dm_value $M.2.Interface) $(dm_value $M.3.Interface)" "Device.IP.Interface.$w0 Device.IP.Interface.$w1 Device.IP.Interface.$w0"
+	expect "PortMapping 2 Protocol/Status, 3 Protocol" "$(dm_value $M.2.Protocol) $(dm_value $M.2.Status) $(dm_value $M.3.Protocol)" "TCP/UDP Disabled UDP"
+	expect "add PortMapping" "$($UBUS call tr069 dm '{"cmd":"add","path":"Device.NAT.PortMapping."}' 2>/dev/null |
+		python3 -c 'import json, sys; r = json.load(sys.stdin); print(r.get("fault"), r.get("instance"))')" "0 4"
+	expect "  new rule without a connection" "$(dm_value $M.4.Interface) $(dm_value $M.4.Status)" " Error_Misconfigured"
+	expect "set PortMapping 4 Interface to the PPP one" "$(dm_set_fault $M.4.Interface Device.IP.Interface.$w1 "$key")" "0"
+	expect "  firewall_clay interface" "$(uci -q get firewall_clay.@port_forwarding[3].interface)" "pppoe-if1"
+	expect "set PortMapping 4 Interface to the bridge (9007)" "$(dm_set_fault $M.4.Interface Device.IP.Interface.$w2 "$key")" "9007"
+	expect "set PortMapping 4 Protocol TCP" "$(dm_set_fault $M.4.Protocol TCP "$key")" "0"
+	expect "  firewall_clay protocol" "$(uci -q get firewall_clay.@port_forwarding[3].protocol)" "tcp"
+	expect "delete PortMapping 4" "$($UBUS call tr069 dm '{"cmd":"del","path":"Device.NAT.PortMapping.4."}' 2>/dev/null |
+		python3 -c 'import json, sys; print(json.load(sys.stdin).get("fault"))')" "0"
+	expect "  count after delete" "$(dm_value Device.NAT.PortMappingNumberOfEntries)" "3"
 	# T3 Wi-Fi: Radio from the radio sections, SSID/AccessPoint numbered like
 	# WLANConfiguration, Security.ModeEnabled from wireless.<iface>.encryption
 	R=Device.WiFi.Radio S=Device.WiFi.SSID A=Device.WiFi.AccessPoint
@@ -1851,7 +1915,7 @@ for x in json.load(open(sys.argv[1]))["parameters"]:
 	restore_cfg cwmp
 	tr181_fixtures_restore
 	if [ $bad_n = 0 ]; then
-		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, LAN (T2), Wi-Fi (T3), WAN port and routing (T4a), WAN connections (T4b) values and writes, DataModel back to tr098; pairs: $(tail -2 "$RUN/tr181.equiv" | head -1)"
+		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, LAN (T2), Wi-Fi (T3), WAN port and routing (T4a), WAN connections and port mappings (T4b-T4d) values and writes, DataModel back to tr098; pairs: $(tail -2 "$RUN/tr181.equiv" | head -1)"
 	else
 		bad "tr181: $bad_n mismatches above"
 	fi

@@ -1761,20 +1761,18 @@ int wan_entry_of_idx(int idx, struct wan_entry *out)
 	return wan_entry_find(NULL, idx, out);
 }
 
-static DMLEAF *wan181_leaf(struct wan_entry *e, const char *leaf)
+static DMLEAF *wan181_leaf(DMLEAF *t, const char *leaf)
 {
-	DMLEAF *t = e->ppp ? tWanPppConnParam : tWanIpConnParam;
-
-	for (; t->parameter; t++) {
+	for (; t && t->parameter; t++) {
 		if (strcmp(t->parameter, leaf) == 0)
 			return t;
 	}
 	return NULL;
 }
 
-int wan181_get(struct wan_entry *e, const char *leaf, char **value)
+int wan181_tbl_get(DMLEAF *t, struct wan_entry *e, const char *leaf, char **value)
 {
-	DMLEAF *l = e ? wan181_leaf(e, leaf) : NULL;
+	DMLEAF *l = e ? wan181_leaf(t, leaf) : NULL;
 
 	*value = "";
 	if (!l || !l->getvalue)
@@ -1783,13 +1781,32 @@ int wan181_get(struct wan_entry *e, const char *leaf, char **value)
 }
 
 /* 9008 where the TR-098 leaf of that kind is read only */
-int wan181_set(struct wan_entry *e, const char *leaf, char *value, int action)
+int wan181_tbl_set(DMLEAF *t, struct wan_entry *e, const char *leaf, char *value, int action)
 {
-	DMLEAF *l = e ? wan181_leaf(e, leaf) : NULL;
+	DMLEAF *l = e ? wan181_leaf(t, leaf) : NULL;
 
 	if (!l || !l->setvalue || l->permission != &DMWRITE)
 		return FAULT_9008;
 	return l->setvalue(NULL, NULL, e, NULL, value, action);
+}
+
+int wan181_get(struct wan_entry *e, const char *leaf, char **value)
+{
+	*value = "";
+	return e ? wan181_tbl_get(e->ppp ? tWanPppConnParam : tWanIpConnParam, e, leaf, value) : 0;
+}
+
+int wan181_set(struct wan_entry *e, const char *leaf, char *value, int action)
+{
+	return e ? wan181_tbl_set(e->ppp ? tWanPppConnParam : tWanIpConnParam, e, leaf, value, action)
+		 : FAULT_9008;
+}
+
+struct wan_entry *wan181_of_ipif(void *ipif_data)
+{
+	struct wan_entry *e = dmcalloc(1, sizeof(*e));
+
+	return (e && ipif_data && wan_entry_of_sec(dip_section(ipif_data), e)) ? e : NULL;
 }
 
 char *wan181_ipif(struct wan_entry *e)
@@ -2143,3 +2160,114 @@ static const struct dm_module wanip181_mtk_module = {
 	.paths = wanip181_mtk_paths,
 };
 DM_MODULE_REGISTER(wanip181_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181: the operator leaves of a connection on its IP.Interface      */
+/* ------------------------------------------------------------------ */
+
+/*
+ * X_AIS_VLANEnable/VLANID/VLAN8021P, X_AIS_DefaultRoute, X_AIS_IPMode and
+ * X_AIS_LanInterface keep their names on Device.IP.Interface.{n} of the
+ * connection (docs/plan/tr181_mtk_design.md, rule 5), joined to
+ * device_ip_mtk.c's Interface by the merge.  X_AIS_LanInterface lists TR-181
+ * paths there (Device.Ethernet.Interface.n, Device.WiFi.SSID.n -- the same
+ * numbers) and takes them on a write; the TR-098 setter does the rest.
+ */
+IPIF181_GET(vlan_enable, tWanIpConnParam, tWanPppConnParam, "X_AIS_VLANEnable")
+IPIF181_SET(vlan_enable, tWanIpConnParam, tWanPppConnParam, "X_AIS_VLANEnable")
+IPIF181_GET(vlan_id, tWanIpConnParam, tWanPppConnParam, "X_AIS_VLANID")
+IPIF181_SET(vlan_id, tWanIpConnParam, tWanPppConnParam, "X_AIS_VLANID")
+IPIF181_GET(vlan_prio, tWanIpConnParam, tWanPppConnParam, "X_AIS_VLAN8021P")
+IPIF181_SET(vlan_prio, tWanIpConnParam, tWanPppConnParam, "X_AIS_VLAN8021P")
+IPIF181_GET(default_route, tWanIpConnParam, tWanPppConnParam, "X_AIS_DefaultRoute")
+IPIF181_SET(default_route, tWanIpConnParam, tWanPppConnParam, "X_AIS_DefaultRoute")
+IPIF181_GET(ip_mode, tWanIpConnParam, tWanPppConnParam, "X_AIS_IPMode")
+IPIF181_SET(ip_mode, tWanIpConnParam, tWanPppConnParam, "X_AIS_IPMode")
+
+#define LAN181_ETH_TR098	"InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig."
+#define LAN181_ETH_TR181	"Device.Ethernet.Interface."
+#define LAN181_WLAN_TR098	"InternetGatewayDevice.LANDevice.1.WLANConfiguration."
+#define LAN181_WLAN_TR181	"Device.WiFi.SSID."
+
+/* every <from> of s replaced by <to>, dm allocated */
+static char *lan181_replace(const char *s, const char *from, const char *to)
+{
+	size_t lf = strlen(from), lt = strlen(to), n = 0;
+	const char *p;
+	char *out, *o;
+
+	for (p = s; (p = strstr(p, from)) != NULL; p += lf)
+		n++;
+	out = dmcalloc(strlen(s) + n * (lt > lf ? lt - lf : 0) + 1, 1);
+	if (!out)
+		return "";
+	for (o = out, p = s; *p; ) {
+		if (strncmp(p, from, lf) == 0) {
+			memcpy(o, to, lt);
+			o += lt;
+			p += lf;
+		} else {
+			*o++ = *p++;
+		}
+	}
+	*o = '\0';
+	return out;
+}
+
+static int get_ipif181_lan_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct wan_entry *e = wan181_of_ipif(data);
+	char *v = "";
+
+	*value = "";
+	if (!e)
+		return 0;
+	wan181_get(e, "X_AIS_LanInterface", &v);
+	v = lan181_replace(v, LAN181_ETH_TR098, LAN181_ETH_TR181);
+	*value = lan181_replace(v, LAN181_WLAN_TR098, LAN181_WLAN_TR181);
+	return 0;
+}
+
+static int set_ipif181_lan_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	struct wan_entry *e = wan181_of_ipif(data);
+	char *v;
+
+	if (!e)
+		return FAULT_9008;
+	v = lan181_replace(value ? value : "", LAN181_ETH_TR181, LAN181_ETH_TR098);
+	v = lan181_replace(v, LAN181_WLAN_TR181, LAN181_WLAN_TR098);
+	return wan181_set(e, "X_AIS_LanInterface", v, action);
+}
+
+static DMLEAF tIpif181WanParam[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"X_AIS_VLANEnable", &DMWRITE, DMT_BOOL, get_ipif181_vlan_enable, set_ipif181_vlan_enable, NULL, NULL},
+{"X_AIS_VLANID", &DMWRITE, DMT_UNINT, get_ipif181_vlan_id, set_ipif181_vlan_id, NULL, NULL},
+{"X_AIS_VLAN8021P", &DMWRITE, DMT_UNINT, get_ipif181_vlan_prio, set_ipif181_vlan_prio, NULL, NULL},
+{"X_AIS_DefaultRoute", &DMWRITE, DMT_BOOL, get_ipif181_default_route, set_ipif181_default_route, NULL, NULL},
+{"X_AIS_IPMode", &DMWRITE, DMT_STRING, get_ipif181_ip_mode, set_ipif181_ip_mode, NULL, NULL},
+{"X_AIS_LanInterface", &DMWRITE, DMT_STRING, get_ipif181_lan_interface, set_ipif181_lan_interface, NULL, NULL},
+{0}
+};
+
+/* browseinstobj left NULL: device_ip_mtk.c makes the Interface instances */
+static DMOBJ tIpif181WanObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Interface", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tIpif181WanParam, NULL},
+{0}
+};
+
+static DMOBJ tIpif181WanRoot[] = {
+{"IP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tIpif181WanObj, NULL, NULL},
+{0}
+};
+
+/* No .paths: Device.IP.Interface. is device_ip_mtk.c's claim */
+static const struct dm_module wanip_ipif181_mtk_module = {
+	.name  = "mtk-wanip-ipif-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tIpif181WanRoot,
+};
+DM_MODULE_REGISTER(wanip_ipif181_mtk_module);

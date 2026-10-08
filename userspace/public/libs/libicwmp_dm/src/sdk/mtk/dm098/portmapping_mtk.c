@@ -55,6 +55,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <ctype.h>
 #include <arpa/inet.h>
 
 #include "dmuci.h"
@@ -64,6 +65,7 @@
 #include "dm_registry.h"
 #include "dmmtk.h"
 #include "wanconn_mtk.h"
+#include "device_ip_mtk.h"
 
 #define PM_PACKAGE	"firewall_clay"
 #define PM_TYPE		"port_forwarding"
@@ -373,10 +375,8 @@ static int get_pm_entries(char *refparam, struct dmctx *ctx, void *data, char *i
  * rule's position.  Copied as is: that is the instance number the ACS was
  * handed before.
  */
-static int add_pm_instance(char *refparam, struct dmctx *ctx, void *data, char **instance)
+static int pm_add(const char *iface, char **instance)
 {
-	struct wan_entry *e = (struct wan_entry *)data;
-	const char *iface = pm_iface_name(e);
 	struct uci_section *s, *added = NULL;
 	char buf[16];
 	/* dmuci_add_section() writes the new section name through this on every
@@ -384,8 +384,6 @@ static int add_pm_instance(char *refparam, struct dmctx *ctx, void *data, char *
 	char *added_name = NULL;
 	int n = 0;
 
-	if (!iface[0])
-		return FAULT_9002;
 	uci_foreach_sections(PM_PACKAGE, PM_TYPE, s)
 		n++;
 	if (n >= PM_MAX_RULES)
@@ -405,6 +403,15 @@ static int add_pm_instance(char *refparam, struct dmctx *ctx, void *data, char *
 	snprintf(buf, sizeof(buf), "%d", n + 1);
 	*instance = dmstrdup(buf);
 	return 0;
+}
+
+static int add_pm_instance(char *refparam, struct dmctx *ctx, void *data, char **instance)
+{
+	const char *iface = pm_iface_name((struct wan_entry *)data);
+
+	if (!iface[0])
+		return FAULT_9002;
+	return pm_add(iface, instance);
 }
 
 static int del_pm_instance(char *refparam, struct dmctx *ctx, void *data, char *instance, unsigned char del_action)
@@ -503,3 +510,167 @@ static const struct dm_module portmapping_mtk_module = {
 	.objs  = tWanDevicePmRoot,
 };
 DM_MODULE_REGISTER(portmapping_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181)                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Device.NAT.PortMapping.{i}: every port_forwarding rule of firewall_clay, in
+ * file order, numbered by position like the TR-098 PortMapping of a
+ * connection (so not stable either), with the same getters and setters.
+ * Interface is the Device.IP.Interface of the connection whose name
+ * (pm_iface_name()) the rule's "interface" option holds; writing it writes
+ * that name.  An AddObject makes the rule with the product's defaults and no
+ * connection yet: the ACS sets Interface, which TR-181 has for that.
+ * Spelled the TR-181 way: Protocol in capitals (the product stores tcp, udp,
+ * tcp/udp; the setter takes any case).  PortMappingNumberOfEntries of a
+ * connection has no TR-181 counterpart (the TR-181 count is global).
+ */
+
+static int browsePm181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	struct uci_section *s;
+	char *idx, *idx_last = NULL;
+	int n = 0;
+
+	uci_foreach_sections(PM_PACKAGE, PM_TYPE, s) {
+		if (n >= PM_MAX_RULES)
+			break;
+		idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section, 1, ++n);
+		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)s, idx) == DM_STOP)
+			break;
+	}
+	return 0;
+}
+
+/* the connection a rule belongs to, NULL when its interface names none */
+static struct wan_entry *pm181_conn(void *data)
+{
+	struct wan_entry *list = dmcalloc(2 * WAN_MAX_ENTRIES, sizeof(*list)), *e;
+	const char *want = pm_opt(data, "interface");
+	int n, i;
+
+	if (!list || !want[0])
+		return NULL;
+	n = wan_entries_all(&list, 2 * WAN_MAX_ENTRIES);
+	for (i = 0; i < n; i++) {
+		if (strcmp(pm_iface_name(&list[i]), want) != 0)
+			continue;
+		e = dmcalloc(1, sizeof(*e));
+		if (e)
+			*e = list[i];
+		return e;
+	}
+	return NULL;
+}
+
+static int get_pm181_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct wan_entry *e = pm181_conn(data);
+
+	*value = e ? wan181_ipif(e) : "";
+	return 0;
+}
+
+static int set_pm181_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	const char *prefix = mtk_ipif_prefix();
+	size_t l = strlen(prefix);
+	struct wan_entry e;
+	char *sec;
+
+	if (!value || strncmp(value, prefix, l) != 0)
+		return FAULT_9007;
+	sec = dip_section_of_instance(value + l);
+	if (!sec || !wan_entry_of_sec(sec, &e) || e.bridge)
+		return FAULT_9007;
+	if (action == VALUECHECK)
+		return 0;
+	return pm_write(data, "interface", pm_iface_name(&e));
+}
+
+static int get_pm181_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	if (!pm181_conn(data))
+		*value = "Error_Misconfigured";
+	else
+		*value = strcmp(pm_opt(data, "enabled"), "1") == 0 ? "Enabled" : "Disabled";
+	return 0;
+}
+
+static int get_pm181_protocol(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *p = pm_opt(data, "protocol"), *u;
+
+	*value = dmstrdup(p);
+	for (u = *value; u && *u; u++)
+		*u = (char)toupper((unsigned char)*u);
+	return 0;
+}
+
+static int add_pm181_instance(char *refparam, struct dmctx *ctx, void *data, char **instance)
+{
+	return pm_add("", instance);
+}
+
+static int get_pm181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct uci_section *s;
+	int n = 0;
+
+	uci_foreach_sections(PM_PACKAGE, PM_TYPE, s)
+		n++;
+	dmasprintf(value, "%d", n > PM_MAX_RULES ? PM_MAX_RULES : n);
+	return 0;
+}
+
+static DMLEAF tPm181Param[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMWRITE, DMT_BOOL, get_pm_enabled, set_pm_enabled, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_pm181_status, NULL, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_pm181_interface, set_pm181_interface, NULL, NULL},
+{"LeaseDuration", &DMWRITE, DMT_UNINT, get_pm_lease, set_pm_lease, NULL, NULL},
+{"RemoteHost", &DMWRITE, DMT_STRING, get_pm_remote_host, set_pm_remote_host, NULL, NULL},
+{"ExternalPort", &DMWRITE, DMT_UNINT, get_pm_ext_port, set_pm_ext_port, NULL, NULL},
+{"ExternalPortEndRange", &DMWRITE, DMT_UNINT, get_pm_ext_port_end, set_pm_ext_port_end, NULL, NULL},
+{"InternalPort", &DMWRITE, DMT_UNINT, get_pm_int_port, set_pm_int_port, NULL, NULL},
+{"Protocol", &DMWRITE, DMT_STRING, get_pm181_protocol, set_pm_protocol, NULL, NULL},
+{"InternalClient", &DMWRITE, DMT_STRING, get_pm_internal_client, set_pm_internal_client, NULL, NULL},
+{"Description", &DMWRITE, DMT_STRING, get_pm_description, set_pm_description, NULL, NULL},
+{"X_AIS_Name", &DMWRITE, DMT_STRING, get_pm_name, set_pm_name, NULL, NULL},
+{"X_AIS_InternalPortEndRange", &DMWRITE, DMT_UNINT, get_pm_int_port_end, set_pm_int_port_end, NULL, NULL},
+{"X_AIS_RemoteHostEndRange", &DMWRITE, DMT_STRING, get_pm_remote_host_end, set_pm_remote_host_end, NULL, NULL},
+{0}
+};
+
+static DMLEAF tNat181PmCountParam[] = {
+{"PortMappingNumberOfEntries", &DMREAD, DMT_UNINT, get_pm181_count, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tNat181PmObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"PortMapping", &DMWRITE, add_pm181_instance, del_pm_instance, NULL, browsePm181Inst, NULL, NULL, NULL, tPm181Param, NULL},
+{0}
+};
+
+static DMOBJ tPm181Root[] = {
+{"NAT", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tNat181PmObj, tNat181PmCountParam, NULL},
+{0}
+};
+
+static const char *const pm181_mtk_paths[] = {
+	"Device.NAT.PortMapping.",
+	"Device.NAT.PortMappingNumberOfEntries",
+	NULL
+};
+
+static const struct dm_module pm181_mtk_module = {
+	.name  = "mtk-portmapping-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tPm181Root,
+	.paths = pm181_mtk_paths,
+};
+DM_MODULE_REGISTER(pm181_mtk_module);

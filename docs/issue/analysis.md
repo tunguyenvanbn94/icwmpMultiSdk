@@ -4671,3 +4671,62 @@ Hướng ánh xạ theo ma trận BDK (`projects/brcm_ap_wifi7_mvn/docs/icwmp_tr
   `network.device status` của `network.<sec>.device`. Với PPPoE hai netdev này khác nhau. Host không có netdev nên
   không so được; cần board (T6).
 - `IP.Interface.Enable` và `WANIPConnection.Enable` có luôn cùng giá trị trên board không (hai option khác nhau).
+
+## 72. TR-181 trên MTK: T4c lá `X_AIS_*` của kết nối, T4d `NAT.PortMapping` (`tr181-0008`) (08/10 17:40–)
+
+Sau bước này, mọi tham số WAN của cây TR-098 đều có quy tắc ánh xạ; không còn tham số WAN nào chờ.
+
+**T4c, lá operator của kết nối trên `IP.Interface.{n}` của nó (nguyên tắc 5, giữ tên):**
+- **Các lá:**
+  - `X_AIS_VLANEnable`/`VLANID`/`VLAN8021P`, `X_AIS_DefaultRoute`, `X_AIS_IPMode` (`wanip_mtk.c`);
+  - `X_AIS_ServiceList` (`servicelist_mtk.c`);
+  - 14 lá phẳng `X_AIS_IPv6*` và subtree `X_AIS_IPv6.` (+`Pd`) (`wanipv6_mtk.c`).
+- **Cách gắn:** mỗi file có một module TR-181 không claim path, gộp lá vào object `Interface` của
+  `device_ip_mtk.c` bằng registry merge.
+- **Wrapper:** sinh bằng `IPIF181_GET/SET` (`wanconn_mtk.h`). Data của instance IP.Interface được đổi thành kết nối
+  bằng `wan181_of_ipif()`, dựa trên `dip_section()` xuất từ `device_ip_mtk.c`. Sau đó gọi đúng lá TR-098 trong bảng
+  của loại kết nối (`wan181_tbl_get/set`).
+- **Bảng lá phẳng IPv6 là hợp của hai loại**, vì sản phẩm cố ý không đối xứng:
+  - `GatewayType`… `ConnStatus` chỉ có ở IPoE;
+  - `PdEnable`/`ConnectionStatus` chỉ có ở PPP;
+  - tên không có ở loại của kết nối thì đọc rỗng và trả 9008 khi ghi.
+- **Interface không mang kết nối** (LAN, `if<id>_6`): mọi lá này đọc rỗng và trả 9008 khi ghi.
+- **`X_AIS_LanInterface` (B):** liệt kê path TR-181 (`Device.Ethernet.Interface.n`, `Device.WiFi.SSID.n`, cùng số) và
+  nhận path TR-181 khi ghi. Wrapper dịch hai chiều, phần còn lại do setter TR-098 làm.
+
+**T4d, `Device.NAT.PortMapping.{k}` (`portmapping_mtk.c`):**
+- **Instance:** mọi rule `port_forwarding` của `firewall_clay` theo thứ tự trong file, đánh số theo vị trí. Không
+  ổn định, giống PortMapping TR-098 của sản phẩm.
+- **`Interface`:** IP.Interface của kết nối có tên (`pm_iface_name()`: `pon[.vlan]` / `pppoe-if<id>`) khớp option
+  `interface` của rule. Ghi `Interface` thì ghi lại tên đó; bridge trả 9007.
+- **AddObject:** tạo rule với giá trị mặc định của sản phẩm, chưa gắn kết nối (`Status` = Error_Misconfigured); ACS
+  đặt `Interface` sau. `add_pm_instance` của TR-098 nay gọi `pm_add()` dùng chung.
+- **`Protocol` viết hoa (B):** `tcp`/`udp`/`tcp/udp` → `TCP`/`UDP`/`TCP/UDP`; setter vốn không phân biệt hoa
+  thường.
+- **D:** `PortMappingNumberOfEntries` của từng kết nối, vì số đếm TR-181 là toàn cục.
+- **Công cụ:** `tr181-map.py` thêm `{pm:iC:iJ}` = instance `NAT.PortMapping` thứ J có `Interface` của kết nối C.
+
+**Kiểm (host):**
+- `tr181-map.py check`: 530 = 530, thiếu 0. Theo loại: A 399, B 28, C 152, D 85; **không còn T2/T3/T4**; chờ T5 136.
+- `run.sh tr181` thêm kiểm:
+  - IPoE: `X_AIS_VLANEnable/VLANID` `true 10`; `X_AIS_LanInterface` =
+    `Device.Ethernet.Interface.1,Device.WiFi.SSID.2`;
+  - LAN `X_AIS_VLANID` rỗng; `X_AIS_IPv6GatewayType` trên PPP rỗng và 9008; ghi lá này trên LAN → 9008;
+  - ghi `X_AIS_LanInterface` (path TR-181) → `hni.wan modify binding_ports= lan3=1 ssid5=1,`; `VLANID` 5000 → 9007;
+  - PortMapping: đếm 3; `Interface` 1/2/3 trỏ đúng IPoE/PPP/IPoE; `Protocol` `TCP/UDP`, `UDP`;
+  - add → 4, chưa gắn kết nối; đặt `Interface` sang PPP → `pppoe-if1`; sang bridge → 9007; `Protocol` TCP → `tcp`;
+    xoá → còn 3.
+- So cặp: **1116 bằng** + 2 theo tham chiếu, B 132, D 226, động 31, 5 thiếu vì TR-098 rỗng, 48 rỗng ở instance khác
+  (lá `X_AIS_*` trên interface không phải WAN, tên IPv6 chỉ có ở một loại), 0 tên TR-181 thiếu cặp.
+- `run.sh all` tại trạng thái T4c: 25/25 PASS; tại T4c+T4d (commit `tr181-0008`): 25/25 PASS. Cổng tĩnh: check-c-sanity 69/0, verify-dm-paths tr098 thiếu 0,
+  claims 0 cặp chồng, automake 0, cross-gcc SDK 69 file 0 lỗi, schema: tên mới đều chuẩn.
+- Chưa build SDK, chưa chạy board.
+
+**Chưa chứng minh được:**
+- Lá `X_AIS_*` trên mọi `IP.Interface` (rỗng ở interface không phải WAN) là lựa chọn của tôi theo nguyên tắc 5. ACS
+  của nhà mạng có dùng chúng ở chế độ TR-181 không thì chưa biết (T7).
+- Số instance `NAT.PortMapping` trượt khi xoá rule đứng trước, giống TR-098 của sản phẩm.
+- **AddObject của kết nối IPoE.** `WANIPConnection` AddObject gọi `hni.wan add IP` và tạo `wan.@entry`. Ở TR-181,
+  `IP.Interface` AddObject của sản phẩm chỉ tạo section `network.if<n>`, không tạo entry, nên chưa tương đương. PPP
+  thì có: `PPP.Interface` AddObject tạo entry PPPoE (T1). Đây là thao tác, không phải tham số, nên không nằm trong so
+  cặp; xét ở T7.

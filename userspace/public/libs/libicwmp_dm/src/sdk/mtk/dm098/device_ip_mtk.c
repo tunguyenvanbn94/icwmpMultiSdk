@@ -790,11 +790,14 @@ static const char *const device_ip_mtk_paths181[] = {
  * wan181_get/set): Alias (cpe-internet ...), MaxMTUSize.  Empty, and not
  * writable, on an interface that carries no WAN connection.
  */
+const char *dip_section(void *data)
+{
+	return data ? DIP_SEC(data) : "";
+}
+
 static struct wan_entry *dip_wan(void *data)
 {
-	struct wan_entry *e = dmcalloc(1, sizeof(*e));
-
-	return (e && wan_entry_of_sec(DIP_SEC(data), e)) ? e : NULL;
+	return wan181_of_ipif(data);
 }
 
 static int get_dip181_wan(void *data, const char *leaf, char **value)

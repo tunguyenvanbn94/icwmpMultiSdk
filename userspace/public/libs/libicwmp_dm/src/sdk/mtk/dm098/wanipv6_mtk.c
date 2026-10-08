@@ -1000,3 +1000,136 @@ static const struct dm_module wanipv6_mtk_module = {
 	.objs  = tWanDeviceV6Root,
 };
 DM_MODULE_REGISTER(wanipv6_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181)                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The IPv6 leaves of a connection on the Device.IP.Interface of its network
+ * section (wanip_mtk.c), same names (docs/plan/tr181_mtk_design.md, rule 5),
+ * joined to device_ip_mtk.c's Interface by the merge.  One Interface table
+ * carries the flat leaves of both objects: a name only WANIPConnection has
+ * (GatewayType ... ConnStatus) reads empty on a PPP connection and is not
+ * writable there, and the other way round for PdEnable/ConnectionStatus --
+ * the product's asymmetry, kept.  The X_AIS_IPv6 subtree is the same on both.
+ */
+IPIF181_GET(v6_automodeenable, tWanIpConnV6Param, tWanPppConnV6Param, "X_AIS_IPv6AutoModeEnable")
+IPIF181_SET(v6_automodeenable, tWanIpConnV6Param, tWanPppConnV6Param, "X_AIS_IPv6AutoModeEnable")
+IPIF181_GET(v6_addressingtype, tWanIpConnV6Param, tWanPppConnV6Param, "X_AIS_IPv6AddressingType")
+IPIF181_SET(v6_addressingtype, tWanIpConnV6Param, tWanPppConnV6Param, "X_AIS_IPv6AddressingType")
+IPIF181_GET(v6_externaladdress, tWanIpConnV6Param, tWanPppConnV6Param, "X_AIS_IPv6ExternalAddress")
+IPIF181_SET(v6_externaladdress, tWanIpConnV6Param, tWanPppConnV6Param, "X_AIS_IPv6ExternalAddress")
+IPIF181_GET(v6_dnsservers1, tWanIpConnV6Param, tWanPppConnV6Param, "X_AIS_IPv6DNSServers1")
+IPIF181_SET(v6_dnsservers1, tWanIpConnV6Param, tWanPppConnV6Param, "X_AIS_IPv6DNSServers1")
+IPIF181_GET(v6_dnsservers2, tWanIpConnV6Param, tWanPppConnV6Param, "X_AIS_IPv6DNSServers2")
+IPIF181_SET(v6_dnsservers2, tWanIpConnV6Param, tWanPppConnV6Param, "X_AIS_IPv6DNSServers2")
+IPIF181_GET(v6_prefixdelegationaddress, tWanIpConnV6Param, tWanPppConnV6Param, "X_AIS_IPv6PrefixDelegationAddress")
+IPIF181_SET(v6_prefixdelegationaddress, tWanIpConnV6Param, tWanPppConnV6Param, "X_AIS_IPv6PrefixDelegationAddress")
+IPIF181_GET(v6_gatewaytype, tWanIpConnV6Param, NULL, "X_AIS_IPv6GatewayType")
+IPIF181_SET(v6_gatewaytype, tWanIpConnV6Param, NULL, "X_AIS_IPv6GatewayType")
+IPIF181_GET(v6_gatewayaddress, tWanIpConnV6Param, NULL, "X_AIS_IPv6GatewayAddress")
+IPIF181_SET(v6_gatewayaddress, tWanIpConnV6Param, NULL, "X_AIS_IPv6GatewayAddress")
+IPIF181_GET(v6_dnstype, tWanIpConnV6Param, NULL, "X_AIS_IPv6DNSType")
+IPIF181_SET(v6_dnstype, tWanIpConnV6Param, NULL, "X_AIS_IPv6DNSType")
+IPIF181_GET(v6_prefixdelegationtype, tWanIpConnV6Param, NULL, "X_AIS_IPv6PrefixDelegationType")
+IPIF181_SET(v6_prefixdelegationtype, tWanIpConnV6Param, NULL, "X_AIS_IPv6PrefixDelegationType")
+IPIF181_GET(v6_guafromprefixenable, tWanIpConnV6Param, NULL, "X_AIS_IPv6GUAFromPrefixEnable")
+IPIF181_SET(v6_guafromprefixenable, tWanIpConnV6Param, NULL, "X_AIS_IPv6GUAFromPrefixEnable")
+IPIF181_GET(v6_connstatus, tWanIpConnV6Param, NULL, "X_AIS_IPv6ConnStatus")
+IPIF181_SET(v6_connstatus, tWanIpConnV6Param, NULL, "X_AIS_IPv6ConnStatus")
+IPIF181_GET(v6_pdenable, NULL, tWanPppConnV6Param, "X_AIS_IPv6PdEnable")
+IPIF181_SET(v6_pdenable, NULL, tWanPppConnV6Param, "X_AIS_IPv6PdEnable")
+IPIF181_GET(v6_connectionstatus, NULL, tWanPppConnV6Param, "X_AIS_IPv6ConnectionStatus")
+IPIF181_SET(v6_connectionstatus, NULL, tWanPppConnV6Param, "X_AIS_IPv6ConnectionStatus")
+IPIF181_GET(v6sub_addressingtype, tWanV6Param, tWanV6Param, "AddressingType")
+IPIF181_SET(v6sub_addressingtype, tWanV6Param, tWanV6Param, "AddressingType")
+IPIF181_GET(v6sub_ipaddress, tWanV6Param, tWanV6Param, "IPAddress")
+IPIF181_SET(v6sub_ipaddress, tWanV6Param, tWanV6Param, "IPAddress")
+IPIF181_GET(v6sub_prefixlength, tWanV6Param, tWanV6Param, "PrefixLength")
+IPIF181_SET(v6sub_prefixlength, tWanV6Param, tWanV6Param, "PrefixLength")
+IPIF181_GET(v6sub_defaultgateway, tWanV6Param, tWanV6Param, "DefaultGateway")
+IPIF181_SET(v6sub_defaultgateway, tWanV6Param, tWanV6Param, "DefaultGateway")
+IPIF181_GET(v6sub_manualdns, tWanV6Param, tWanV6Param, "ManualDNS")
+IPIF181_SET(v6sub_manualdns, tWanV6Param, tWanV6Param, "ManualDNS")
+IPIF181_GET(v6sub_dnsservers, tWanV6Param, tWanV6Param, "DNSServers")
+IPIF181_SET(v6sub_dnsservers, tWanV6Param, tWanV6Param, "DNSServers")
+IPIF181_GET(v6sub_connectionstatus, tWanV6Param, tWanV6Param, "ConnectionStatus")
+IPIF181_GET(v6sub_uptime, tWanV6Param, tWanV6Param, "Uptime")
+IPIF181_GET(v6pd_enable, tWanV6PdParam, tWanV6PdParam, "Enable")
+IPIF181_SET(v6pd_enable, tWanV6PdParam, tWanV6PdParam, "Enable")
+IPIF181_GET(v6pd_address, tWanV6PdParam, tWanV6PdParam, "Address")
+IPIF181_GET(v6pd_prefixlength, tWanV6PdParam, tWanV6PdParam, "PrefixLength")
+IPIF181_GET(v6pd_pltime, tWanV6PdParam, tWanV6PdParam, "PLtime")
+IPIF181_GET(v6pd_vltime, tWanV6PdParam, tWanV6PdParam, "VLtime")
+
+static DMLEAF tIpif181V6PdParam[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMWRITE, DMT_BOOL, get_ipif181_v6pd_enable, set_ipif181_v6pd_enable, NULL, NULL},
+{"Address", &DMREAD, DMT_STRING, get_ipif181_v6pd_address, NULL, NULL, NULL},
+{"PrefixLength", &DMREAD, DMT_UNINT, get_ipif181_v6pd_prefixlength, NULL, NULL, NULL},
+{"PLtime", &DMREAD, DMT_UNINT, get_ipif181_v6pd_pltime, NULL, NULL, NULL},
+{"VLtime", &DMREAD, DMT_UNINT, get_ipif181_v6pd_vltime, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tIpif181V6SubObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Pd", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tIpif181V6PdParam, NULL},
+{0}
+};
+
+static DMLEAF tIpif181V6SubParam[] = {
+{"AddressingType", &DMWRITE, DMT_STRING, get_ipif181_v6sub_addressingtype, set_ipif181_v6sub_addressingtype, NULL, NULL},
+{"IPAddress", &DMWRITE, DMT_STRING, get_ipif181_v6sub_ipaddress, set_ipif181_v6sub_ipaddress, NULL, NULL},
+{"PrefixLength", &DMWRITE, DMT_UNINT, get_ipif181_v6sub_prefixlength, set_ipif181_v6sub_prefixlength, NULL, NULL},
+{"DefaultGateway", &DMWRITE, DMT_STRING, get_ipif181_v6sub_defaultgateway, set_ipif181_v6sub_defaultgateway, NULL, NULL},
+{"ManualDNS", &DMWRITE, DMT_BOOL, get_ipif181_v6sub_manualdns, set_ipif181_v6sub_manualdns, NULL, NULL},
+{"DNSServers", &DMWRITE, DMT_STRING, get_ipif181_v6sub_dnsservers, set_ipif181_v6sub_dnsservers, NULL, NULL},
+{"ConnectionStatus", &DMREAD, DMT_STRING, get_ipif181_v6sub_connectionstatus, NULL, NULL, NULL},
+{"Uptime", &DMREAD, DMT_UNINT, get_ipif181_v6sub_uptime, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tIpif181V6Obj[] = {
+{"X_AIS_IPv6", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tIpif181V6SubObj, tIpif181V6SubParam, NULL},
+{0}
+};
+
+static DMLEAF tIpif181V6Param[] = {
+{"X_AIS_IPv6AutoModeEnable", &DMWRITE, DMT_BOOL, get_ipif181_v6_automodeenable, set_ipif181_v6_automodeenable, NULL, NULL},
+{"X_AIS_IPv6AddressingType", &DMWRITE, DMT_STRING, get_ipif181_v6_addressingtype, set_ipif181_v6_addressingtype, NULL, NULL},
+{"X_AIS_IPv6ExternalAddress", &DMWRITE, DMT_STRING, get_ipif181_v6_externaladdress, set_ipif181_v6_externaladdress, NULL, NULL},
+{"X_AIS_IPv6DNSServers1", &DMWRITE, DMT_STRING, get_ipif181_v6_dnsservers1, set_ipif181_v6_dnsservers1, NULL, NULL},
+{"X_AIS_IPv6DNSServers2", &DMWRITE, DMT_STRING, get_ipif181_v6_dnsservers2, set_ipif181_v6_dnsservers2, NULL, NULL},
+{"X_AIS_IPv6PrefixDelegationAddress", &DMWRITE, DMT_STRING, get_ipif181_v6_prefixdelegationaddress, set_ipif181_v6_prefixdelegationaddress, NULL, NULL},
+{"X_AIS_IPv6GatewayType", &DMWRITE, DMT_STRING, get_ipif181_v6_gatewaytype, set_ipif181_v6_gatewaytype, NULL, NULL},
+{"X_AIS_IPv6GatewayAddress", &DMWRITE, DMT_STRING, get_ipif181_v6_gatewayaddress, set_ipif181_v6_gatewayaddress, NULL, NULL},
+{"X_AIS_IPv6DNSType", &DMWRITE, DMT_STRING, get_ipif181_v6_dnstype, set_ipif181_v6_dnstype, NULL, NULL},
+{"X_AIS_IPv6PrefixDelegationType", &DMWRITE, DMT_STRING, get_ipif181_v6_prefixdelegationtype, set_ipif181_v6_prefixdelegationtype, NULL, NULL},
+{"X_AIS_IPv6GUAFromPrefixEnable", &DMWRITE, DMT_BOOL, get_ipif181_v6_guafromprefixenable, set_ipif181_v6_guafromprefixenable, NULL, NULL},
+{"X_AIS_IPv6ConnStatus", &DMWRITE, DMT_STRING, get_ipif181_v6_connstatus, set_ipif181_v6_connstatus, NULL, NULL},
+{"X_AIS_IPv6PdEnable", &DMWRITE, DMT_BOOL, get_ipif181_v6_pdenable, set_ipif181_v6_pdenable, NULL, NULL},
+{"X_AIS_IPv6ConnectionStatus", &DMWRITE, DMT_STRING, get_ipif181_v6_connectionstatus, set_ipif181_v6_connectionstatus, NULL, NULL},
+{0}
+};
+
+/* browseinstobj left NULL: device_ip_mtk.c makes the Interface instances */
+static DMOBJ tIpif181V6IfObj[] = {
+{"Interface", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tIpif181V6Obj, tIpif181V6Param, NULL},
+{0}
+};
+
+static DMOBJ tIpif181V6Root[] = {
+{"IP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tIpif181V6IfObj, NULL, NULL},
+{0}
+};
+
+/* No .paths: Device.IP.Interface. is device_ip_mtk.c's claim */
+static const struct dm_module wanipv6181_mtk_module = {
+	.name  = "mtk-wanipv6-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tIpif181V6Root,
+};
+DM_MODULE_REGISTER(wanipv6181_mtk_module);

@@ -364,3 +364,36 @@ static const struct dm_module servicelist_mtk_module = {
 	.objs  = tWanDeviceSvcRoot,
 };
 DM_MODULE_REGISTER(servicelist_mtk_module);
+
+/* TR-181 (cwmp.cpe.datamodel=tr181): X_AIS_ServiceList of a connection on
+ * the Device.IP.Interface of its network section (wanip_mtk.c), the same
+ * getter and setter; empty and not writable on any other interface */
+IPIF181_GET(service_list, tConnServiceListParam, tConnServiceListParam, "X_AIS_ServiceList")
+IPIF181_SET(service_list, tConnServiceListParam, tConnServiceListParam, "X_AIS_ServiceList")
+
+static DMLEAF tIpif181SvcParam[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"X_AIS_ServiceList", &DMWRITE, DMT_STRING, get_ipif181_service_list, set_ipif181_service_list, NULL, NULL},
+{0}
+};
+
+/* browseinstobj left NULL: device_ip_mtk.c makes the Interface instances */
+static DMOBJ tIpif181SvcObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Interface", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tIpif181SvcParam, NULL},
+{0}
+};
+
+static DMOBJ tIpif181SvcRoot[] = {
+{"IP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tIpif181SvcObj, NULL, NULL},
+{0}
+};
+
+/* No .paths: Device.IP.Interface. is device_ip_mtk.c's claim */
+static const struct dm_module servicelist181_mtk_module = {
+	.name  = "mtk-servicelist-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tIpif181SvcRoot,
+};
+DM_MODULE_REGISTER(servicelist181_mtk_module);

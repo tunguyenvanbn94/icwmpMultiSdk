@@ -81,5 +81,37 @@ int wan181_get(struct wan_entry *e, const char *leaf, char **value);
 int wan181_set(struct wan_entry *e, const char *leaf, char *value, int action);
 /* "Device.IP.Interface.<n>" of the connection, "" when not numbered */
 char *wan181_ipif(struct wan_entry *e);
+/* the connection on a Device.IP.Interface instance (its browse data), NULL
+ * when that interface carries none */
+struct wan_entry *wan181_of_ipif(void *ipif_data);
+/* <leaf> of a TR-098 leaf table t of a connection, called on e: "" when t
+ * has no such leaf (or t is NULL), 9008 when it is not writable there */
+int wan181_tbl_get(DMLEAF *t, struct wan_entry *e, const char *leaf, char **value);
+int wan181_tbl_set(DMLEAF *t, struct wan_entry *e, const char *leaf, char *value, int action);
+
+/*
+ * A leaf of Device.IP.Interface.{i} answered by the connection on it: the
+ * TR-098 leaf <leaf> of ip_t (IPoE/bridge) or ppp_t (PPP).  Empty, and not
+ * writable, on an interface without a connection.
+ */
+#define IPIF181_GET(name, ip_t, ppp_t, leaf)						\
+static int get_ipif181_##name(char *refparam, struct dmctx *ctx, void *data,		\
+			      char *instance, char **value)				\
+{											\
+	struct wan_entry *e = wan181_of_ipif(data);					\
+											\
+	*value = "";									\
+	return e ? wan181_tbl_get(e->ppp ? (ppp_t) : (ip_t), e, leaf, value) : 0;	\
+}
+
+#define IPIF181_SET(name, ip_t, ppp_t, leaf)						\
+static int set_ipif181_##name(char *refparam, struct dmctx *ctx, void *data,		\
+			      char *instance, char *value, int action)			\
+{											\
+	struct wan_entry *e = wan181_of_ipif(data);					\
+											\
+	return e ? wan181_tbl_set(e->ppp ? (ppp_t) : (ip_t), e, leaf, value, action)	\
+		 : FAULT_9008;								\
+}
 
 #endif

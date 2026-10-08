@@ -13,6 +13,7 @@ TR-181 side {iN} is the Nth instance of the TR-098 path, {i} the next one, and
 Device.WiFi.Radio of the SSID numbered like the Nth instance, {wanif:iN} the
 Device.IP.Interface of WAN connection N (NAT.InterfaceSetting.N.Interface),
 {ppp:iN} its Device.PPP.Interface (by Name: the connection's, else if<N-1>)
+{pm:iC:iJ} the Jth Device.NAT.PortMapping whose Interface is connection C's
 -- read from the dumps, "{i}" for check -- and {dns:iN} / {gw:iN} the fixed
 numbers 3N-2 (first DNS.Client.Server) / 64+N (default route):
   prefix  the longest matching prefix wins, the rest of the path is kept
@@ -46,6 +47,7 @@ DYNAMIC = [r"\.Stats\.", r"\.(Bytes|Packets)(Sent|Received)$", r"\.UpTime$", r"\
 def pat(p):
     p = p.replace("{lan}", "{i}")
     p = re.sub(r"\{(radio|wanif|ppp):(\d+|\{i\})\}", "{i}", p)
+    p = re.sub(r"\{pm:(\d+|\{i\}):(\d+|\{i\})\}", "{i}", p)
     p = re.sub(r"\$\d", "{i}", p)
     p = re.sub(r"\.\d+\.", ".{i}.", p)
     p = re.sub(r"\.\d+\.", ".{i}.", p)
@@ -99,6 +101,7 @@ def target(rule, m, path):
     caps = list(m.groups())
     out = re.sub(r"\{(radio|wanif|ppp):i(\d)\}", lambda x: "{%s:%s}" % (x.group(1), caps[int(x.group(2)) - 1]), rule[2])
     out = re.sub(r"\{(dns|gw):i(\d)\}", lambda x: fixed(x.group(1), caps[int(x.group(2)) - 1]), out)
+    out = re.sub(r"\{pm:i(\d):i(\d)\}", lambda x: "{pm:%s:%s}" % (caps[int(x.group(1)) - 1], caps[int(x.group(2)) - 1]), out)
     out = re.sub(r"\{i(\d)\}", lambda x: caps[int(x.group(1)) - 1], out)
     it = iter(caps)
     out = re.sub(r"\{i\}", lambda x: next(it), out)
@@ -177,6 +180,16 @@ def ppp_of(d98, d181, conn):
     return "{ppp:%s}" % conn
 
 
+def pm_of(d181, conn, nth):
+    """the nth (1-based) NAT.PortMapping whose Interface is connection conn's IP.Interface"""
+    w = wanif_of(d181, conn)
+    ref = "Device.IP.Interface.%s" % w
+    ks = sorted(int(m.group(1)) for k, p in d181.items()
+                for m in [re.match(r"^Device\.NAT\.PortMapping\.(\d+)\.Interface$", k)]
+                if m and p.get("value") == ref)
+    return str(ks[int(nth) - 1]) if len(ks) >= int(nth) else "{pm:%s:%s}" % (conn, nth)
+
+
 def radio_of(d181, ssid):
     """Device.WiFi.Radio instance of Device.WiFi.SSID.<ssid> (its LowerLayers)"""
     v = d181.get("Device.WiFi.SSID.%s.LowerLayers" % ssid, {}).get("value", "")
@@ -231,6 +244,8 @@ def main():
                 t = re.sub(r"\{wanif:(\d+)\}", lambda x: wanif_of(d181, x.group(1)), t)
             if t and "{ppp:" in t:
                 t = re.sub(r"\{ppp:(\d+)\}", lambda x: ppp_of(d98, d181, x.group(1)), t)
+            if t and "{pm:" in t:
+                t = re.sub(r"\{pm:(\d+):(\d+)\}", lambda x: pm_of(d181, x.group(1), x.group(2)), t)
             kind = r[3] if r else "none"
             if not t:
                 cls[kind] = cls.get(kind, 0) + 1

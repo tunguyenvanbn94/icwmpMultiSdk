@@ -21,5 +21,7 @@ char *dip_update_instance(const char *nsec);
 /* the first network section whose ip_int_instance is <inst>, NULL if none
  * (dhcp6_find_network_sec_by_ipinst) */
 char *dip_section_of_instance(const char *inst);
+/* the network section of an Interface.{i} instance (its browse data) */
+const char *dip_section(void *data);
 
 #endif
