@@ -59,6 +59,7 @@ flowchart LR
 | BDK | Prototype; **build image đạt 06/10 tại 0088** (bundle một SDK, analysis §56) | SDK build BDK; board BDK chưa (PH7) |
 | Test host | Chạy được trên máy build: container `ubuntu:24.04` (§55) | **`run.sh all` PASS 06/10** trên repo (code 0086) và từ chính bundle MTK `e273359` |
 | **PH0 (đóng băng baseline)** | **Xong 08/10** (PH0.5, tag `baseline/ph0-mtk-tr098-20261008`) | Board image `0fa9d31` (0101), parity PASS. Mang sang sau: G9 24 h (không chặn, quyết định 08/10), WebUI (G6), K15 hoãn (§64) |
+| **Bản giao MTK** | **`release/mtk-20261008`** (08/10): full C, không còn shell data model | bundle `--sdk mtk` kiểm sha256, apply = code image `9f393e4` (board PASS), `run.sh all` từ bundle 24/24 PASS; làm lại từng bước: [icwmp_mtk_build_verify_guide.md](icwmp_mtk_build_verify_guide.md) (§66) |
 | **PH5 (tắt compat)** | **Đạt board 08/10** (0103, 0104; kéo lên trước PH1–PH3) | Build MTK `--disable-dm-script-compat`, không cài `icwmp_dm.sh`. Image `9f393e4`: parity compat-off PASS, không tên nào chỉ ở shell → **cây C đủ trên board**; GPV toàn cây 1 s. Tìm và sửa K28 (§65) |
 
 ---
@@ -95,6 +96,7 @@ flowchart LR
 | TR-098 C — P7 | 0093–0095 | 79 param `X_AIS_*` của operator (UPnP, 3rdAgent, CPEagent với khóa lấy lúc build, AutoWiFiScan, Logging, UplinkSetup, WiFiStatus, MLO, …); test host `p7`, `p7c` | host `run.sh all`; MTK SDK build gói + image (§60) |
 | Công cụ test (K22) | 0096 | valgrind `--run-libc-freeres=no`; agent kẹt dưới valgrind được báo rồi dọn | host `run.sh all` |
 | TR-098 C — P8 | 0097–0099 | `Device.IP`/TraceRoute/DHCPv6/DOCSIS, `Device.PPP`/DynamicDNS/RouterAdvertisement, `Services`: 132 param, toàn cây 783/783; test host `p8`, `p8b`, `p8c` | host `run.sh all`; MTK SDK build gói + image dev-access (§61) |
+| Bản giao + tài liệu | 0105, docs | `tests/board/soak_sample.sh` (G9); tài liệu build và kiểm từng bước; tag `release/mtk-20261008` | bundle: sha256 sạch, `run.sh all` từ bundle PASS (§66) |
 | PH5 compat off | 0103 | Feed `libtr098` `--disable-dm-script-compat`, không cài `icwmp_dm.sh`; `build.sh` host mặc định như sản phẩm (`ICWMP_HOST_DM_COMPAT=1` = rollback); test `full`; `parity_dump.sh` `DM_SH=` | **board** image `9f393e4`: parity compat-off PASS, cây C đủ (§65) |
 | K28 | 0104 | `NTPServer` getter trả bản sao; `mtk_varstate` sao chép; `run.sh valgrind` có tải K28; `parity.py` chịu byte không phải UTF-8 | **board** image `9f393e4` + valgrind host (§65.1) |
 | Board parity (K25–K27) | 0101 | So toàn cây C với shell sản phẩm trên board (`tests/board/parity_dump.sh` + `parity.py`): boolean P1–P3, MAC LAN, `gsw_stats`, `ConnReqXMPPConnection`; `verify-dm-paths` xét `#ifdef` | **board** image `0fa9d31`: parity PASS (§63) |

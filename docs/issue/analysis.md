@@ -4260,3 +4260,47 @@ upstream). Ghi ở `other-findings/icwmp-get-commits-other-uci-changes.md` của
 
 **Kết luận PH5:** build sản phẩm MTK không còn shell. Cây TR-098 C đủ trên board thật, đã đối chiếu với shell sản phẩm.
 Source `sdk/mtk/compat/` vẫn giữ để rollback và làm driver cho parity; xoá hẳn (K7) sau một bản giao không cần rollback.
+
+## 66. Bản giao đầu tiên MTK full C: `release/mtk-20261008` (08/10 11:53–)
+
+**Yêu cầu của user (08/10 11:53, chatlog 88):** push; bàn giao code MTK full C, đủ tham số, không còn chạy `.sh`, làm bản
+base và release đầu. Sau đó viết tài liệu từng bước (máy nào, lệnh gì, để làm gì, kết quả gì) để tự chạy lại và học.
+
+**Push 11:56:** `dev` `5df1675..c386821`, `main` `4965f5d..c022de1`, tag `baseline/ph0-mtk-tr098-20261008`. Trước khi push
+đã rà bí mật: khóa CPEagent 0 trong cây và lịch sử, mật khẩu dev 0.
+
+**"Không còn chạy `.sh`" nghĩa là gì (Verified từ source 0104):**
+- Đường GET/SET/ADD/DEL/notify/Inform của data model là C. `icwmp_dm.sh` không build, không cài.
+- Shell còn chạy là hành động của sản phẩm, firmware cũ cũng gọi y hệt:
+  - restart dịch vụ sau SET: init script, `hni_wan_reload.sh`, `start_wsl.sh`;
+  - launcher chẩn đoán `/usr/share/easycwmp/functions/*_launch` khi `DiagnosticsState=Requested`;
+  - `/usr/sbin/icwmp` cho Download/Upload/nạp firmware/Reboot/FactoryReset;
+  - `sh -c` một dòng để ghi output của `mwctl`/`iw` (`X_AIS_WiFiStatus`).
+- Bỏ nốt phần này nghĩa là port launcher chẩn đoán và hành động sang C. Bản giao này chưa làm; tài liệu hướng dẫn mục 2
+  ghi rõ.
+
+**Code của bản giao** = 0104 + 0105 (`tests/board/soak_sample.sh`, chỉ là công cụ test).
+- Apply bundle vào `1_src` (backup `.icwmp-backups/20261008-120159-6jo_3lt1`) chỉ ghi `.icwmp-release.json`.
+- Nghĩa là `libicwmp_dm`, `icwmp_tr098` và feed Makefile trùng từng byte với bản đã build thành image `9f393e4`
+  đang chạy trên board (§65.2). Không cần build lại.
+
+**Kiểm bundle** (thư mục `icwmp_mtk_26580fe0d1c3`, 361 file, gồm `docs/`, `tests/host`, `tests/board`):
+- `sha256sum -c SHA256SUMS` sạch.
+- `apply --dry-run` rồi apply thật: như trên.
+- Test host chạy từ chính bundle (container `ubuntu:24.04` mount bundle, đúng các lệnh C1–C6 của tài liệu):
+  `apt=0`, `build.sh` ok, `setup.sh` ok, `run.sh full` PASS, `run.sh all` exit 0, 24 PASS, 0 FAIL.
+- Các lệnh E1, E2 (dạng không tương tác), E6 và G1–G13, H1–H2 của tài liệu cũng đã chạy thật ngày 08/10.
+- G9 có chuỗi rỗng bị 9007: đó là hợp đồng input của sản phẩm, nên tài liệu dùng ví dụ đổi rồi trả lại `NTPServer3`.
+
+**Tài liệu:** [handover/icwmp_mtk_build_verify_guide.md](../handover/icwmp_mtk_build_verify_guide.md). Các bước A–H và
+rollback, mỗi bước một bảng gồm máy, lệnh, mục đích, kết quả đạt.
+
+**Tag:** `release/mtk-20261008` (annotated) ở commit tài liệu chứa mục này. Message của tag ghi sha256 của
+`./export.py --sdk mtk` tại tag. Bundle chép ra workspace `issues/20260922_icwmp_multiplatform_tr098/release/`.
+
+**Còn mở:**
+- G9 24 h: đang chạy trên `9f393e4` từ 11:42:44; 2 mẫu đầu phẳng (fd 12, 52 phiên, 0 lỗi).
+- G6: xem WebUI.
+- K15: hoãn.
+- 1 phiên lỗi trên image `2cca863`: chưa rõ nguyên nhân.
+- Image giao khách phải build **không** có patch dev-access.

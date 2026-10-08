@@ -1,6 +1,6 @@
 # icwmp MTK (TR-098 full C): build và kiểm chứng từng bước
 
-Bản giao: tag **`release/mtk-20261008`**, code `0104`. Gồm icwmp và data model TR-098 của sản phẩm (783/783 tham số)
+Bản giao: tag **`release/mtk-20261008`**, code `0104` (cộng `0105`, chỉ là công cụ test). Gồm icwmp và data model TR-098 của sản phẩm (783/783 tham số)
 viết bằng C, cho SDK MTK/Airoha 2025Q3, board HP2236B.
 
 Mọi lệnh dưới đây đã chạy thật trên lab ngày 08/10/2026. Cột **Kết quả đạt** là kết quả thấy được hôm đó. Làm lần
@@ -87,7 +87,7 @@ Muốn bỏ nốt các phần này thì phải port launcher chẩn đoán và c
 
 | # | Lệnh | Để làm gì | Kết quả đạt |
 |---|---|---|---|
-| A1 | `GIT_SSH_COMMAND='ssh -4' git clone git@github.com:tunguyenvanbn94/icwmpMultiSdk.git $REPO` | lấy repo | có thư mục `$REPO` |
+| A1 | `git clone https://github.com/tunguyenvanbn94/icwmpMultiSdk.git $REPO` | lấy repo (public, không cần key) | có thư mục `$REPO` |
 | A2 | `cd $REPO && git checkout release/mtk-20261008` | về đúng bản giao | `HEAD is now at …` |
 | A3 | `git tag -n30 release/mtk-20261008` | đọc ghi chú bản giao | có sha256 của bundle (dùng ở D1) và kết quả kiểm |
 | A4 | `git status --short` | cây sạch | không in gì |
@@ -100,7 +100,7 @@ Chạy trong `$REPO`.
 |---|---|---|---|
 | B1 | `python3 docs/issue/verify-dm-paths.py --sdk mtk` | so cây C với 783 tham số của sản phẩm (`docs/issue/tr098_coverage_matrix.tsv`) | cuối có `thiếu  : 0`, `dôi    : 17`, 5 lá `DNSDiagnostics.Result` "không tới được" |
 | B2 | `python3 docs/issue/verify-dm-paths.py --sdk mtk --claims` | không có hai module cùng giữ một object | `cặp chồng: 0` |
-| B3 | `python3 docs/issue/check-c-sanity.py` | các lỗi C hay gặp (giải phóng sai, thiếu kiểm NULL…) | `[lib/mtk] 68 file kiểm, 0 vấn đề` |
+| B3 | `python3 docs/issue/check-c-sanity.py` | lỗi C bắt được không cần compiler: comment đóng sớm, ngoặc lệch, hàm chưa khai báo, `static` trùng khai báo | `[lib/mtk] 68 file kiểm, 0 vấn đề` |
 | B4 | `python3 docs/issue/check-cc-syntax.py --sdk-root $SDK --tree all` | biên dịch thử bằng gcc của chính SDK | `0 file lỗi` cho lib (68 file) và app (17 file) |
 | B5 | `python3 docs/issue/check-automake-conds.py` | `Makefile.am` hợp lệ | `0 vấn đề` |
 
@@ -148,16 +148,21 @@ Chi tiết: [tests/host/README.md](../../tests/host/README.md).
 
 | # | Lệnh | Để làm gì | Kết quả đạt |
 |---|---|---|---|
-| D1 | `cd $REPO && python3 export.py --sdk mtk /tmp/icwmp_mtk.tar.gz` | đóng gói đúng commit HEAD, chỉ phần MTK | `commit: <commit> sdks: mtk files: …` và `sha256: …`, trùng sha256 ghi trong tag (A3) |
-| D2 | `mkdir -p /tmp/icwmp_rel && tar -xzf /tmp/icwmp_mtk.tar.gz -C /tmp/icwmp_rel` | giải nén | có `/tmp/icwmp_rel/icwmp_mtk_<commit 7 ký tự>/` |
+| D1 | `cd $REPO && python3 export.py --sdk mtk /tmp/icwmp_mtk.tar.gz` | đóng gói đúng commit HEAD, chỉ phần MTK | nhiều dòng `Drop:` (bỏ code BDK/uci), rồi `commit: <commit> sdks: mtk files: …` và `sha256: …` trùng sha256 ghi trong tag (A3) |
+| D2 | `mkdir -p /tmp/icwmp_rel && tar -xzf /tmp/icwmp_mtk.tar.gz -C /tmp/icwmp_rel` | giải nén | có `/tmp/icwmp_rel/icwmp_mtk_<12 ký tự đầu của commit>/`, trong đó có `apply`, `docs/`, `tests/`, `userspace/`, `feeds/` |
 | D3 | `cd /tmp/icwmp_rel/icwmp_mtk_*/ && sha256sum -c --quiet SHA256SUMS` | file trong bundle không bị sửa | không in gì |
-| D4 | `./apply --sdk mtk --dry-run $SDK` | kiểm trước, không ghi | liệt kê path sẽ thay, không có `ERROR` |
-| D5 | `./apply --sdk mtk $SDK` | cài vào cây SDK, có backup | `Applied:` cho `libicwmp_dm`, `icwmp_tr098`, feed `libtr098/Makefile`, `.icwmp-release.json`; `Backup: $SDK/.icwmp-backups/<thời điểm>` |
+| D4 | `./apply --sdk mtk --dry-run $SDK` | kiểm trước, không ghi | `Release: <commit> SDK: mtk profile: HP2236B layout: sdk-only`, các dòng `Manage:` (path sẽ quản lý), `DRY RUN: no target files changed.`, rồi gợi ý lệnh build |
+| D5 | `./apply --sdk mtk $SDK` | cài vào cây SDK, có backup | một dòng `Applied:` cho mỗi path khác bản đang cài (lần đầu: `libicwmp_dm`, `icwmp_tr098`, 2 feed Makefile, profile, `.icwmp-release.json`); `Backup: $SDK/.icwmp-backups/<thời điểm>` |
 | D6 | `cat $SDK/.icwmp-release.json` | cây SDK ghi lại bản đã cài | `commit` trùng commit của tag |
 
-Apply lại đúng bản đã cài thì in `Already applied` và không tạo backup mới.
+Path giống hệt bản đang cài thì không chép lại. Ví dụ 08/10: cây SDK đang có code của image `9f393e4`, apply bản giao
+chỉ in `Applied: .icwmp-release.json`, tức code bản giao trùng code image đó. Apply lại y hệt lần trước thì in
+`Already applied` và không tạo backup mới.
 
 ## 7. Bước E — Build image (container build)
+
+**Cây SDK mới hoàn toàn** (chưa build lần nào): chạy trước một lần lệnh `./airoha_script/airoha-compile.sh …` mà D4/D5
+in ra, ở `$SDK`, trong container build.
 
 **Image lab hay image giao khách.** Image lab có patch dev-access (mục 1): SSH/telnet mở sẵn sau boot để làm bước
 F cách 2 và bước G. **Không bao giờ dùng patch này cho image giao khách.** Kiểm cây đang ở loại nào:
@@ -326,7 +331,7 @@ wget -q -T 5 -O - "http://172.16.0.15:7557/faults/?query=%7B%22_id%22%3A%7B%22%2
 
 | Hiện tượng | Nguyên nhân | Cách xử lý |
 |---|---|---|
-| `git clone`/`push` báo `REMOTE HOST IDENTIFICATION HAS CHANGED` | DNS mạng lab trả địa chỉ IPv6 lạ cho github.com, ssh đi vào dropbear của board | `GIT_SSH_COMMAND='ssh -4'`; không sửa `known_hosts` |
+| `git push` qua SSH báo `REMOTE HOST IDENTIFICATION HAS CHANGED` | DNS mạng lab trả địa chỉ IPv6 lạ cho github.com, ssh đi vào dropbear của board | `GIT_SSH_COMMAND='ssh -4 -o StrictHostKeyChecking=yes'`; không sửa `known_hosts` |
 | SSH board báo host key đổi | mỗi lần nạp image key đổi | `-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null` (chỉ lab) |
 | Nạp xong không SSH được | image không có dev-access: `svcboot` tắt SSH mỗi lần boot | nạp image lab, hoặc dùng console/WebUI |
 | `sysupgrade` không chạy, không báo gì | chạy `setsid`/`nohup`/`&` trong SSH; board không có các lệnh đó | dùng lệnh F6 |
