@@ -174,6 +174,23 @@ phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đ�
 Số phủ sau T4a: nguồn TR-098 (ma trận + tên chỉ có ở C) theo loại: A 344, B 16, C 88, D 65, chờ T4 151, T5 136.
 Tên TR-181 trong cây C: 456.
 
+## T4b–T4d: đề xuất (08/10, chờ user xác nhận trước khi code)
+
+Mỗi kết nối WAN (`WANIPConnection.{id+1}`/`WANPPPConnection.{id+1}`, `wan.@entry` có `id`) neo vào `Device.IP.Interface`
+của section `network.if<id>` (bridge: `if_wanbr<id>`), đánh số bằng `ip_int_instance` như từ T1. Hướng theo ma trận BDK.
+
+| TR-098 | TR-181 đề xuất | Ghi chú |
+|---|---|---|
+| `ExternalIPAddress`, `SubnetMask`, `AddressingType` | `IP.Interface.{n}.IPv4Address.1.` | mở rộng browse `IPv4Address` của T2 sang WAN |
+| `NATEnabled` | `NAT.InterfaceSetting.{id+1}.Enable` (+`Interface`) | số theo kết nối, không trùng giữa IP và PPP vì `id` duy nhất |
+| `DNSServers` | `DNS.Client.Server.{k}` mỗi địa chỉ một instance (+`Interface`, `Type`) | TR-181 `DNSServer` là một địa chỉ; loại B |
+| `DefaultGateway` | `Routing.Router.1.IPv4Forwarding` mục động (`StaticRoute` false, `Origin`), sau các route tĩnh | số mục động đổi khi thêm/xoá route tĩnh |
+| `Enable`, `ConnectionStatus`, `Alias`, `Stats.*`, `MaxMTUSize` | lá của `IP.Interface.{n}` | `Enable` TR-098 đọc `wan.@entry.active`, TR-181 đọc `network.<sec>.auto`: kiểm trên board |
+| `Username`, `Password`, `MaxMRUSize`, `CurrentMRUSize`, `RemoteIPAddress`… (PPP) | `PPP.Interface.{p}` (đã có từ T1) + `IPCP` | |
+| `X_AIS_*` (VLAN, IPMode, DefaultRoute, LanInterface, ServiceList, `X_AIS_IPv6.*`) | `IP.Interface.{n}.X_AIS_*`, cùng tên lá (nguyên tắc 5) | rỗng ở instance không phải WAN |
+| `PortMapping.{j}` | `NAT.PortMapping.{k}` (+`Interface`) | T4d |
+| `Name` (tên hiển thị của sản phẩm), `Uptime`, `PossibleConnectionTypes`, `ConnectionType` | D, hoặc `X_AIS_` nếu ACS cần | TR-181 không có tương ứng trực tiếp |
+
 ## Quy ước trên `dev_181`
 
 - Commit code: `[icwmp tr181-NNNN] <phạm vi>: <việc>`, chuỗi số riêng từ `0001`, để không trùng `[icwmp NNNN]` của
