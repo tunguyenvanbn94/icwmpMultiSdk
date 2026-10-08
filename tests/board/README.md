@@ -15,6 +15,11 @@ DM_SH=/tmp/icwmp_dm.sh sh parity_dump.sh /tmp/icwmp_parity
 python3 tests/board/parity.py <dir>      # exit 1 on any unexplained difference
 ```
 
+`soak_sample.sh` (gate G9) samples icwmpd every 10 min into `/tmp/g9.csv`: pid, RSS, fd, threads, session
+counters, MemAvailable, agent starts; start it with `start-stop-daemon` (header of the script).
+Step by step, with the expected output of each command:
+[docs/handover/icwmp_mtk_build_verify_guide.md](../../docs/handover/icwmp_mtk_build_verify_guide.md).
+
 `parity.py` sorts each difference into: equal, dynamic (counters and clocks
 read seconds apart), known (deliberate, each with the place it is written
 down), quote (the shell printed the quotes of an `echo \"...\"` getter) or
