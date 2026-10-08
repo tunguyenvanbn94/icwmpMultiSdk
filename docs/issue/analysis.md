@@ -4931,3 +4931,52 @@ So với G9 trên image `9f393e4` (§66, 11 giờ): cùng fd 12 và 11 thread; V
 5724–6104 kB). **Giới hạn:** chu kỳ Inform của board là 43.200 s, nên trong 5 giờ agent chỉ có một phiên với ACS. Mẫu này
 cho thấy agent ổn định lúc rảnh, chưa cho thấy ổn định dưới nhiều phiên (phần đó có soak host 300 phiên ở §57). CSV ở
 workspace `issues/…/logs/20261009_g9_soak_image_dev181_084ef3a.csv`.
+
+## 77. T7 (1): hai lỗi ngữ nghĩa TR-181 thấy trên board, và vì sao `LowerLayers` chưa đổi (`tr181-0011`) (09/10 04:50–)
+
+§74 ghi ba chỗ giá trị TR-181 bằng giá trị TR-098 của sản phẩm nhưng sai theo TR-181. Hai chỗ sửa ở lượt này. Chỗ thứ
+ba (`LowerLayers`) là hợp đồng ghi của sản phẩm, cần quyết định trước khi đổi.
+
+**1. `IP.Interface.{n}.IPv4Address.1.AddressingType` của kết nối PPP = `IPCP`.**
+- Trước: `wan181_get(e, "AddressingType")` → getter TR-098 của sản phẩm đọc `v4_mode` (`0` → `DHCP`, `1` → `Static`) cho cả
+  `WANPPPConnection`. Board: PPPoE `if0` báo `DHCP`.
+- Sau: `get_ipv4_addressing181` (`lan_mtk.c`) trả `IPCP` khi `e->ppp`, cùng quy tắc với `Origin` của route mặc định
+  (`layer3forwarding_mtk.c`). Lá TR-181 chỉ đọc; nhánh TR-098 không đổi.
+- Ánh xạ: cặp `WANPPPConnection.{i}.AddressingType` A → B.
+
+**2. `WiFi.Radio.{i}.Channel` khi chọn kênh tự động, và `AutoChannelEnable` = false.**
+- TR-181: khi `AutoChannelEnable` là true, `Channel` phải là kênh bộ chọn tự động đang dùng; đặt `AutoChannelEnable` false thì
+  kênh đang chọn được giữ. Sản phẩm (TR-098) đọc cấu hình (`wireless.<radio>.channel` = 0 khi auto), và khi tắt auto thì
+  ghi kênh đầu của băng (1 hoặc 36).
+- Sau, chỉ ở bảng TR-181 (`wlan_mtk.c`):
+  - `get_radio181_channel`: cấu hình 0 → `ChannelsInUse` (`ubus hni getCurrentChannel`);
+  - `set_radio181_auto_channel`: false khi đang auto → ghi kênh đang dùng nếu `set_channel` (VALUECHECK) nhận nó cho băng
+    đó (kể cả luật khối 160 MHz), nếu không thì như sản phẩm. Ghi uci như `set_auto_channel`, không thêm reload mà setter
+    của sản phẩm không có.
+- Ánh xạ: cặp `WLANConfiguration.{i}.Channel` A → B. Bảng kiểu shell (`shelltypes_mtk.h`) vì vậy mất
+  `Device.WiFi.Radio.{i}.Channel` (340 dòng, 176 TR-181). `set_channel` tự kiểm chữ số và dải kênh, nên SPV sai kiểu vẫn
+  bị từ chối: host `Device.WiFi.Radio.1.Channel=abc` → 9007.
+
+**3. `LowerLayers` chưa đổi.**
+- `PPP.Interface.{i}.LowerLayers` **ghi được** trong sản phẩm, và là nút đặt VLAN WAN: `pon` hoặc `pon.<vid>` →
+  `wan.@entry.vlan_active/vlan_id`, `network.<if>.device`, reload WAN (`device_ppp_mtk.c` `set_ppp_lowerlayers`). Đổi
+  sang tham chiếu TR-181 sẽ phá hợp đồng ghi đó. Không có cách nào khác để đặt VLAN qua cây `Device.` hiện tại, ngoài
+  `IP.Interface.{n}.X_AIS_VLANID`.
+- Lớp nằm ngay dưới chưa có trong cây: PPP → `Ethernet.VLANTermination` → `Ethernet.Link` → `Optical.Interface.1` /
+  `Ethernet.Interface.5`; IP.Interface của LAN → `Ethernet.Link` → `Bridging.Bridge.1.Port`. Chỉ đổi riêng
+  IP.Interface của PPP thành `Device.PPP.Interface.{p}` sẽ để cùng một lá mang hai dạng (tham chiếu và tên netdev).
+- Đề xuất (cần user, và nếu được thì nhà mạng, chốt): làm cả tầng một lần — `Ethernet.Link` (thêm `MACAddress`, tức
+  dòng D `LANHostConfigManagement.MACAddress`), `Ethernet.VLANTermination` (`VLANID` ghi vào đúng option `vlan_id`),
+  `Bridging` cho LAN nếu ACS dùng. Sau đó mọi `LowerLayers` là tham chiếu, VLAN đặt qua `VLANTermination.VLANID`. Trước
+  khi làm cần biết ACS của nhà mạng có đang ghi `PPP.Interface.{i}.LowerLayers` = `pon.<vid>` (qua nhánh
+  `InternetGatewayDevice.Device.PPP` của sản phẩm) hay không. Nếu có thì giữ cách viết đó, và mục này dừng ở mức ghi nhận.
+
+**Kiểm (host):**
+- `run.sh tr181` thêm: PPP `IPv4Address.1` = `10.20.30.40` + `IPCP`; Radio 2 (auto) `Channel` = `ChannelsInUse` = 116;
+  `Radio.1.Channel=abc` → 9007; `AutoChannelEnable` false → `wireless.MT7993_1_2.channel` 116 (kênh đang dùng), true → 0.
+  ubus giả của test trả `hni getCurrentChannel` (radio 1 → 116, radio 0 → 6).
+- So cặp: 1211 bằng + 2 tham chiếu, B 150 (13 cặp chuyển từ "bằng": 12 `Channel` + 1 `AddressingType`), 0 tên thiếu cặp.
+- `tr181-map.py check` 651 = 651; check-c-sanity lib 69/0, app ×3 17/0; verify-dm-paths tr098 thiếu 0; claims 0 chồng;
+  automake 0; cross-gcc SDK (`2_src`) lib 69 file 0 lỗi, không cảnh báo ở `lan_mtk.c`/`wlan_mtk.c`.
+- `run.sh all` 25/25 PASS tại `tr181-0011`.
+- Chưa build image, chưa chạy board cho thay đổi này.

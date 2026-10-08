@@ -159,7 +159,7 @@ phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đ�
 | T4 WAN | T4a **xong trên host** (`tr181-0006`, §70): cổng WAN `Ethernet.Interface.5`, `Optical.Interface.1`, `Routing.Router.1.IPv4Forwarding`. T4b **xong trên host** (`tr181-0007`, §71): kết nối → IP.Interface, IPv4Address, DHCPv4.Client, NAT.InterfaceSetting, DNS.Client.Server, route mặc định, PPP.Interface. T4c + T4d **xong trên host** (`tr181-0008`, §72): `X_AIS_*`/`X_AIS_IPv6`/ServiceList trên IP.Interface, `NAT.PortMapping` (+Add/Delete). Add/Delete kết nối: `PPP.Interface` AddObject (T1) tạo `wan.@entry` PPPoE; **IPoE chưa tương đương**: `IP.Interface` AddObject của sản phẩm chỉ tạo section `network`, không gọi `hni.wan add` như `WANIPConnection` AddObject (T7) | như trên + `hni.wan` thật trên board |
 | T5 Chẩn đoán, firewall — **xong trên host** (`tr181-0009`, analysis §73) | IP.Diagnostics.IPPing/TraceRoute/Download/Upload, DNS.Diagnostics.NSLookupDiagnostics, `Device.DNSDiagnostics`, `Device.Firewall` (path interface → tham chiếu), `Device.LTE` | `check` thiếu 0; `run.sh tr181`: 1224 cặp bằng, không còn phase chờ |
 | T6 Board — **xong** (`tr181-0010`, analysis §74) | so cặp TR-098 ↔ TR-181 trên board (`tests/board/tr181_window.sh`, ACS bị chặn suốt cửa sổ), phiên ACS thật ở chế độ `tr181` | 0 cặp lệch không giải thích được: đạt trên board (1272 bằng, 0 tên thiếu cặp, TR-098 parity với shell PASS); phiên GenieACS chế độ `tr181` success, 0 fault |
-| T7 Theo BDK | tham số TR-181 mà ACS dùng trên BDK nhưng chưa có ở đây (không làm tất cả) | danh sách chốt với user |
+| T7 Theo BDK — **đang làm** (`tr181-0011`, analysis §77: `AddressingType` PPP = `IPCP`, `Radio.Channel`/`AutoChannelEnable` theo TR-181; `LowerLayers` chờ quyết định) | tham số TR-181 mà ACS dùng trên BDK nhưng chưa có ở đây (không làm tất cả) | danh sách chốt với user |
 
 ## Công cụ
 
@@ -210,8 +210,10 @@ của section `network.if<id>` (bridge: `if_wanbr<id>`), đánh số bằng `ip_
 - Danh sách tham số TR-181 ACS thật sự dùng trên BDK: chưa trích (T7).
 - `AssociatedDevice` (`ubus hni`): lúc T6 không có client Wi-Fi, instance chưa được thử trên board. `ChannelsInUse`,
   `PossibleChannels` đúng trên board (§74).
-- Ngữ nghĩa TR-181 mà so cặp không bắt được vì giá trị bằng TR-098 của sản phẩm (§74, T7): `IPv4Address.AddressingType`
-  của PPPoE là `DHCP` (TR-181: `IPCP`), `LowerLayers` là tên netdev, `WiFi.Radio.Channel` = 0 khi kênh tự động.
+- Ngữ nghĩa TR-181 mà so cặp không bắt được vì giá trị bằng TR-098 của sản phẩm (§74): `AddressingType` của PPP và
+  `WiFi.Radio.Channel` khi auto đã sửa (§77). `LowerLayers` vẫn là tên netdev: `PPP.Interface.LowerLayers` ghi được và là
+  nút đặt VLAN WAN của sản phẩm (`pon.<vid>`); đổi sang tham chiếu cần cả tầng `Ethernet.Link`/`VLANTermination` và cần
+  biết ACS của nhà mạng có ghi lá đó không (§77).
 - Tạo kết nối IPoE từ ACS ở chế độ `tr181`: `IP.Interface` AddObject không tạo `wan.@entry` qua `hni.wan` (analysis §72). Cần
   quyết định cách làm cùng ACS (T7).
 - `MruEnable` (tên sản phẩm không tiền tố vendor) chưa có chỗ trong TR-181: cần tên `X_AIS_`/`X_HNI_` thống nhất với nhà
