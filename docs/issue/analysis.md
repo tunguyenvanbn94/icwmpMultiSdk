@@ -3964,3 +3964,88 @@ mục 5 của issue trong workspace.
 - Image này thay `tclinux_p8_2ea7c00_devaccess.bin` để nạp: cùng P8, thêm 0100.
 
 **Board:** chưa. SSH vẫn đóng (chưa nạp image nào có dev-access).
+
+## 63. Board với image `d3f7459`: so toàn cây C với shell sản phẩm, K8 và SPV trên board, sửa `0101` (08/10 09:37–)
+
+User nạp `tclinux_k8_d3f7459_devaccess.bin` qua WebUI và cho phép Claude tự nạp FW trong phiên này (chatlog mục 85).
+
+**Board sau khi nạp:**
+- SSH mở (dev-access v1, account dev lấy từ patch, chỉ giữ trong biến môi trường);
+- `libtr098.so.3.0.0` md5 `27ee9edd…`, đúng bản trong image;
+- 3 phiên ACS đều `success`, 0 failure.
+
+**GPV toàn cây:** C 4 s qua `ubus tr069 dm`, shell sản phẩm 23 s qua `icwmp_dm.sh`. Image 0083 còn compat là 15–16 s.
+
+### 63.1 So từng tham số C với shell trên cùng board
+
+`tests/board/parity_dump.sh` (chạy trên board) dump GPV + GPN toàn cây từ hai phía, và `tests/board/parity.py`
+(chạy trên host) phân loại mọi khác biệt. Trên image `d3f7459`:
+
+| Lớp | Số tham số | Ghi chú |
+|---|---|---|
+| Bằng nhau | 1468 | |
+| Bộ đếm, đồng hồ | 97 | hai lần đọc cách nhau ~20 s |
+| Khác biệt đã biết | 16 | CR URL và ParameterKey của icwmpd, PPP Password đọc ra rỗng, rate 5 GHz, DUID |
+| Nháy của shell | 31 | getter `"echo \"\""` chạy qua `$(...)` không eval: shell trả `""`, `"Synchronized"` |
+| **Không giải thích được** | **24** | sửa ở `0101`, xem 63.2 |
+
+Tập tham số: C 1769, shell 1752, chung 1751.
+- Chỉ ở C: 11 lá ManagementServer (K3), `X_HNI_Icwmp`, và `Account.Web.SessionMaxTime`. Shell thiếu nhánh `"$DMROOT."`
+  trong `entry_execute_method_root_Account_Web`, nên chỉ trả lá này khi hỏi đúng `Account.Web.`.
+- Chỉ ở shell: `ManagementServer.ConnReqXMPPConnection`.
+
+GPN: cờ writable chỉ khác ở `WLANConfiguration` (K24).
+
+Kiểu khác ở 664 tham số. cwmpclient gửi `xsd:string` khi shell không khai kiểu, và gửi nguyên chữ khi có kiểu, kể cả
+`xsd:IPv4Address`, `xsd:unsignedint`. Giá trị y hệt; engine không phát được kiểu ngoài chuẩn. **Chấp nhận**, không sửa.
+
+### 63.2 Lệch thật, sửa ở `0101`
+
+| Nhóm | Phase | Lỗi | Sửa |
+|---|---|---|---|
+| Chữ boolean, 21 mẫu | P1 Time, P2 LAN/Hosts/DHCP, P3 WLAN + AssociatedDevice | C trả `1`/`0`, shell (cả 2 giá trị, đọc getter) `true`/`false`. Trái §17.4. Có từ 0037–0039, đã chạy trên mọi image | getter trả `true`/`false`; Time so `"1"` đúng như shell |
+| `LANHostConfigManagement.MACAddress` | P2 | C đọc sysfs (chữ thường), shell `ifconfig` (chữ hoa) | đổi sang chữ hoa |
+| `LANEthernetInterfaceConfig.Stats` | P2 | `gsw_sum()` dừng ở key đầu tiên trên một dòng, mà `/proc/tc3162/gsw_stats` in hai bộ đếm một dòng: PacketsReceived/Sent thiếu multicast, DiscardPacketsReceived thiếu `Rx ING Drop`/`Rx FILTER Drop`. Board port 3: shell 1977 = 1870 + 95 + 12, C ~1884 | cộng mọi key trên dòng, như `LANEthernet_Stats_sum_keys` |
+| `ManagementServer.ConnReqXMPPConnection` | P1 | lá portable chỉ có dưới `#ifdef XMPP_ENABLE`, build MTK không bật | thêm lá read-only vào `managementserver_mtk.c`, trả `""` (shell trả nháy) |
+| `verify-dm-paths.py` | công cụ | không xét `#ifdef` nên báo "thiếu 0" sai | bỏ nhánh `#ifdef`/`#ifndef` không build theo macro của SDK; chạy với code cũ báo đúng thiếu 1 |
+
+Bộ đếm Stats của LANEthernet nằm trong lớp "bộ đếm" của parity.py, nên công cụ không tự bắt được lỗi `gsw_sum`. Lỗi
+này tìm ra bằng cách hỏi riêng từng nhánh `.Stats.`; GET cả object qua shell trả 0 ở mọi bộ đếm, cũng là lỗi của
+đường bulk bên shell.
+
+**Lỗi shell, C giữ giá trị đúng (khác biệt có chủ đích):**
+- `BasicDataTransmitRates` / `OperationalDataTransmitRates`: `case "$iface" in ra*)` khớp cả `rai*`, nên shell báo
+  rate 2.4 GHz cho cả 6 interface 5 GHz. C trả `6,12,24` như shell định viết.
+- `Device.DHCPv6.Server.Pool.{i}.DUID`: shell định viết chữ hoa (`tr '[:lower:]' '[:upper:]'`), nhưng busybox `tr`
+  của board đổi theo từng ký tự (`echo lower | tr ...` ra `upper`), nên ACS thấy chữ thường. C giữ chữ hoa;
+  `parity.py` so không phân biệt hoa thường.
+- Nháy thừa (`""`, `"Synchronized"`): C trả giá trị shell định viết.
+
+### 63.3 K8 trên board (`hni.wan` thật, qua `ubus tr069 dm`, cùng đường code với RPC)
+
+Sao lưu `/etc/config/wan` và `network` trước khi test. Board có một entry WAN (PPPoE id 0).
+
+| Bước | Kết quả |
+|---|---|
+| GPN `WANConnectionDevice.1.` | `WANIPConnection.` và `WANPPPConnection.` đều `writable 1` (K23 trên board) |
+| add `WANIPConnection.` | instance `2`; entry id 1 `conn_type 0`, `active 0`; ParameterKey `k8a`; không reload; `if0` vẫn up |
+| add `WANPPPConnection.` | instance `3`; entry id 2 `conn_type 2`; số entry IP 1, PPP 2; instance IP 2, PPP 1, 3 |
+| del `WANIPConnection.2.` | `hni.wan` xoá vị trí 1; `if0` uptime 8 s lúc 10:00:38 (reload cuối phiên đã chạy), up lại |
+| del `WANPPPConnection.3.` | xoá, reload, `if0` up; `WANIPConnection.9.` → 9005 |
+
+**Sau test:** `wan` về một entry như cũ. Có hai thay đổi do `hni.wan`, không do C:
+- `wan.pending.wan_id '0'` đã được reload xử lý;
+- `network.lan.ip6class` còn `if1_6` và `if2_6` của hai entry đã xoá. Đây là lỗi của `hni.wan`
+  (other-findings của issue trong workspace); đã gỡ bằng `uci del_list` và commit.
+
+ACS vẫn ping được.
+
+### 63.4 SPV trên board (ghi, đọc lại, trả về)
+
+Ghi rồi trả về đều fault 0, đọc lại đúng:
+- **P6:** `CarrierLocking.X_AIS_RoundNum`, `X_AIS_WebUserInfo.RemoteAccessTimeout`;
+- **P7:** `X_AIS_Logging.DebugEnable`, `X_AIS_UPnP.Enable`, `X_AIS_MeshAPI.Delay_time`, `X_AIS_Conf.auto_upload_delay`;
+- **P8:** `RouterAdvertisement.InterfaceSetting.1.MaxRtrAdvInterval`, `DynamicDNS.Client.1.Server`.
+
+`CurrentLanguage=th` → 9007. Đúng: `clay.language.available` của board chỉ có `en`, và shell (`set_CurrentLanguage`)
+cũng từ chối. Giá trị sai `abc` và `a;b` → 9007, giá trị cũ giữ nguyên.
