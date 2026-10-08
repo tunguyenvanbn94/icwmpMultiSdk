@@ -4221,3 +4221,42 @@ commit rồi GET `Time.`.
 
 **Phát hiện phụ:** `dmuci_commit()` sau mọi lệnh, kể cả GET, commit luôn thay đổi chưa commit của tiến trình khác (hành vi
 upstream). Ghi ở `other-findings/icwmp-get-commits-other-uci-changes.md` của workspace, không sửa trong phạm vi này.
+
+### 65.2 Image `9f393e4` (0104) trên board, parity PASS
+
+**Host tại 0104:** `run.sh all` 24/24 PASS, EXIT 0, gồm `full` và valgrind có tải K28.
+
+**Build** (11:30–11:36):
+- export sha256 `b3f7e533…`, backup `.icwmp-backups/20261008-113026-rxbozm_4`;
+- gói rc 0, image rc 0, có dev_access, không có `usr/share/icwmp/`;
+- `libtr098` md5 `5d73ec37…`, trùng `root-airoha`, 0 chuỗi của shell bridge;
+- `tclinux.bin` md5 `6fef74bbd7fc901d65c75d853c03f1a1` → `.icwmp-images/tclinux_k28_9f393e4_devaccess.bin`.
+
+**Phiên lỗi trên `2cca863`:** trước khi nạp đè, `tr069 status` báo 113 success, **1 failure** (11:09–11:33).
+- Log đã xoay vòng, phần còn lại (từ 11:33) không có dòng ERROR/WARNING.
+- GenieACS NBI (chỉ đọc `GET /faults`, lọc theo OUI `000378` + serial): không có fault nào của board.
+- Nguyên nhân: **chưa xác định**. Một khả năng là rác của K28 trong XML gửi ACS; chưa chứng minh.
+- Image `0fa9d31` (compat-on) trước đó: 130/0.
+- Theo dõi bằng G9 trên image mới.
+
+**Nạp** 11:38:11–11:38:14 (cùng các bước), kiểm 11:41:18.
+
+**Board sau khi nạp:**
+- uptime 146 s, `libtr098` `5d73ec37…`, không có `/usr/share/icwmp`;
+- 6 phiên success, 0 failure; 2 dòng start, không crash.
+- `/tmp/.uci/` có file delta của 8 package, nhưng đều rỗng (0 dòng, chỉ còn vỏ sau commit): không có thay đổi chưa
+  commit nào.
+
+**Parity compat-off: PASS.**
+- 1724 tham số chung: 1583 bằng, 97 động, 15 đã biết, 29 nháy.
+- Không tên nào chỉ có ở shell; writable lệch 13 tên, đều thuộc K24.
+- `NTPServer1..3` = `time.nist.gov`, `2.th.pool.ntp.org`, `3.asia.pool.ntp.org` như config, 4 và 5 rỗng.
+- GPV/GPN toàn cây C 1 s mỗi lệnh, shell 23 s.
+- Sau dump: 11 phiên success, 0 failure.
+
+**G9 trên image cuối** chạy lại từ 11:42:44 (`/tmp/g9.sh 600 150`):
+- mẫu đầu: pid 10252, VmRSS 6096 kB, **fd 12**, thread 11;
+- fd 12, giảm 2 so với 14 của bản compat-on, vì hai pipe tới tiến trình shell không còn.
+
+**Kết luận PH5:** build sản phẩm MTK không còn shell. Cây TR-098 C đủ trên board thật, đã đối chiếu với shell sản phẩm.
+Source `sdk/mtk/compat/` vẫn giữ để rollback và làm driver cho parity; xoá hẳn (K7) sau một bản giao không cần rollback.
