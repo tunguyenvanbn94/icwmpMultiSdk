@@ -4888,3 +4888,29 @@ rỗng ở instance khác 79, 0 tên TR-181 thiếu cặp. Host `run.sh tr181` v
   là cùng đường `ubus tr069 dm` đã so cặp ở trên.
 
 **Chưa làm ở T6:** soak trên image này (đang chạy từ 23:32, `/tmp/g9.csv` trên board).
+
+## 75. BDK: apply + build image tại `dev_181` `3e1ef1f` trên cây clone mới (08/10 23:30–23:37)
+
+User (chatlog 94): BDK chỉ apply rồi build, chưa test. Cây `/home/vtanh/workspaceBRCM/tunv/2_src/bcm963xx` là clone mới
+(`8e4187339`, user build xong 22:46), chưa có icwmp. Máy `192.168.100.38`, container `vtanh-brcm` qua tmux `bdk1`, profile
+`MO77300EB`, như §56.
+
+**Kết luận:** code `dev_181` build được trên BDK (lib engine có thay đổi T0 `dm_entry_load_model`, phần còn lại của
+`dev_181` là MTK). Image ra đủ. Chưa nạp board BDK.
+
+| Bước | Kết quả |
+|---|---|
+| Bundle `export.py --sdk bdk` tại `3e1ef1f` | 341 file, sha256 `dbce0cf8bc03…`, `sha256sum -c` trên máy build OK; stage `tunv/icwmp_bdk_stage_20261008/` (group `vtanh` để user trong container ghi được log) |
+| `apply --sdk bdk --dry-run` | rc 0, 8 path quản lý |
+| `apply --sdk bdk` | rc 0, backup `.icwmp-backups/20261008-163151-wbca6_j6`; Applied: `microxml`, `uci`, `libicwmp_dm`, `icwmp`, `make.common`, `comp_tr69_md.c`, profile, marker |
+| 6 lệnh build component | rc 0. 264 cảnh báo, đều ở code cũ (xml.c, dmcommon.c, `CWMP_BKP_FILE` redefined, …); trong `dmentry.c` không cảnh báo nào rơi vào dòng 477–516 mà `dev_181` thêm; `icwmpcfg.c` 0 |
+| Profile so với backup | chỉ thêm `BUILD_ICWMP=y` (dòng 807) |
+| `make PROFILE=MO77300EB` | lần 1 dừng ở `profile_saved_check`, lần 2 `FORCE=1` touch cookie rồi vẫn exit (vendor), lần 3 **rc 0** (16:33:37–16:36:33 UTC), "Image MO77300EB has been built"; cảnh báo icwmp duy nhất `diagnostic.c` `icwmpd_cmd` không dùng (file không đổi từ 0034) |
+
+Sản phẩm:
+- `.icwmp-release.json` ghi `3e1ef1f`, `sdk-only`.
+- `fs.install/lib/libtr098.so.3.0.0` 897.880 B, md5 `3f47dc7a…`, có `dm_entry_load_model` và `dm_entry_prefetch_values`.
+- `fs.install/bin/icwmpd` 721.280 B, md5 `f8e5e8e8…`.
+- `targets/MO77300EB/bcmMO77300EB_emmc_squashfs_update.pkgtb` 57.050.860 B, md5 `7d5e471f…`.
+
+**Chưa làm:** nạp image BDK, smoke trên board BDK (PH7), TR-181 của BDK theo `cwmp.cpe.datamodel` trên board.

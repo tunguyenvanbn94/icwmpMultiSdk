@@ -5,7 +5,7 @@ Tài liệu tiến độ để chuyển giao. Kiến trúc và cách chia code �
 
 | | |
 |---|---|
-| Cập nhật | 2026-10-08 23:35. `dev` = `main` = `dc3d7f7` (tag `release/mtk-20261008`, đã push). TR-181 trên branch `dev_181` tới `[icwmp tr181-0010]` (local, chưa push). Board chạy image `dev_181` `084ef3a` build ở cây mới `2_src/2025q3` (mặc định `tr098`) |
+| Cập nhật | 2026-10-08 23:40. BDK: `dev_181` build đạt trên cây clone mới `tunv/2_src` (§75, chưa nạp board). `dev` = `main` = `dc3d7f7` (tag `release/mtk-20261008`, đã push). TR-181 trên branch `dev_181` tới `[icwmp tr181-0010]` (local, chưa push). Board chạy image `dev_181` `084ef3a` build ở cây mới `2_src/2025q3` (mặc định `tr098`) |
 | Nguồn trạng thái có cấu trúc | [../issue/implementation-status.json](../issue/implementation-status.json), xem nhanh: `python3 docs/issue/progress.py` |
 | Bằng chứng chi tiết | [../issue/analysis.md](../issue/analysis.md) (§ theo thời gian, mới nhất ở cuối) |
 | Quy ước | Trạng thái không cao hơn bằng chứng thấp nhất trên HEAD. "Đạt" ở đây luôn ghi rõ mức: STATIC, SDK build, BOARD, HOST |
