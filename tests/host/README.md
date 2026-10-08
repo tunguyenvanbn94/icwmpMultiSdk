@@ -21,11 +21,15 @@ busybox valgrind libjson-c-dev libcurl4-openssl-dev libssl-dev zlib1g-dev`.
 ```sh
 tests/host/build.sh            # deps (pinned libubox/uci/ubus), microxml, libtr098, icwmp_tr098d
 sudo tests/host/setup.sh --yes # fake CPE: UCI config (cwmp, easycwmp, stun), ubusd, stuncd stand-in, data model shell, external script
-tests/host/run.sh all          # unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b p8c wan valgrind, exit 1 on any FAIL
+tests/host/run.sh all          # unit full smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b p8c wan valgrind, exit 1 on any FAIL
 ```
 
 Work files go to `$ICWMP_HOST_WORK` (default `/tmp/icwmp-host`); `build.sh`
-again after editing the sources rebuilds what changed.
+again after editing the sources rebuilds what changed.  libtr098 is configured
+like the product, `--disable-dm-script-compat` (PH5): the data model shell
+`setup.sh` installs is then never started.  `ICWMP_HOST_DM_COMPAT=1 build.sh`
+builds the shell bridge back in (rollback variant: `full` fails on it, the
+other tests run); switching rebuilds libtr098 from clean.
 
 Checked environment (06/10): `docker run -v <repo>:/repo:ro ubuntu:24.04`
 (json-c 0.17, Python 3.12, gcc 13) with the packages above plus
@@ -54,6 +58,7 @@ too: use 24.04.
 | `p8b` | P8b in C (0098): `Device.PPP.Interface` over the anonymous wan entries with conn_type 2, numbered max+1 and committed on a GET, Enable/LowerLayers/Username writing wan + network, AddObject as the shell meant (entry index, if<n>), Delete; `Device.DynamicDNS` (counts, SupportedServices fallback, positional clients, Interface as `Device.IP.Interface.<n>`, AddObject answering the real instance); `Device.RouterAdvertisement.InterfaceSetting` (own numbering, alias given on a GET, Max then Min in one SPV checked against each other, flag modes); 6 faults |
 | `p8c` | P8c in C (0099): STBService placeholders; StorageService instances, Capabilities and LogicalVolume figures computed from this host's `/sys` the way the shell did (the container cannot mount: mount, unmount and relabel are left to the board); Enable on a disk without a `/dev` node and an invalid value fault; AddObject 9005 |
 | `wan` | K8 (0100): AddObject/DeleteObject of `WANIPConnection`/`WANPPPConnection` in C against a `hni.wan` stand-in (add returns the number of entries, delete by position queues `hni_wan_reload.sh`, hni FAIL 9002, no instance 9005); the shell is never asked a path below `WANDevice.`; the GPN writable flag of every object equals the shell's (coverage matrix), except `WLANConfiguration` (read only on purpose) |
+| `full` | PH5, the build the product ships: `X_HNI_Icwmp.DataModelBackend` is `mtk-c`, a session and a whole-tree GPV/GPN never start the data model shell (`fake_dm.py` logs every command), every name of the tree is in the coverage matrix, icwmpd's own object or the 11 K3 leaves (objects without an instance on the host are counted, not failed) |
 
 Logs: `$ICWMP_HOST_WORK/run/` (`acs.log`, `icwmpd.out`, `vg.log`,
 `fake_dm.cmds` = every request the data model shell got).

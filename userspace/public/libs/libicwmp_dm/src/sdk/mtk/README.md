@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Storage | UCI, the product's own schema (`easycwmp`, `network`, `wireless`, `system`, `pon`, `firewall`) + ubus |
-| Data model | native C modules in `dm098/`, plus `compat/` while the port is in progress |
+| Data model | native C modules in `dm098/`: the whole TR-098 tree. `compat/` is left out of the product build (`--disable-dm-script-compat`, PH5) |
 | Vendor prefix | `X_HNI_` (ours), `X_AIS_` (the operator's, already in the product tree) |
 | Extra deps | libuci, libubox, libubus, json-c, libm |
 
@@ -27,16 +27,19 @@ through 449 shell helper functions. Porting them to C is worth doing — it is w
 GetParameterValues of the whole tree fast and what makes the same tree buildable on another
 SDK — but it cannot be one change.
 
-So `compat/` answers exactly the paths no C module claims yet, and every phase moves
-parameters from it into `dm098/`. When the last one moves:
+So `compat/` answered exactly the paths no C module claimed yet, and every phase moved
+parameters from it into `dm098/`. The last ones moved in 0099 (parameters) and 0100
+(AddObject/DeleteObject of the WAN connections); since PH5 the feed builds
 
 ```sh
 ./configure --with-sdk=mtk --disable-dm-script-compat
-rm -rf sdk/mtk/compat
 ```
 
-Nothing else changes: `dm_platform_param_method()` then returns 0 for every path and an
-unknown parameter is a plain 9005 from the engine.
+`dm_platform_param_method()` then returns 0 for every path, an unknown parameter is a
+plain 9005 from the engine, `X_HNI_Icwmp.DataModelBackend` reads `mtk-c` and
+`/usr/share/icwmp/icwmp_dm.sh` is not installed.  The source of `compat/` stays for now:
+it is the rollback (drop the flag, put the two install lines of `feeds/libtr098` back) and
+`icwmp_dm.sh` is what `tests/board/parity_dump.sh` drives the product shell with.
 
 ## Adding an object
 
@@ -45,9 +48,8 @@ unknown parameter is a plain 9005 from the engine.
 2. End the file with a `struct dm_module` and `DM_MODULE_REGISTER()`, listing the full path
    in `.paths` — that single line takes the subtree away from `compat/`.
 3. Add the file to `sdk.mk`.
-4. Check the result against the old client on a board, per parameter:
-   `ubus call tr069 dm '{"cmd":"get","path":"<object>."}'` vs
-   `/usr/sbin/easycwmp get value "<object>."`.
+4. Check the result against the product shell on a board: `tests/board/` (whole tree,
+   values, names, writable flags).
 
 The phase plan and the per-parameter status are in the issue:
 `projects/mtk_openwrt_wifi7/issues/20260922_icwmp_multiplatform_tr098/`.

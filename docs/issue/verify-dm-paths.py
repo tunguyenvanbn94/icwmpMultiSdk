@@ -107,12 +107,12 @@ def literal(tok, defines):
     return val
 
 
-# Macro mà build thật định nghĩa (feeds/libtr098/Makefile chỉ có --with-sdk=<sdk>,
-# compat mặc định bật).  Hàng bảng nằm trong #ifdef của macro không có ở đây
+# Macro mà build thật định nghĩa (feeds/libtr098/Makefile: --with-sdk=<sdk>, MTK thêm
+# --disable-dm-script-compat từ PH5).  Hàng bảng nằm trong #ifdef của macro không có ở đây
 # (XMPP_ENABLE, UPNP_TR064, ...) không được build: trước đây script vẫn đếm,
 # nên ManagementServer.ConnReqXMPPConnection bị coi là có trong cây C.
 BUILD_MACROS = {
-    "mtk": {"DM_SDK_MTK", "DM_PLATFORM_MTK", "DM_MTK_SCRIPT_COMPAT"},
+    "mtk": {"DM_SDK_MTK", "DM_PLATFORM_MTK"},          # feeds/libtr098: --disable-dm-script-compat
     "bdk": {"DM_SDK_BDK", "DM_PLATFORM_BDK"},
 }
 ACTIVE_MACROS = BUILD_MACROS["mtk"]

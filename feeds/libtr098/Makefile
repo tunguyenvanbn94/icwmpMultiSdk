@@ -29,10 +29,10 @@ endef
 
 define Package/libtr098/description
  Shared data model engine of icwmp_tr098d. Source: libicwmp_dm.
- With --with-sdk=mtk the TR-098 model is native C in sdk/mtk/dm098/, and the objects not ported yet are
- still served by the product's easycwmp shell library through
- /usr/share/icwmp/icwmp_dm.sh (sdk/mtk/compat, --disable-dm-script-compat
- drops it).
+ With --with-sdk=mtk the whole TR-098 model is native C in sdk/mtk/dm098/.
+ The easycwmp shell bridge (sdk/mtk/compat, /usr/share/icwmp/icwmp_dm.sh)
+ is left out: --disable-dm-script-compat.  Drop that flag and put the
+ install lines of icwmp_dm.sh back to build the bridge again.
 endef
 
 define Build/Prepare
@@ -58,7 +58,8 @@ define Build/Configure
 	./configure \
 		--host=$(GNU_TARGET_NAME) \
 		--prefix=/usr \
-		--with-sdk=mtk
+		--with-sdk=mtk \
+		--disable-dm-script-compat
 endef
 
 define Build/Compile
@@ -75,11 +76,10 @@ endef
 define Package/libtr098/install
 	$(INSTALL_DIR) $(1)/usr/lib
 	$(CP) $(PKG_BUILD_DIR)/bin/.libs/libtr098.so* $(1)/usr/lib/
-	# migration scaffolding: driver of the easycwmp shell library for the
-	# objects not ported to C yet (sdk/mtk/compat/dmscript.c spawns it).
-	# Drop these two lines together with --disable-dm-script-compat.
-	$(INSTALL_DIR) $(1)/usr/share/icwmp
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/sdk/mtk/compat/icwmp_dm.sh $(1)/usr/share/icwmp/icwmp_dm.sh
+	# no /usr/share/icwmp/icwmp_dm.sh: built --disable-dm-script-compat.
+	# With the bridge compiled in it needs, here:
+	#   $(INSTALL_DIR) $(1)/usr/share/icwmp
+	#   $(INSTALL_BIN) $(PKG_BUILD_DIR)/sdk/mtk/compat/icwmp_dm.sh $(1)/usr/share/icwmp/icwmp_dm.sh
 endef
 
 define Build/Clean

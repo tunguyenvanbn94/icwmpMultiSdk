@@ -32,7 +32,7 @@
  *	                            "" = own address of cwmp.cpe.interface
  *	  ConnectionRequestExternalPort RW 1..65535 cwmp.cpe.cr_port: port on that host,
  *	                            "" = ConnectionRequestPort
- *	  DataModelBackend      RO                  dm_platform_name() ("bdk", "mtk-script", "uci")
+ *	  DataModelBackend      RO                  dm_platform_name() ("bdk", "mtk-c", "mtk-c+script", "uci")
  *
  *	Names are provisional (CUSTOM_PREFIX), to be renamed when agreed with
  *	the ACS.

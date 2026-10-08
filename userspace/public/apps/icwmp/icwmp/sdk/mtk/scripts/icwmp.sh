@@ -5,8 +5,7 @@
 # uploads, firmware apply, reboot and factory reset, lifted from
 # cwmpclient/ext/openwrt/scripts/easycwmp.sh (handle_action download /
 # upload / apply_download / factory_reset / reboot).  The data model is NOT
-# here: libtr098 --with-platform=mtk drives the easycwmp function library
-# through /usr/share/icwmp/icwmp_dm.sh.
+# here: it is C in libtr098 (--with-sdk=mtk, sdk/mtk/dm098/).
 #
 # Replies: {"fault_code":"0"} = ok, {"fault_code":"9xxx"} = CWMP fault.
 #

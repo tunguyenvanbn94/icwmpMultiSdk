@@ -17,8 +17,11 @@
 #   run.sh p8b             P8b Device.PPP, DynamicDNS, RouterAdvertisement
 #   run.sh p8c             P8c Services: STBService, StorageService over /sys
 #   run.sh wan             K8: WANIP/WANPPPConnection AddObject/DeleteObject in C (hni.wan stand-in)
-#   run.sh all             unit smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b p8c wan valgrind
-# Needs build.sh, then setup.sh --yes (root, throwaway container).
+#   run.sh full            PH5: backend mtk-c, no shell call, whole tree inside the coverage matrix
+#   run.sh all             unit full smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b p8c wan valgrind
+# Needs build.sh, then setup.sh --yes (root, throwaway container).  build.sh
+# builds what the product ships, --disable-dm-script-compat; ICWMP_HOST_DM_COMPAT=1
+# builds the shell bridge in (full then fails, the other tests still run).
 . "$(dirname "$0")/env.sh"
 
 fail=0
@@ -1277,10 +1280,17 @@ UBUS
 	# WLANConfiguration is read only on purpose (wlan_mtk.c)
 	expect "object writable flags unlike the shell's" "$(obj_writable_diff)" \
 		"InternetGatewayDevice.LANDevice.{i}.WLANConfiguration. InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}."
+	be=$(dm_value InternetGatewayDevice.X_HNI_Icwmp.DataModelBackend)
 	cp "$RUN/fake_dm.cmds" "$RUN/wan.shell" 2>/dev/null
 	stop
-	expect "shell asked below WANDevice." "$(grep -c 'WANDevice\.' "$RUN/wan.shell" 2>/dev/null)" "0"
-	expect "shell asked at all (the IGD. walk)" "$([ -s "$RUN/wan.shell" ] && echo yes)" "yes"
+	if [ "$be" = mtk-c ]; then
+		# the product build (--disable-dm-script-compat): no shell at all
+		expect "shell asked at all (compat off)" "$([ -s "$RUN/wan.shell" ] && echo yes)" ""
+	else
+		# bridge built in: the IGD. walk asks it, never below WANDevice.
+		expect "shell asked below WANDevice." "$(grep -c 'WANDevice\.' "$RUN/wan.shell" 2>/dev/null)" "0"
+		expect "shell asked at all (the IGD. walk)" "$([ -s "$RUN/wan.shell" ] && echo yes)" "yes"
+	fi
 	# AddObject IP, then PPP: the count of entries after hni wrote them
 	start 1 "--add $W.WANIPConnection." env PATH="$RUN/wanbin:$PATH"
 	wait_done 30; sleep 1
@@ -1452,6 +1462,56 @@ except Exception: print('')")
 	if [ "$ms" = "17:00" ]; then pass "ptime: next periodic Inform $next (aligned on :17:00)"; else bad "ptime: next periodic Inform '$next', want minute:second 17:00"; fi
 }
 
+# PH5: the product build has no shell bridge (--disable-dm-script-compat).
+# The backend says so, a session and a whole-tree GPV/GPN never start the
+# script (fake_dm.py logs every command it gets), and every name of the
+# tree is one of the coverage matrix, of icwmpd's own object or of the 11
+# ManagementServer leaves the product tree lacks (K3).  Matrix objects
+# without an instance on the host cannot show up; they are counted, not
+# failed (verify-dm-paths.py checks the tree statically).
+do_full() {
+	start 1 ""
+	if ! wait_done 60 || ! alive; then bad "full: session"; stop; return; fi
+	be=$(dm_value InternetGatewayDevice.X_HNI_Icwmp.DataModelBackend)
+	$UBUS call tr069 dm '{"cmd":"get","path":"InternetGatewayDevice."}' > "$RUN/full.gpv" 2>/dev/null
+	$UBUS call tr069 dm '{"cmd":"names","path":"InternetGatewayDevice.","next_level":false}' > "$RUN/full.gpn" 2>/dev/null
+	stop
+	if [ "$be" != mtk-c ]; then
+		bad "full: DataModelBackend '$be', want mtk-c (built with ICWMP_HOST_DM_COMPAT=1?)"; return
+	fi
+	if [ -s "$RUN/fake_dm.cmds" ]; then
+		bad "full: the shell bridge ran: $(head -c 200 "$RUN/fake_dm.cmds")"; return
+	fi
+	if r=$(python3 - "$RUN/full.gpv" "$RUN/full.gpn" "$MATRIX" <<'PY'
+import json, re, sys
+extra = re.compile(r"^InternetGatewayDevice\.(X_HNI_Icwmp\.|ManagementServer\.(AliasBasedAddressing|"
+                   r"HTTPCompression|HTTPCompressionSupported|InstanceMode|LightweightNotificationProtocolsSupported|"
+                   r"LightweightNotificationProtocolsUsed|SupportedConnReqMethods|UDPLightweightNotificationHost|"
+                   r"UDPLightweightNotificationPort)$)")
+def pat(p):
+    return re.sub(r"\.\d+\.", ".{i}.", re.sub(r"\.\d+\.", ".{i}.", p))
+gpv = json.load(open(sys.argv[1])).get("parameters", [])
+gpn = json.load(open(sys.argv[2])).get("parameters", [])
+want = set()
+for line in open(sys.argv[3]):
+    f = line.rstrip("\n").split("\t")
+    if len(f) > 3 and f[2] in ("obj", "param"):
+        want.add(pat(re.sub(r"\$\d", "{i}", f[3])))   # the matrix keeps fixed numbers (DOCSIS.Interface.1.)
+seen = set(pat(x["parameter"]) for x in gpn)
+unknown = sorted(p for p in seen if p not in want and not extra.match(p))
+for p in unknown[:10]:
+    print("  not in the matrix:", p)
+print("%d values, %d names, %d/%d matrix paths present, %d unknown" %
+      (len(gpv), len(gpn), len(seen & want), len(want), len(unknown)))
+sys.exit(1 if unknown or not gpv else 0)
+PY
+	); then
+		pass "full: backend mtk-c, no shell call, $(echo "$r" | tail -1)"
+	else
+		echo "$r"; bad "full: whole tree"
+	fi
+}
+
 do_soak() {
 	start "${1:-300}" ""
 	touch "$RUN/load.on"; load 2
@@ -1485,7 +1545,8 @@ case "$1" in
 	p8b) do_p8b ;;
 	p8c) do_p8c ;;
 	wan) do_wan ;;
-	all) do_unit; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_p7c; do_p8; do_p8b; do_p8c; do_wan; do_valgrind ;;
+	full) do_full ;;
+	all) do_unit; do_full; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_p7c; do_p8; do_p8b; do_p8c; do_wan; do_valgrind ;;
 	*) sed -n '2,/^# Needs/p' "$0"; exit 1 ;;
 esac
 exit $fail

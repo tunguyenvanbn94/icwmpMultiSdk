@@ -2,6 +2,9 @@
 # Build libubox/uci/ubus (pinned), microxml, libtr098 (--with-sdk=mtk) and
 # icwmp_tr098d on the host, under $ICWMP_HOST_WORK (default /tmp/icwmp-host).
 # Re-run after editing the sources: only what changed is rebuilt.
+# libtr098 is configured like the product (feeds/libtr098):
+# --disable-dm-script-compat.  ICWMP_HOST_DM_COMPAT=1 builds the easycwmp
+# shell bridge in; switching rebuilds libtr098 from clean.
 set -e
 . "$(dirname "$0")/env.sh"
 
@@ -56,9 +59,14 @@ LDFLAGS_COMMON="-L$PREFIX/lib -Wl,-rpath,$PREFIX/lib"
 sync_tree "$LIB_SRC" "$WORK/build/dm"
 key_h=$WORK/build/dm/sdk/mtk/dm098/cpeagent_key_mtk.h
 [ -f "$key_h" ] || printf '#define MTK_CPEAGENT_KEY_HEX "%s"\n' "$CPEAGENT_TEST_KEY" > "$key_h"
-if [ ! -f "$WORK/build/dm/Makefile" ]; then
+DM_CONF="--prefix=$PREFIX --with-sdk=mtk"
+[ "${ICWMP_HOST_DM_COMPAT:-0}" = 1 ] || DM_CONF="$DM_CONF --disable-dm-script-compat"
+if [ ! -f "$WORK/build/dm/Makefile" ] || [ "$(cat "$WORK/build/dm/.host-configure" 2>/dev/null)" != "$DM_CONF" ]; then
+	# the switch is a -D on the command line (no config.h): rebuild from clean
+	[ -f "$WORK/build/dm/Makefile" ] && make -C "$WORK/build/dm" clean >/dev/null 2>&1
 	(cd "$WORK/build/dm" && ./tools/sdk-scan.sh >/dev/null && autoreconf -i >/dev/null 2>&1 &&
-	 CFLAGS="$CFLAGS_COMMON" LDFLAGS="$LDFLAGS_COMMON" ./configure --prefix="$PREFIX" --with-sdk=mtk >/dev/null)
+	 CFLAGS="$CFLAGS_COMMON" LDFLAGS="$LDFLAGS_COMMON" ./configure $DM_CONF >/dev/null)
+	echo "$DM_CONF" > "$WORK/build/dm/.host-configure"
 fi
 make -C "$WORK/build/dm" -j"$(nproc)" > "$WORK/build/dm.log" 2>&1 || { grep -m5 error "$WORK/build/dm.log"; exit 1; }
 cp -a "$WORK/build/dm"/bin/.libs/libtr098.so* "$PREFIX/lib/"
