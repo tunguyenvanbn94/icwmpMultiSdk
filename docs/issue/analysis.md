@@ -4304,3 +4304,73 @@ rollback, mỗi bước một bảng gồm máy, lệnh, mục đích, kết qu�
 - K15: hoãn.
 - 1 phiên lỗi trên image `2cca863`: chưa rõ nguyên nhân.
 - Image giao khách phải build **không** có patch dev-access.
+
+## 67. TR-181 trên MTK, branch `dev_181`: T0 nền và T1 object hệ thống (08/10 12:44–)
+
+**Quyết định của user:**
+- **Chatlog 89:** bản giao TR-098 đạt yêu cầu, vì phần tham số/xử lý đã là C; chẩn đoán và script hành động giữ
+  shell. Làm TR-181 trên branch mới `dev_181`, tách từ `dev` tại `dc3d7f7`.
+- **Chatlog 90:** phạm vi trước hết là TR-181 tương đương 783 tham số TR-098. Sau đó tham khảo TR-181 của BDK, chỉ
+  thêm tham số cần dùng.
+
+Thiết kế: [../plan/tr181_mtk_design.md](../plan/tr181_mtk_design.md).
+
+**Nguồn TR-181 sẵn có của sản phẩm (Verified):**
+- easycwmp có `functions/tr181`: 18 file, 6336 dòng, 297 tham số / 86 object.
+- Package `cwmpclient` **không cài** thư mục đó: dòng cài bị comment trong Makefile, sản phẩm chỉ ship TR-098.
+- Các file này là bản upstream PIVA. Không có tham chiếu HNI nào (`hni`, `mwctl`, `wan.@entry` đều 0), trong khi 32/60
+  file `tr098` đã được sửa cho sản phẩm. Vì vậy chúng không dùng làm chuẩn hành vi được.
+- Thiếu Time, PPP, Firewall, DHCPv6 và mọi `X_AIS_*`.
+
+**Tham chiếu dùng được:**
+- Ma trận TR-098 783 tham số.
+- Ánh xạ TR-098 ↔ TR-181 đã làm cho BDK (`projects/brcm_ap_wifi7_mvn/docs/icwmp_tr098_bdk_mapping_matrix.md`).
+- Schema TR-181 của BDK, qua `docs/issue/tr181-schema.py`: chỉ lấy tên `specSource="TR181"`, đọc lúc chạy, không chép
+  vào repo public. Bảng tra có 512 object, 4206 tham số.
+- Cây TR-098 của sản phẩm đã có nhánh `InternetGatewayDevice.Device.*` viết theo TR-181 (IP.Interface trên mọi
+  interface, đánh số bền bằng `ip_int_instance`; PPP, DHCPv6, DynamicDNS, RouterAdvertisement, TraceRoute).
+
+**T0 (`4cd9b1d`, `[icwmp tr181-0001]`):**
+- Model được chốt từ `cwmp.cpe.datamodel` lúc khởi động và lúc reload config (`dm_entry_load_model()`), nên ACS ghi
+  `DataModel` thì có hiệu lực ở phiên sau, không đổi giữa phiên. Hàm dùng context UCI riêng, không mở dm context.
+- MTK đổi root trong `dm_platform_select_root`; BDK giữ cơ chế riêng, không đổi.
+- `sdk/mtk/dm181/root181_mtk.c`: `Device.RootDataModelVersion` = `2.19` (forced inform) và `Device.X_HNI_Icwmp.`.
+- `verify-dm-paths.py --model`, `tr181-schema.py`, `acs.py --walk`, `run.sh tr181`.
+- `run.sh all` PASS sau khi thêm stub cho harness (lần chạy đầu `unit` không link được).
+
+**T1 (object hệ thống):**
+- **Cách đặt bảng:** bảng TR-181 nằm ngay trong file backend của domain (`sdk/mtk/dm098/*_mtk.c`), cạnh bảng TR-098.
+  Getter/setter vẫn `static`, một bản dùng cho cả hai model.
+- **Dùng lại nguyên bảng (A/C):** 16 module `X_AIS_*`/UserInterface, Account, Services, ManagementServer (core +
+  MTK), XMPP (không gồm LTE).
+- **Nhánh `Device.*` của sản phẩm:** 6 module (IP, PPP, DynamicDNS, DHCPv6, RouterAdvertisement, TraceRoute) đặt ở
+  root. Tham chiếu `…IP.Interface.<n>` của DHCPv6 và RA, cùng đường `RouteHops`, nay theo root của context
+  (`mtk_dev_prefix()`, `mtk_ipif_prefix()` trong `dmmtk.c`).
+- **Bảng TR-181 riêng:**
+  - `DeviceInfo`: không có `DeviceLog`.
+  - `Time`: `LocalTimeZone` là chuỗi TZ POSIX, ghi được nếu là TZ của một thành phố trong bảng sản phẩm, đi qua đúng
+    setter của `LocalTimeZoneName`. Không có `LocalTimeZoneName`, `DaylightSavings*`.
+  - Placeholder ở root: SelfTest, FaultMgmt, BulkData, SoftwareModules, `USB.USBHosts`, CaptivePortal, FAP,
+    `Users.User`.
+- **Hai tên sai so với TR-181, bắt được nhờ đối chiếu bảng tra:**
+  - nhánh TraceRoute sản phẩm ghép vào dùng tên lá TR-098 (`HopHost`, `HopHostAddress`, `HopErrorCode`, `HopRTTTimes`).
+    Bảng TR-181 dùng `Host`, `HostAddress`, `ErrorCode`, `RTTimes`;
+  - `CaptivePortal.CaptivePortalURL` → `URL`.
+- **Còn lại 58 tên không có trong bảng tra BDK:** đều là tên BBF hợp lệ mà XML Broadcom không mang (TR-135/140
+  Services, DynamicDNS, FAP.GPS, SelfTestDiagnostics, lá LWN và HTTPCompression của ManagementServer,
+  `XMPP...ServerConnectAttempts`), cộng `Account.Web.SessionMaxTime` của sản phẩm.
+
+**Ánh xạ và bằng chứng:**
+- `docs/issue/tr181_mapping.tsv`: quy tắc prefix/leaf/new, loại A/B/C/D, các nhánh chờ phase sau.
+- `docs/issue/tr181-map.py`:
+  - `check`: TR-181 mong đợi 318 = cây C 318, thiếu 0, không tên nào thiếu quy tắc.
+  - Nguồn: ma trận + tên chỉ có ở C TR-098. Theo loại: A 236, B 1, C 80, D 24; chờ: T2 63, T3 75, T4 185, T5 136.
+  - `equiv`: so giá trị từng cặp trên hai bản dump thật.
+- **Host `run.sh tr181`:**
+  - Inform root `Device.`, duyệt toàn cây 400 tên, 0 fault, đường `InternetGatewayDevice.` trả 9005.
+  - So cặp: **306 bằng**, 4 động, 2 loại B có mặt (`LocalTimeZone`, `DataModel`), 0 tên TR-181 thiếu cặp.
+  - Hai lệch ban đầu (`ParameterKey`, `DataModel`) do chính lệnh đổi model của test. Một lệch `UsedSpace` do đĩa host
+    thay đổi giữa hai lần dump; đã xếp vào lớp động.
+
+**Để cải tiến ở T7 (giữ tương đương TR-098 lúc này):** vài tham chiếu của sản phẩm là tên thiết bị Linux chứ không
+phải path TR-181: `IP.Diagnostics.TraceRoute.Interface`, `IP.Interface.{i}.LowerLayers`.

@@ -36,9 +36,10 @@ flowchart LR
 
 ## Nguyên tắc
 
-1. **Một backend.** `dm181` không viết lại logic đọc/ghi sản phẩm. Getter/setter của `dm098` được dùng chung: công
-   khai qua header, hoặc tách thành helper chung khi ngữ nghĩa giống. Module TR-181 chỉ có bảng DMOBJ/DMLEAF, cách đánh
-   instance của TR-181 và phần dịch ngữ nghĩa (ví dụ `LocalTimeZone` của TR-181 là chuỗi POSIX).
+1. **Một backend.** Không viết lại logic đọc/ghi sản phẩm. Bảng TR-181 của một domain nằm ngay trong file backend
+   của domain đó (`sdk/mtk/dm098/<domain>_mtk.c`), cạnh bảng TR-098. Getter/setter vẫn `static`, một bản cho cả hai
+   model. Phần riêng TR-181 chỉ là bảng DMOBJ/DMLEAF, cách đánh instance và phần dịch ngữ nghĩa (ví dụ `LocalTimeZone`
+   của TR-181 là chuỗi POSIX). `sdk/mtk/dm181/` chỉ chứa gốc `Device.` (`root181_mtk.c`).
 2. **Chọn model lúc chạy** bằng `cwmp.cpe.datamodel` (`tr098` mặc định, `tr181`), giống BDK. Mỗi lúc chỉ một model.
    Build không có module TR-181 thì giữ TR-098 và ghi lỗi vào log, không im lặng.
 3. **Tên và kiểu theo chuẩn.** Kiểm bằng `docs/issue/tr181-schema.py` (tên BBF trong XML của BDK, đọc lúc chạy, không
@@ -151,14 +152,27 @@ phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đ�
 
 | Phase | Nội dung | Xong khi |
 |---|---|---|
-| T0 Nền | chọn model trên MTK (`cwmp.cpe.datamodel`), root `Device.` + `RootDataModelVersion`, thư mục `sdk/mtk/dm181`, công cụ `tr181-schema.py`, test host `run.sh tr181` | đổi model bằng UCI + reload, GPN `Device.` chạy, Inform có `Device.*`, TR-098 không đổi (`run.sh all` PASS) |
-| T1 Hệ thống (loại A) | DeviceInfo, ManagementServer, Time, UserInterface, Users, XMPP, BulkData, FaultMgmt, SoftwareModules, Services, CaptivePortal, FAP, USB, `X_AIS_*` ở root | mỗi cặp ánh xạ cùng giá trị trên host; tên/kiểu qua `tr181-schema.py` |
+| T0 Nền — **xong** (`tr181-0001`, analysis §67) | chọn model trên MTK (`cwmp.cpe.datamodel`), root `Device.` + `RootDataModelVersion`, thư mục `sdk/mtk/dm181`, công cụ `tr181-schema.py`, test host `run.sh tr181` | đổi model bằng UCI + reload, GPN `Device.` chạy, Inform có `Device.*`, TR-098 không đổi (`run.sh all` PASS) |
+| T1 Hệ thống (loại A) — **xong trên host** (`tr181-0002`, analysis §67) | DeviceInfo, ManagementServer, Time, UserInterface, Users, XMPP, BulkData, FaultMgmt, SoftwareModules, Services, CaptivePortal, FAP, USB, `X_AIS_*` ở root, nhánh `Device.*` của sản phẩm (IP, PPP, DHCPv6, DynamicDNS, RouterAdvertisement, TraceRoute) | `tr181-map.py check` thiếu 0; `run.sh tr181`: 306 cặp bằng, 0 tên TR-181 thiếu cặp |
 | T2 LAN | IP.Interface LAN, Ethernet.Interface, DHCPv4.Server, Hosts, Bridging | như trên + ghi/Add/Delete |
 | T3 Wi-Fi | WiFi.Radio/SSID/AccessPoint (+Security/WPS/AssociatedDevice/Stats), `X_AIS` Wi-Fi | như trên |
 | T4 WAN | IP.Interface WAN, PPP, DHCPv4/v6 Client, NAT, Routing, DNS, Ethernet/Optical WAN, RouterAdvertisement, DynamicDNS, Add/Delete kết nối | như trên + `hni.wan` thật trên board |
 | T5 Chẩn đoán, firewall | IP.Diagnostics.*, DNS.Diagnostics, SelfTest, `Firewall.X_AIS_*` | như trên |
 | T6 Board | so cặp TR-098 ↔ TR-181 trên board, phiên ACS thật ở chế độ `tr181` | 0 cặp lệch không giải thích được |
 | T7 Theo BDK | tham số TR-181 mà ACS dùng trên BDK nhưng chưa có ở đây (không làm tất cả) | danh sách chốt với user |
+
+## Công cụ
+
+| Công cụ | Làm gì |
+|---|---|
+| `docs/issue/tr181_mapping.tsv` | quy tắc TR-098 → TR-181 (prefix/leaf/new), loại A/B/C/D, phase chờ |
+| `docs/issue/tr181-map.py check` | mọi tên A/B/C mong đợi có trong cây C, mọi tên cây C có quy tắc |
+| `docs/issue/tr181-map.py equiv <tr098.json> <tr181.json>` | giá trị từng cặp trên hai bản dump thật (host `run.sh tr181`, board sau) |
+| `docs/issue/tr181-schema.py <bcm963xx>/data-model --check <file>` | tên có trong TR-181 chuẩn (bảng tra BDK); tên BBF mà XML Broadcom không có thì xét tay |
+| `docs/issue/verify-dm-paths.py --model tr181 --dump` | cây TR-181 build khai báo |
+
+Số phủ sau T1: nguồn TR-098 (ma trận + tên chỉ có ở C) theo loại: A 236, B 1, C 80, D 24, chờ T2 63, T3 75, T4 185,
+T5 136.
 
 ## Quy ước trên `dev_181`
 

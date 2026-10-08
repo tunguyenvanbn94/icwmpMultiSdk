@@ -27,7 +27,7 @@ flowchart LR
     subgraph LATER["Mở rộng"]
         PH4["PH4<br/>P6-P8, lớp product"]
         PH5["PH5<br/>full C, tắt compat<br/>board 08/10"]
-        PH6["PH6<br/>TR-181 trên MTK"]
+        PH6["PH6<br/>TR-181 trên MTK<br/>dev_181: T0, T1"]
         PH7["PH7<br/>BDK cùng contract"]
         PH8["PH8<br/>CI, release, ABI"]
     end
@@ -46,7 +46,7 @@ flowchart LR
     style PH3 fill:#eeeeee,stroke:#888888
     style PH4 fill:#eeeeee,stroke:#888888
     style PH5 fill:#d8f0d8,stroke:#2e7d32
-    style PH6 fill:#eeeeee,stroke:#888888
+    style PH6 fill:#fff3c4,stroke:#b58900
 ```
 
 | Hạng mục | Trạng thái | Mức bằng chứng cao nhất |
@@ -59,6 +59,7 @@ flowchart LR
 | BDK | Prototype; **build image đạt 06/10 tại 0088** (bundle một SDK, analysis §56) | SDK build BDK; board BDK chưa (PH7) |
 | Test host | Chạy được trên máy build: container `ubuntu:24.04` (§55) | **`run.sh all` PASS 06/10** trên repo (code 0086) và từ chính bundle MTK `e273359` |
 | **PH0 (đóng băng baseline)** | **Xong 08/10** (PH0.5, tag `baseline/ph0-mtk-tr098-20261008`) | Board image `0fa9d31` (0101), parity PASS. Mang sang sau: G9 24 h (không chặn, quyết định 08/10), WebUI (G6), K15 hoãn (§64) |
+| **PH6 TR-181 MTK** (branch `dev_181`) | **Đang làm**: T0 nền + T1 object hệ thống xong trên host | 318 tên TR-181, `tr181-map.py check` thiếu 0, `run.sh tr181` so cặp 306 bằng (§67); kế hoạch T2–T7: [../plan/tr181_mtk_design.md](../plan/tr181_mtk_design.md) |
 | **Bản giao MTK** | **`release/mtk-20261008`** (08/10): full C, không còn shell data model | bundle `--sdk mtk` kiểm sha256, apply = code image `9f393e4` (board PASS), `run.sh all` từ bundle 24/24 PASS; làm lại từng bước: [icwmp_mtk_build_verify_guide.md](icwmp_mtk_build_verify_guide.md) (§66) |
 | **PH5 (tắt compat)** | **Đạt board 08/10** (0103, 0104; kéo lên trước PH1–PH3) | Build MTK `--disable-dm-script-compat`, không cài `icwmp_dm.sh`. Image `9f393e4`: parity compat-off PASS, không tên nào chỉ ở shell → **cây C đủ trên board**; GPV toàn cây 1 s. Tìm và sửa K28 (§65) |
 
