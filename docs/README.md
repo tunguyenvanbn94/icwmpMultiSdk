@@ -44,6 +44,8 @@ bằng chứng ở [issue/analysis.md](issue/analysis.md) (đã đồng bộ t�
 Các file trong `mtk/` và `bdk/`, cùng phần đầu của `issue/`, là bản sao từ workspace ngày 2026-09-29.
 Chúng giữ mốc commit và đường dẫn gốc để truy vết, nên vài liên kết tương đối và trạng thái trong file cũ
 không phản ánh repo này; link tới `../../src/2025q3/...` trong `analysis.md` là cây vendor của workspace.
+Build và kiểm chứng bản giao MTK từng bước (máy nào, lệnh gì, kết quả gì):
+[handover/icwmp_mtk_build_verify_guide.md](handover/icwmp_mtk_build_verify_guide.md).
 Trạng thái hiện hành luôn xem ở [handover/icwmp_progress_matrix.md](handover/icwmp_progress_matrix.md) và JSON:
 mốc code mới nhất `0104`, 783/783 parameter TR-098 bằng C (P1–P8, toàn cây) và từ 0100 cả AddObject/DeleteObject
 (K8), test host `run.sh all` đạt tại 0101, board image `0fa9d31` khớp shell sản phẩm (`tests/board`, §63); PH0 đóng băng 08/10 ở tag `baseline/ph0-mtk-tr098-20261008` (§64); PH5 đạt board 08/10: build không còn compat shell, parity compat-off PASS trên image `9f393e4` (mốc code `0104`, §65); chi tiết: xem progress matrix (board đạt G1–G7 phía router trên image 0083; BDK build đạt tại 0088).
