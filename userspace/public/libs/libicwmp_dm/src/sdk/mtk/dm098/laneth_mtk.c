@@ -29,6 +29,7 @@
 #include "dmmem.h"
 #include "dm_registry.h"
 #include "dmmtk.h"
+#include "wan_mtk.h"
 
 #define LAN_ETH_PORTS		4
 #define GSW_STATS_FILE		"/proc/tc3162/gsw_stats"
@@ -507,17 +508,27 @@ DM_MODULE_REGISTER(laneth_mtk_module);
 
 /*
  * LANEthernetInterfaceConfig.{i} is Device.Ethernet.Interface.{i}, the same
- * four ports in the same order, Upstream false.  The WAN port joins with the
- * WAN phase (T4) after them, so these numbers do not move.  Two values are
- * spelled the TR-181 way: Status (the product's "NoLink"/"Disable" are Down)
- * and MaxBitRate (-1 is Auto).  MACAddressControlEnabled has no TR-181
- * counterpart.
+ * four ports in the same order, Upstream false; the WAN port
+ * (WANEthernetInterfaceConfig) is instance 5 after them, Upstream true, its
+ * leaves answered by wan_mtk.c (wan_eth181_get/set).  Spelled the TR-181 way:
+ * Status (the product's "NoLink"/"Disable" are Down) and MaxBitRate (-1 is
+ * Auto).  MACAddressControlEnabled has no TR-181 counterpart.
  */
+
+#define ETH181_WAN	(LAN_ETH_PORTS + 1)
+static const int eth181_wan_instance = ETH181_WAN;
+
+static int eth181_is_wan(void *data)
+{
+	return eth_inst(data) == ETH181_WAN;
+}
 
 static int get_eth_status181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
 	char *v = NULL;
 
+	if (eth181_is_wan(data))
+		return wan_eth181_get("Status", value);
 	get_eth_status(refparam, ctx, data, instance, &v);
 	if (v && strcmp(v, "Up") == 0)
 		*value = "Up";
@@ -532,6 +543,8 @@ static int get_eth_maxbitrate181(char *refparam, struct dmctx *ctx, void *data, 
 {
 	char *v = NULL;
 
+	if (eth181_is_wan(data))
+		return wan_eth181_get("MaxBitRate", value);
 	get_eth_maxbitrate(refparam, ctx, data, instance, &v);
 	*value = (!v || !*v || strcmp(v, "Auto") == 0) ? "-1" : v;
 	return 0;
@@ -539,21 +552,68 @@ static int get_eth_maxbitrate181(char *refparam, struct dmctx *ctx, void *data, 
 
 static int set_eth_maxbitrate181(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
+	if (eth181_is_wan(data))
+		return wan_eth181_set("MaxBitRate", value, action);
 	return set_eth_maxbitrate(refparam, ctx, data, instance,
 				  strcmp(value, "-1") == 0 ? "Auto" : value, action);
 }
 
-static int get_eth_false(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+static int get_eth_upstream181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = "false";
+	*value = eth181_is_wan(data) ? "true" : "false";
 	return 0;
 }
 
 /* the instances published, not the br-lan member count TR-098 reports */
 static int get_eth_count181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	dmasprintf(value, "%d", LAN_ETH_PORTS);
+	dmasprintf(value, "%d", ETH181_WAN);
 	return 0;
+}
+
+/* a leaf the LAN ports answer with their TR-098 getter, the WAN port with
+ * wan_mtk.c's */
+#define ETH181_GET(name, lan_getter, leaf)						\
+static int get_eth181_##name(char *refparam, struct dmctx *ctx, void *data,	\
+			     char *instance, char **value)				\
+{											\
+	if (eth181_is_wan(data))							\
+		return wan_eth181_get(leaf, value);					\
+	return lan_getter(refparam, ctx, data, instance, value);			\
+}
+
+ETH181_GET(enable, get_eth_enable, "Enable")
+ETH181_GET(name, get_eth_name, "Name")
+ETH181_GET(mac, get_eth_mac, "MACAddress")
+ETH181_GET(duplex, get_eth_duplex, "DuplexMode")
+ETH181_GET(bytes_sent, get_st_bytes_sent, "BytesSent")
+ETH181_GET(bytes_recv, get_st_bytes_recv, "BytesReceived")
+ETH181_GET(packets_sent, get_st_packets_sent, "PacketsSent")
+ETH181_GET(packets_recv, get_st_packets_recv, "PacketsReceived")
+ETH181_GET(errors_sent, get_st_errors_sent, "ErrorsSent")
+ETH181_GET(errors_recv, get_st_errors_recv, "ErrorsReceived")
+ETH181_GET(discard_sent, get_st_discard_sent, "DiscardPacketsSent")
+ETH181_GET(discard_recv, get_st_discard_recv, "DiscardPacketsReceived")
+ETH181_GET(multicast_sent, get_st_multicast_sent, "MulticastPacketsSent")
+ETH181_GET(multicast_recv, get_st_multicast_recv, "MulticastPacketsReceived")
+ETH181_GET(broadcast_sent, get_st_broadcast_sent, "BroadcastPacketsSent")
+ETH181_GET(broadcast_recv, get_st_broadcast_recv, "BroadcastPacketsReceived")
+ETH181_GET(unknown_recv, get_st_unknown_recv, "UnknownProtoPacketsReceived")
+ETH181_GET(unicast_sent, get_st_unicast_sent, "UnicastPacketsSent")
+ETH181_GET(unicast_recv, get_st_unicast_recv, "UnicastPacketsReceived")
+
+static int set_eth181_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	if (eth181_is_wan(data))
+		return wan_eth181_set("Enable", value, action);
+	return set_eth_enable(refparam, ctx, data, instance, value, action);
+}
+
+static int set_eth181_duplex(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	if (eth181_is_wan(data))
+		return wan_eth181_set("DuplexMode", value, action);
+	return set_eth_duplex(refparam, ctx, data, instance, value, action);
 }
 
 static int browseEth181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
@@ -564,21 +624,48 @@ static int browseEth181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev
 	for (i = 0; i < LAN_ETH_PORTS; i++) {
 		idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section, 1, i + 1);
 		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)&eth_instances[i], idx) == DM_STOP)
-			break;
+			return 0;
 	}
+	idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section, 1, ETH181_WAN);
+	DM_LINK_INST_OBJ(dmctx, parent_node, (void *)&eth181_wan_instance, idx);
 	return 0;
 }
 
-static DMLEAF tEth181InstParam[] = {
+static DMLEAF tEth181StatsParam[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"BytesSent", &DMREAD, DMT_UNINT, get_eth181_bytes_sent, NULL, NULL, NULL},
+{"BytesReceived", &DMREAD, DMT_UNINT, get_eth181_bytes_recv, NULL, NULL, NULL},
+{"PacketsSent", &DMREAD, DMT_UNINT, get_eth181_packets_sent, NULL, NULL, NULL},
+{"PacketsReceived", &DMREAD, DMT_UNINT, get_eth181_packets_recv, NULL, NULL, NULL},
+{"ErrorsSent", &DMREAD, DMT_UNINT, get_eth181_errors_sent, NULL, NULL, NULL},
+{"ErrorsReceived", &DMREAD, DMT_UNINT, get_eth181_errors_recv, NULL, NULL, NULL},
+{"DiscardPacketsSent", &DMREAD, DMT_UNINT, get_eth181_discard_sent, NULL, NULL, NULL},
+{"DiscardPacketsReceived", &DMREAD, DMT_UNINT, get_eth181_discard_recv, NULL, NULL, NULL},
+{"MulticastPacketsSent", &DMREAD, DMT_UNINT, get_eth181_multicast_sent, NULL, NULL, NULL},
+{"MulticastPacketsReceived", &DMREAD, DMT_UNINT, get_eth181_multicast_recv, NULL, NULL, NULL},
+{"BroadcastPacketsSent", &DMREAD, DMT_UNINT, get_eth181_broadcast_sent, NULL, NULL, NULL},
+{"BroadcastPacketsReceived", &DMREAD, DMT_UNINT, get_eth181_broadcast_recv, NULL, NULL, NULL},
+{"UnknownProtoPacketsReceived", &DMREAD, DMT_UNINT, get_eth181_unknown_recv, NULL, NULL, NULL},
+{"UnicastPacketsSent", &DMREAD, DMT_UNINT, get_eth181_unicast_sent, NULL, NULL, NULL},
+{"UnicastPacketsReceived", &DMREAD, DMT_UNINT, get_eth181_unicast_recv, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tEth181InstObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tEth181StatsParam, NULL},
+{0}
+};
+
+static DMLEAF tEth181InstParam[] = {
 {"Alias", &DMREAD, DMT_STRING, get_eth_alias, NULL, NULL, NULL},
-{"Enable", &DMWRITE, DMT_BOOL, get_eth_enable, set_eth_enable, NULL, NULL},
+{"Enable", &DMWRITE, DMT_BOOL, get_eth181_enable, set_eth181_enable, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_eth_status181, NULL, NULL, NULL},
-{"Name", &DMREAD, DMT_STRING, get_eth_name, NULL, NULL, NULL},
-{"Upstream", &DMREAD, DMT_BOOL, get_eth_false, NULL, NULL, NULL},
-{"MACAddress", &DMREAD, DMT_STRING, get_eth_mac, NULL, NULL, NULL},
+{"Name", &DMREAD, DMT_STRING, get_eth181_name, NULL, NULL, NULL},
+{"Upstream", &DMREAD, DMT_BOOL, get_eth_upstream181, NULL, NULL, NULL},
+{"MACAddress", &DMREAD, DMT_STRING, get_eth181_mac, NULL, NULL, NULL},
 {"MaxBitRate", &DMWRITE, DMT_INT, get_eth_maxbitrate181, set_eth_maxbitrate181, NULL, NULL},
-{"DuplexMode", &DMWRITE, DMT_STRING, get_eth_duplex, set_eth_duplex, NULL, NULL},
+{"DuplexMode", &DMWRITE, DMT_STRING, get_eth181_duplex, set_eth181_duplex, NULL, NULL},
 {0}
 };
 
@@ -588,8 +675,7 @@ static DMLEAF tEth181Param[] = {
 };
 
 static DMOBJ tEth181Obj[] = {
-/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Interface", &DMREAD, NULL, NULL, NULL, browseEth181Inst, NULL, NULL, tLanEthInstObj, tEth181InstParam, NULL},
+{"Interface", &DMREAD, NULL, NULL, NULL, browseEth181Inst, NULL, NULL, tEth181InstObj, tEth181InstParam, NULL},
 {0}
 };
 

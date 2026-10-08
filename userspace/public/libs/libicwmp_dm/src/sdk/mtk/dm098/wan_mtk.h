@@ -28,4 +28,15 @@ const char *wan_uplink_iface(void);
  */
 char *wan_netdev_stat(const char *iface, const char *counter);
 
+/*
+ * TR-181: the WAN port is Device.Ethernet.Interface.<n> (laneth_mtk.c owns
+ * that object and its browse, the WAN instance comes after the LAN ports).
+ * Its leaves are WANEthernetInterfaceConfig's (+Stats), answered here so the
+ * product's values stay in one file.  leaf is the TR-181 name (Stats leaves
+ * without the "Stats." prefix); 0, or FAULT_9008 for a leaf this port does
+ * not let the ACS write.
+ */
+int wan_eth181_get(const char *leaf, char **value);
+int wan_eth181_set(const char *leaf, char *value, int action);
+
 #endif

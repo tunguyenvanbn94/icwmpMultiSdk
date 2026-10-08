@@ -1569,6 +1569,17 @@ config SwitchPara
 config SwitchPara
 	option enable 'Yes'
 	option maxBitRate 'auto'
+
+config routev4Common 'routev4Common'
+	option max_rules '32'
+
+config route
+	option interface 'lan'
+	option target '10.0.0.0'
+	option netmask '255.0.0.0'
+	option gateway '192.168.1.254'
+	option metric '5'
+	option disabled '0'
 EOF2
 	cat > /etc/config/dhcp <<'EOF2'
 config dnsmasq
@@ -1660,7 +1671,7 @@ PY
 	lan=$(uci -q get network.lan.ip_int_instance)
 	E=Device.Ethernet.Interface P=Device.DHCPv4.Server.Pool.1 H=Device.Hosts.Host
 	expect "LAN numbered by device_ip" "$(echo "$lan" | grep -c '^[0-9][0-9]*$')" "1"
-	expect "Ethernet.InterfaceNumberOfEntries" "$(dm_value Device.Ethernet.InterfaceNumberOfEntries)" "4"
+	expect "Ethernet.InterfaceNumberOfEntries" "$(dm_value Device.Ethernet.InterfaceNumberOfEntries)" "5"
 	expect "Ethernet 1 MaxBitRate auto" "$(dm_value $E.1.MaxBitRate)" "-1"
 	expect "Ethernet 2 MaxBitRate" "$(dm_value $E.2.MaxBitRate)" "100"
 	expect "Ethernet 2 Status (disabled)" "$(dm_value $E.2.Status)" "Down"
@@ -1688,6 +1699,21 @@ print(sum(1 for p in json.load(open(sys.argv[1]))["parameters"] if re.match(r"De
 	expect "set Ethernet 2 MaxBitRate abc" "$(dm_set_fault $E.2.MaxBitRate abc "$key")" "9007"
 	expect "set Ethernet 1 MaxBitRate 10 (2.5G PHY)" "$(dm_set_fault $E.1.MaxBitRate 10 "$key")" "9007"
 	expect "  SwitchPara[0] unchanged" "$(uci -q get network.@SwitchPara[0].maxBitRate)" "auto"
+	# T4a: the WAN port as Ethernet.Interface.5, the PON link, static routes as
+	# Routing.Router.1.IPv4Forwarding (same sections, Add, Interface as a
+	# Device.IP.Interface reference)
+	expect "WAN port Upstream/Name/Duplex/Status" "$(dm_value $E.5.Upstream) $(dm_value $E.5.Name) $(dm_value $E.5.DuplexMode) $(dm_value $E.5.Status)" "true eth0 Full Down"
+	expect "set WAN port MaxBitRate (read only)" "$(dm_set_fault $E.5.MaxBitRate 100 "$key")" "9008"
+	expect "Optical.Interface.1 Status/Name" "$(dm_value Device.Optical.Interface.1.Status) $(dm_value Device.Optical.Interface.1.Name)" "Down pon"
+	F=Device.Routing.Router.1.IPv4Forwarding
+	expect "route 1 Status/Interface/Metric" "$(dm_value $F.1.Status) $(dm_value $F.1.Interface) $(dm_value $F.1.ForwardingMetric)" "Enabled Device.IP.Interface.$lan 5"
+	wan_if=$(uci -q get network.if0.ip_int_instance)
+	expect "set route 1 Interface to if0" "$(dm_set_fault $F.1.Interface Device.IP.Interface.$wan_if "$key")" "0"
+	expect "  network.@route[0].interface" "$(uci -q get network.@route[0].interface)" "if0"
+	expect "set route 1 Interface not an IP.Interface" "$(dm_set_fault $F.1.Interface Device.IP.Interface.99 "$key")" "9007"
+	expect "add IPv4Forwarding" "$($UBUS call tr069 dm '{"cmd":"add","path":"Device.Routing.Router.1.IPv4Forwarding."}' 2>/dev/null |
+		python3 -c 'import json, sys; r = json.load(sys.stdin); print(r.get("fault"), r.get("instance"))')" "0 2"
+	expect "  IPv4ForwardingNumberOfEntries" "$(dm_value Device.Routing.Router.1.IPv4ForwardingNumberOfEntries)" "2"
 	# T3 Wi-Fi: Radio from the radio sections, SSID/AccessPoint numbered like
 	# WLANConfiguration, Security.ModeEnabled from wireless.<iface>.encryption
 	R=Device.WiFi.Radio S=Device.WiFi.SSID A=Device.WiFi.AccessPoint
@@ -1736,7 +1762,7 @@ print(sum(1 for p in json.load(open(sys.argv[1]))["parameters"] if re.match(r"De
 	restore_cfg cwmp
 	tr181_fixtures_restore
 	if [ $bad_n = 0 ]; then
-		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, LAN (T2) and Wi-Fi (T3) values and writes, DataModel back to tr098; pairs: $(tail -2 "$RUN/tr181.equiv" | head -1)"
+		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, LAN (T2), Wi-Fi (T3), WAN port and routing (T4a) values and writes, DataModel back to tr098; pairs: $(tail -2 "$RUN/tr181.equiv" | head -1)"
 	else
 		bad "tr181: $bad_n mismatches above"
 	fi

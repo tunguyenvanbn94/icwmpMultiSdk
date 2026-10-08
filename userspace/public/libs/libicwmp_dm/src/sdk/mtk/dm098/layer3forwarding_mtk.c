@@ -89,6 +89,7 @@
 #include "dm_registry.h"
 #include "dmmtk.h"
 #include "wanconn_mtk.h"
+#include "device_ip_mtk.h"
 
 #define L3F_WAN_PREFIX	"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1."
 #define L3F_LAN_PATH	"InternetGatewayDevice.LANDevice."
@@ -653,3 +654,144 @@ static const struct dm_module l3f_mtk_module = {
 	.paths = l3f_mtk_paths,
 };
 DM_MODULE_REGISTER(l3f_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181)                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Layer3Forwarding.Forwarding.{i} is Device.Routing.Router.1.IPv4Forwarding.{i},
+ * the same anonymous route sections in the same order, the same Add/Delete,
+ * getters and setters; the container leaves are Router.1's (Enable,
+ * IPv4ForwardingNumberOfEntries).  Spelled the TR-181 way: Status
+ * (Enabled/Disabled) and Interface, a Device.IP.Interface.<n> reference
+ * numbered by device_ip_mtk.c.  Writing Interface takes any IP.Interface:
+ * the TR-098 setter's WAN path needs the "hniwan" package the product does
+ * not have (header), the TR-181 reference names the network section itself.
+ * No TR-181 counterpart: Type, DefaultConnectionService.
+ */
+
+static int get_rt_status181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = l3f_route_enabled((struct uci_section *)data) ? "Enabled" : "Disabled";
+	return 0;
+}
+
+static int get_rt_interface181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *itf = l3f_opt((struct uci_section *)data, "interface");
+	char *inst;
+
+	*value = "";
+	if (!*itf)
+		return 0;
+	inst = dip_update_instance(itf);
+	if (*inst)
+		dmasprintf(value, "%s%s", mtk_ipif_prefix(), inst);
+	return 0;
+}
+
+static int set_rt_interface181(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	const char *prefix = mtk_ipif_prefix();
+	size_t l = strlen(prefix);
+	char *sec;
+
+	if (!value || strncmp(value, prefix, l) != 0)
+		return FAULT_9007;
+	sec = dip_section_of_instance(value + l);
+	if (!sec)
+		return FAULT_9007;
+	if (action == VALUECHECK)
+		return 0;
+	dmuci_set_value_by_section((struct uci_section *)data, "interface", sec);
+	wan_reload();
+	return 0;
+}
+
+static int browseRouter181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	char *idx, *idx_last = NULL;
+
+	idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section, 1, 1);
+	DM_LINK_INST_OBJ(dmctx, parent_node, NULL, idx);
+	return 0;
+}
+
+static int browseIpv4Fwd181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	struct uci_section *list[L3F_MAX_ROUTES];
+	char *idx, *idx_last = NULL;
+	int n, i;
+
+	n = l3f_routes(list, L3F_MAX_ROUTES);
+	if (n > L3F_MAX_ROUTES)
+		n = L3F_MAX_ROUTES;
+	for (i = 0; i < n; i++) {
+		idx = handle_update_instance(2, dmctx, &idx_last, update_instance_without_section,
+					     1, i + 1);
+		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)list[i], idx) == DM_STOP)
+			break;
+	}
+	return 0;
+}
+
+static int get_router181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "1";
+	return 0;
+}
+
+static DMLEAF tIpv4Fwd181Params[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMWRITE, DMT_BOOL, get_rt_enable, set_rt_enable, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_rt_status181, NULL, NULL, NULL},
+{"StaticRoute", &DMREAD, DMT_BOOL, get_rt_static, NULL, NULL, NULL},
+{"DestIPAddress", &DMWRITE, DMT_STRING, get_rt_dest, set_rt_dest, NULL, NULL},
+{"DestSubnetMask", &DMWRITE, DMT_STRING, get_rt_mask, set_rt_mask, NULL, NULL},
+{"GatewayIPAddress", &DMWRITE, DMT_STRING, get_rt_gateway, set_rt_gateway, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_rt_interface181, set_rt_interface181, NULL, NULL},
+{"ForwardingMetric", &DMWRITE, DMT_INT, get_rt_metric, set_rt_metric, NULL, NULL},
+{0}
+};
+
+static DMLEAF tRouter181Params[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_l3f_enable, set_l3f_enable, NULL, NULL},
+{"IPv4ForwardingNumberOfEntries", &DMREAD, DMT_UNINT, get_l3f_count, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tRouter181Obj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"IPv4Forwarding", &DMWRITE, add_l3f_route, del_l3f_route, NULL, browseIpv4Fwd181Inst, NULL, NULL, NULL, tIpv4Fwd181Params, NULL},
+{0}
+};
+
+static DMLEAF tRouting181Params[] = {
+{"RouterNumberOfEntries", &DMREAD, DMT_UNINT, get_router181_count, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tRouting181Obj[] = {
+{"Router", &DMREAD, NULL, NULL, NULL, browseRouter181Inst, NULL, NULL, tRouter181Obj, tRouter181Params, NULL},
+{0}
+};
+
+static DMOBJ tL3f181Root[] = {
+{"Routing", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tRouting181Obj, tRouting181Params, NULL},
+{0}
+};
+
+static const char *const l3f181_mtk_paths[] = {
+	"Device.Routing.",
+	NULL
+};
+
+static const struct dm_module l3f181_mtk_module = {
+	.name  = "mtk-layer3forwarding-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tL3f181Root,
+	.paths = l3f181_mtk_paths,
+};
+DM_MODULE_REGISTER(l3f181_mtk_module);

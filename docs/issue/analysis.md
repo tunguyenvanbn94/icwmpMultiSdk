@@ -4529,3 +4529,61 @@ dùng cùng getter/setter, nên cùng option UCI, cùng lệnh reload và cùng 
   getWlanDeviceList). Host không có `hni`, nên chỉ thấy giá trị rỗng/0 và không có station. Cần board (T6).
 - `Radio.Enable` đọc `wireless.<radio>.disabled`. Sản phẩm có dùng option này để tắt radio không thì chưa kiểm trên
   board.
+
+## 70. TR-181 trên MTK: T4a cổng WAN, PON, định tuyến tĩnh (`tr181-0006`) (08/10 16:50–)
+
+T4 (WAN, 185 tham số) chia bốn bước có commit riêng:
+- **T4a:** phần không phụ thuộc kết nối (34 tham số).
+- **T4b:** lá chuẩn của `WANIPConnection`/`WANPPPConnection` → `IP.Interface`/`IPv4Address`/`NAT`/`DNS`/`PPP`.
+- **T4c:** lá `X_AIS_*` của kết nối (VLAN, IPv6, ServiceList).
+- **T4d:** PortMapping → `NAT.PortMapping`.
+
+Hướng ánh xạ theo ma trận BDK (`projects/brcm_ap_wifi7_mvn/docs/icwmp_tr098_bdk_mapping_matrix.md` Phần 2, 5):
+`WANIPConnection.{i}` ↔ `IP.Interface` của kết nối, cộng `DHCPv4.Client`, `NAT.InterfaceSetting`, `Routing`,
+`DNS.Client.Server`; `WANPPPConnection` ↔ `PPP.Interface`.
+
+**T4a:**
+- **Cổng WAN:** `WANEthernetInterfaceConfig` (+`Stats`) → `Device.Ethernet.Interface.5` (`Upstream` = true), sau 4
+  cổng LAN.
+  - Object `Ethernet.Interface` chỉ có một browse (`laneth_mtk.c`). Instance 5 đi qua `wan_eth181_get/set` của
+    `wan_mtk.c`, nên hằng số và bộ đếm uplink của sản phẩm vẫn chỉ nằm một chỗ.
+  - Giá trị giữ của sản phẩm: `Status` "Down" cố định, `MaxBitRate` 1000, `Enable` nhận rồi bỏ.
+  - `DuplexMode` "Full Duplex" → "Full" (B). `MaxBitRate`/`DuplexMode` của cổng WAN trả 9008 khi ghi (TR-098 là
+    read-only).
+  - Bốn bộ đếm `Total*` của `WANCommonInterfaceConfig` cùng getter với `Stats` của cổng này.
+  - Lá chỉ có ở TR-181 của instance 5 (`Alias`, `Name` = netdev uplink, `MACAddress`, các bộ đếm khác đọc sysfs
+    uplink) được khai báo là quy tắc `new`.
+  - `InterfaceNumberOfEntries` nay là 5.
+- **PON:** `PhysicalLinkStatus` → `Device.Optical.Interface.1.Status` (`pon.xpon_link.trafficStatus`).
+- **Không có tương ứng (D):** `EnabledForInternet`, `WANAccessType` (rỗng trên sản phẩm), hai lá tốc độ dòng
+  `Layer1*MaxBitRate`, 5 lá `WANDSLLinkConfig` (không có DSL).
+- **Định tuyến:** `Layer3Forwarding.Forwarding.{i}` → `Routing.Router.1.IPv4Forwarding.{i}`.
+  - Cùng các section route ẩn danh, cùng Add/Delete, getter và setter.
+  - Lá ở mức container của sản phẩm (`Forwarding.Enable`, `ForwardNumberOfEntries`) → `Router.1.Enable`,
+    `IPv4ForwardingNumberOfEntries`.
+  - `Status` → `Enabled`/`Disabled` (B).
+  - `Interface` → tham chiếu `Device.IP.Interface.<n>` (B):
+    - đọc: `network.@route[i].interface` qua bảng số của `device_ip_mtk.c`;
+    - ghi: nhận mọi `IP.Interface`. Setter TR-098 chỉ nhận LAN, vì nhánh WAN cần package `hniwan` mà sản phẩm không
+      có (chú thích đầu `layer3forwarding_mtk.c`).
+  - `Type`, `DefaultConnectionService` là D.
+
+**Kiểm (host):**
+- `tr181-map.py check`: TR-181 456 = cây C 456, thiếu 0. Theo loại: A 344, B 16, C 88, D 65; chờ T4 151, T5 136.
+- `run.sh tr181` thêm fixture route (`routev4Common.max_rules`, một route LAN):
+  - cổng WAN: `true eth0 Full Down`; ghi `MaxBitRate` → 9008;
+  - Optical: `Down pon`;
+  - route 1: `Enabled`, `Device.IP.Interface.<lan>`, metric 5; ghi `Interface` sang IP.Interface của `if0` →
+    `network.@route[0].interface` = `if0`; IP.Interface không tồn tại → 9007;
+  - `add` IPv4Forwarding → fault 0, instance 2.
+  - So cặp 910 bằng + 2 theo tham chiếu, B 116, D 197, 0 tên TR-181 thiếu cặp.
+- Cổng tĩnh: check-c-sanity 69/0, verify-dm-paths tr098 thiếu 0, claims 0 cặp chồng, automake 0, cross-gcc SDK
+  69 file 0 lỗi, schema: tên mới đều chuẩn (vẫn 58 tên đã chấp nhận).
+- Chưa build SDK, chưa chạy board.
+
+**Chưa chứng minh được:**
+- `Ethernet.Interface.5.Status` "Down" cố định là hằng của sản phẩm (`get_fake_WANEthernetStatus`). Trạng thái thật
+  của cổng uplink Ethernet chưa có ở cả hai model.
+- Uplink PON hay Ethernet đều đặt ở `Ethernet.Interface.5`, `Name` = netdev uplink (`pon`, `eth0`…). Trong TR-181,
+  uplink PON đúng ra nằm dưới `Optical.Interface`. Có cần tách theo `clay.opermode.uplink` không thì xét ở T7 cùng
+  ACS.

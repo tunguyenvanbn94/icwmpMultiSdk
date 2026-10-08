@@ -123,7 +123,7 @@ prefix	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.	Device.Et
 leaf	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.Status	Device.Ethernet.Interface.{i2}.Status	B	TR-181 enumeration: NoLink/Disable -> Down
 leaf	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.MaxBitRate	Device.Ethernet.Interface.{i2}.MaxBitRate	B	TR-181 int, -1 = Auto
 leaf	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.MACAddressControlEnabled	-	D	TR-098 only
-leaf	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceNumberOfEntries	Device.Ethernet.InterfaceNumberOfEntries	B	TR-181 counts the instances (4), TR-098 the eth members of br-lan
+leaf	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceNumberOfEntries	Device.Ethernet.InterfaceNumberOfEntries	B	TR-181 counts the instances (4 LAN ports + the WAN port), TR-098 the eth members of br-lan
 leaf	InternetGatewayDevice.LANDevice.{i}.LANUSBInterfaceNumberOfEntries	-	D	constant 0; Device.USB is the hidden placeholder of the product
 prefix	InternetGatewayDevice.LANDevice.{i}.Hosts.	Device.Hosts.	A	lanhosts_mtk.c, the same lanhost sections in the same order
 leaf	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.{i}.MACAddress	Device.Hosts.Host.{i2}.PhysAddress	A	TR-181 leaf name
@@ -135,7 +135,29 @@ new	-	Device.Ethernet.Interface.{i}.Upstream	A	laneth_mtk.c, false
 new	-	Device.Hosts.Host.{i}.Layer3Interface	A	lanhosts_mtk.c, Device.IP.Interface of network.lan
 prefix	InternetGatewayDevice.Layer2Bridging.	-	D	objects only, no parameter in the product; TR-181 Bridging.Bridge built when an ACS needs it (T7)
 prefix	InternetGatewayDevice.WANDevice.	?	T4	IP.Interface WAN, PPP, DHCPv4/v6 Client, NAT, Routing, DNS, Ethernet/Optical
-prefix	InternetGatewayDevice.Layer3Forwarding.	?	T4	Routing.Router.1.IPv4Forwarding
+leaf	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.EnabledForInternet	-	D	constant 1, no TR-181 counterpart
+leaf	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.WANAccessType	-	D	empty on the product, no TR-181 counterpart
+leaf	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.Layer1UpstreamMaxBitRate	-	D	GPON/Ethernet line rate constants, no TR-181 counterpart
+leaf	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.Layer1DownstreamMaxBitRate	-	D	GPON/Ethernet line rate constants, no TR-181 counterpart
+leaf	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.PhysicalLinkStatus	Device.Optical.Interface.1.Status	A	wan_mtk.c, pon.xpon_link.trafficStatus
+leaf	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.TotalBytesSent	Device.Ethernet.Interface.5.Stats.BytesSent	A	the uplink netdev counters, same as WANEthernetInterfaceConfig.Stats
+leaf	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.TotalBytesReceived	Device.Ethernet.Interface.5.Stats.BytesReceived	A	uplink netdev
+leaf	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.TotalPacketsSent	Device.Ethernet.Interface.5.Stats.PacketsSent	A	uplink netdev
+leaf	InternetGatewayDevice.WANDevice.{i}.WANCommonInterfaceConfig.TotalPacketsReceived	Device.Ethernet.Interface.5.Stats.PacketsReceived	A	uplink netdev
+prefix	InternetGatewayDevice.WANDevice.{i}.WANEthernetInterfaceConfig.	Device.Ethernet.Interface.5.	A	the WAN port: Ethernet.Interface.5 (after the four LAN ports), Upstream true; laneth_mtk.c browse, wan_mtk.c values
+leaf	InternetGatewayDevice.WANDevice.{i}.WANEthernetInterfaceConfig.DuplexMode	Device.Ethernet.Interface.5.DuplexMode	B	TR-181 enumeration: "Full Duplex" -> "Full"
+prefix	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANDSLLinkConfig.	-	D	no DSL line on this product (constants)
+prefix	InternetGatewayDevice.Layer3Forwarding.Forwarding.	Device.Routing.Router.1.IPv4Forwarding.	A	layer3forwarding_mtk.c, the same route sections, Add/Delete
+leaf	InternetGatewayDevice.Layer3Forwarding.Forwarding.Enable	Device.Routing.Router.1.Enable	A	the container leaf of the product (network.route4_common.active)
+leaf	InternetGatewayDevice.Layer3Forwarding.Forwarding.ForwardNumberOfEntries	Device.Routing.Router.1.IPv4ForwardingNumberOfEntries	A	TR-181 leaf name
+leaf	InternetGatewayDevice.Layer3Forwarding.Forwarding.DefaultConnectionService	-	D	no TR-181 counterpart
+leaf	InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.Status	Device.Routing.Router.1.IPv4Forwarding.{i}.Status	B	TR-181 enumeration: Enable/Disable -> Enabled/Disabled
+leaf	InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.Interface	Device.Routing.Router.1.IPv4Forwarding.{i}.Interface	B	Device.IP.Interface.<n> reference instead of the TR-098 LANDevice/WAN connection path
+leaf	InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.Type	-	D	no TR-181 counterpart
+new	-	Device.Routing.RouterNumberOfEntries	A	layer3forwarding_mtk.c, 1
+new	-	Device.Optical.InterfaceNumberOfEntries	A	wan_mtk.c, 1
+new	-	Device.Optical.Interface.{i}.Enable	A	wan_mtk.c
+new	-	Device.Optical.Interface.{i}.Name	A	wan_mtk.c, pon
 prefix	InternetGatewayDevice.IPPingDiagnostics.	?	T5	IP.Diagnostics.IPPing
 prefix	InternetGatewayDevice.TraceRouteDiagnostics.	?	T5	IP.Diagnostics.TraceRoute
 prefix	InternetGatewayDevice.DownloadDiagnostics.	?	T5	IP.Diagnostics.DownloadDiagnostics
@@ -145,3 +167,17 @@ prefix	InternetGatewayDevice.DNSDiagnostics.	?	T5	product diagnostics
 prefix	InternetGatewayDevice.Firewall.	?	T5	Firewall.X_AIS_*
 prefix	InternetGatewayDevice.LTE.	?	T5	Cellular
 prefix	InternetGatewayDevice.DOCSIS.	-	D	no TR-181 counterpart, static values of the product
+new	-	Device.Ethernet.Interface.{i}.Alias	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
+new	-	Device.Ethernet.Interface.{i}.MACAddress	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
+new	-	Device.Ethernet.Interface.{i}.Name	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
+new	-	Device.Ethernet.Interface.{i}.Stats.ErrorsSent	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
+new	-	Device.Ethernet.Interface.{i}.Stats.ErrorsReceived	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
+new	-	Device.Ethernet.Interface.{i}.Stats.DiscardPacketsSent	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
+new	-	Device.Ethernet.Interface.{i}.Stats.DiscardPacketsReceived	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
+new	-	Device.Ethernet.Interface.{i}.Stats.MulticastPacketsSent	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
+new	-	Device.Ethernet.Interface.{i}.Stats.MulticastPacketsReceived	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
+new	-	Device.Ethernet.Interface.{i}.Stats.BroadcastPacketsSent	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
+new	-	Device.Ethernet.Interface.{i}.Stats.BroadcastPacketsReceived	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
+new	-	Device.Ethernet.Interface.{i}.Stats.UnicastPacketsSent	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
+new	-	Device.Ethernet.Interface.{i}.Stats.UnicastPacketsReceived	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
+new	-	Device.Ethernet.Interface.{i}.Stats.UnknownProtoPacketsReceived	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig

@@ -340,3 +340,139 @@ static const struct dm_module wan_mtk_module = {
 	.paths = wan_mtk_paths,
 };
 DM_MODULE_REGISTER(wan_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181)                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * WANEthernetInterfaceConfig (+Stats) and the uplink totals of
+ * WANCommonInterfaceConfig are Device.Ethernet.Interface.<WAN> (Upstream
+ * true, built in laneth_mtk.c through wan_eth181_get/set below), the same
+ * constants and the same uplink counters.  DuplexMode is spelled the TR-181
+ * way ("Full Duplex" -> "Full").  PhysicalLinkStatus is the PON link:
+ * Device.Optical.Interface.1.Status.  No TR-181 counterpart:
+ * EnabledForInternet, WANAccessType (empty on the product), the two Layer1
+ * line rates, and WANDSLLinkConfig (no DSL line).
+ */
+
+int wan_eth181_get(const char *leaf, char **value)
+{
+	static const struct {
+		const char *leaf;
+		const char *counter;	/* statistics/<counter> of the uplink */
+	} counters[] = {
+		{ "ErrorsSent", "tx_errors" }, { "ErrorsReceived", "rx_errors" },
+		{ "DiscardPacketsSent", "tx_dropped" }, { "DiscardPacketsReceived", "rx_dropped" },
+		{ "MulticastPacketsReceived", "multicast" },
+	};
+	char *v;
+	int i;
+
+	if (strcmp(leaf, "Enable") == 0)
+		return get_true(NULL, NULL, NULL, NULL, value);
+	if (strcmp(leaf, "Status") == 0)
+		return get_eth_status(NULL, NULL, NULL, NULL, value);
+	if (strcmp(leaf, "MaxBitRate") == 0)
+		return get_eth_maxbitrate(NULL, NULL, NULL, NULL, value);
+	if (strcmp(leaf, "DuplexMode") == 0) {
+		*value = "Full";
+		return 0;
+	}
+	if (strcmp(leaf, "Name") == 0) {
+		*value = (char *)wan_uplink_iface();
+		return 0;
+	}
+	if (strcmp(leaf, "MACAddress") == 0) {
+		char path[96];
+
+		snprintf(path, sizeof(path), "/sys/class/net/%s/address", wan_uplink_iface());
+		*value = mtk_file_line(path);
+		return 0;
+	}
+	if (strcmp(leaf, "BytesSent") == 0)
+		return get_uplink_tx_bytes(NULL, NULL, NULL, NULL, value);
+	if (strcmp(leaf, "BytesReceived") == 0)
+		return get_uplink_rx_bytes(NULL, NULL, NULL, NULL, value);
+	if (strcmp(leaf, "PacketsSent") == 0)
+		return get_uplink_tx_packets(NULL, NULL, NULL, NULL, value);
+	if (strcmp(leaf, "PacketsReceived") == 0)
+		return get_uplink_rx_packets(NULL, NULL, NULL, NULL, value);
+	for (i = 0; i < (int)(sizeof(counters) / sizeof(counters[0])); i++) {
+		if (strcmp(leaf, counters[i].leaf) == 0) {
+			v = wan_netdev_stat(wan_uplink_iface(), counters[i].counter);
+			*value = (v && *v) ? v : "0";
+			return 0;
+		}
+	}
+	*value = "0";
+	return 0;
+}
+
+/* Enable is accepted and dropped as on WANEthernetInterfaceConfig; the rest
+ * was read only there */
+int wan_eth181_set(const char *leaf, char *value, int action)
+{
+	if (strcmp(leaf, "Enable") == 0)
+		return mtk_parse_bool(value) < 0 ? FAULT_9007 : 0;
+	return FAULT_9008;
+}
+
+static int get_optical181_name(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "pon";
+	return 0;
+}
+
+static int browseOptical181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	char *idx, *idx_last = NULL;
+
+	idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section, 1, 1);
+	DM_LINK_INST_OBJ(dmctx, parent_node, NULL, idx);
+	return 0;
+}
+
+static int get_one181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "1";
+	return 0;
+}
+
+static DMLEAF tOptical181IfParam[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMREAD, DMT_BOOL, get_true, NULL, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_wancommon_link_status, NULL, NULL, NULL},
+{"Name", &DMREAD, DMT_STRING, get_optical181_name, NULL, NULL, NULL},
+{0}
+};
+
+static DMLEAF tOptical181Param[] = {
+{"InterfaceNumberOfEntries", &DMREAD, DMT_UNINT, get_one181, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tOptical181Obj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Interface", &DMREAD, NULL, NULL, NULL, browseOptical181Inst, NULL, NULL, NULL, tOptical181IfParam, NULL},
+{0}
+};
+
+static DMOBJ tWan181Root[] = {
+{"Optical", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tOptical181Obj, tOptical181Param, NULL},
+{0}
+};
+
+static const char *const wan181_mtk_paths[] = {
+	"Device.Optical.",
+	NULL
+};
+
+static const struct dm_module wan181_mtk_module = {
+	.name  = "mtk-wan-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tWan181Root,
+	.paths = wan181_mtk_paths,
+};
+DM_MODULE_REGISTER(wan181_mtk_module);
