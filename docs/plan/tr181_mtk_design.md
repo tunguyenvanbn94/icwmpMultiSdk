@@ -154,7 +154,7 @@ phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đ�
 |---|---|---|
 | T0 Nền — **xong** (`tr181-0001`, analysis §67) | chọn model trên MTK (`cwmp.cpe.datamodel`), root `Device.` + `RootDataModelVersion`, thư mục `sdk/mtk/dm181`, công cụ `tr181-schema.py`, test host `run.sh tr181` | đổi model bằng UCI + reload, GPN `Device.` chạy, Inform có `Device.*`, TR-098 không đổi (`run.sh all` PASS) |
 | T1 Hệ thống (loại A) — **xong trên host** (`tr181-0002`, analysis §67) | DeviceInfo, ManagementServer, Time, UserInterface, Users, XMPP, BulkData, FaultMgmt, SoftwareModules, Services, CaptivePortal, FAP, USB, `X_AIS_*` ở root, nhánh `Device.*` của sản phẩm (IP, PPP, DHCPv6, DynamicDNS, RouterAdvertisement, TraceRoute) | `tr181-map.py check` thiếu 0; `run.sh tr181`: 306 cặp bằng, 0 tên TR-181 thiếu cặp |
-| T2 LAN | IP.Interface LAN, Ethernet.Interface, DHCPv4.Server, Hosts, Bridging | như trên + ghi/Add/Delete |
+| T2 LAN — **xong trên host** (`tr181-0003`, analysis §68) | DHCPv4.Server.Pool.1, IP.Interface LAN IPv4Address.1, Ethernet.Interface 1..4 (+Stats), Hosts.Host; Bridging: sản phẩm không có tham số (D) | `check` thiếu 0; `run.sh tr181`: 482 cặp bằng + 2 bằng theo tham chiếu, ghi qua tên TR-181 vào đúng option |
 | T3 Wi-Fi | WiFi.Radio/SSID/AccessPoint (+Security/WPS/AssociatedDevice/Stats), `X_AIS` Wi-Fi | như trên |
 | T4 WAN | IP.Interface WAN, PPP, DHCPv4/v6 Client, NAT, Routing, DNS, Ethernet/Optical WAN, RouterAdvertisement, DynamicDNS, Add/Delete kết nối | như trên + `hni.wan` thật trên board |
 | T5 Chẩn đoán, firewall | IP.Diagnostics.*, DNS.Diagnostics, SelfTest, `Firewall.X_AIS_*` | như trên |
@@ -171,14 +171,16 @@ phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đ�
 | `docs/issue/tr181-schema.py <bcm963xx>/data-model --check <file>` | tên có trong TR-181 chuẩn (bảng tra BDK); tên BBF mà XML Broadcom không có thì xét tay |
 | `docs/issue/verify-dm-paths.py --model tr181 --dump` | cây TR-181 build khai báo |
 
-Số phủ sau T1: nguồn TR-098 (ma trận + tên chỉ có ở C) theo loại: A 236, B 1, C 80, D 24, chờ T2 63, T3 75, T4 185,
-T5 136.
+Số phủ sau T2: nguồn TR-098 (ma trận + tên chỉ có ở C) theo loại: A 280, B 7, C 80, D 37, chờ T3 75, T4 185, T5 136.
+Tên TR-181 trong cây C: 372.
 
 ## Quy ước trên `dev_181`
 
 - Commit code: `[icwmp tr181-NNNN] <phạm vi>: <việc>`, chuỗi số riêng từ `0001`, để không trùng `[icwmp NNNN]` của
   `dev` khi gộp nhánh. Docs không đánh số.
 - Cổng trước mỗi commit: như `sync-main-dev.md` §6.3, cộng `run.sh tr181`.
+- Sửa `tr181_mapping.tsv` thì sinh lại `sdk/mtk/shelltypes_mtk.h` (`docs/issue/gen-shell-types.py`): bảng kiểu shell
+  mang cả tên TR-181 của các cặp A/C, để SPV qua `Device.*` bị kiểm như qua `InternetGatewayDevice.*` (analysis §68).
 - Bằng chứng ghi vào `docs/issue/analysis.md` (mục mới), trạng thái vào `implementation-status.json`.
 
 ## Chưa chứng minh được
@@ -187,3 +189,4 @@ T5 136.
   TR-181 đó; chốt cùng T6 khi có ACS thật ở chế độ `tr181`.
 - ACS lab (GenieACS) làm việc với thiết bị ở chế độ `tr181`: chưa thử.
 - Danh sách tham số TR-181 ACS thật sự dùng trên BDK: chưa trích (T7).
+- `Hosts.Host.{i}.Layer1Interface` của host Wi-Fi trỏ `Device.WiFi.SSID.<n>` theo số `WLANConfiguration`: chốt ở T3.

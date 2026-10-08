@@ -1677,6 +1677,13 @@ print(sum(1 for p in json.load(open(sys.argv[1]))["parameters"] if re.match(r"De
 	expect "set Ethernet 2 MaxBitRate abc" "$(dm_set_fault $E.2.MaxBitRate abc "$key")" "9007"
 	expect "set Ethernet 1 MaxBitRate 10 (2.5G PHY)" "$(dm_set_fault $E.1.MaxBitRate 10 "$key")" "9007"
 	expect "  SwitchPara[0] unchanged" "$(uci -q get network.@SwitchPara[0].maxBitRate)" "auto"
+	# the shell's type check holds for the TR-181 names too (shelltypes_mtk.h
+	# carries both): setters that leave it to that check must not take these
+	old=$(dm_value Device.X_AIS_Conf.auto_upload_delay)
+	expect "set auto_upload_delay abc (xsd:int)" "$(dm_set_fault Device.X_AIS_Conf.auto_upload_delay abc "$key")" "9007"
+	expect "  auto_upload_delay unchanged" "$(dm_value Device.X_AIS_Conf.auto_upload_delay)" "$old"
+	expect "set Time.Enable maybe (xsd:boolean)" "$(dm_set_fault Device.Time.Enable maybe "$key")" "9007"
+	expect "set PeriodicInformInterval -5 (xsd:unsignedInt)" "$(dm_set_fault Device.ManagementServer.PeriodicInformInterval -5 "$key")" "9007"
 	$UBUS -t 120 call tr069 dm '{"cmd":"get","path":"Device."}' > "$RUN/tr181.gpv" 2>/dev/null
 	# back to TR-098 the way an ACS does it, over ubus: reload right away.
 	# Same ParameterKey as before, so that the pair comparison below does not

@@ -4376,3 +4376,76 @@ Thiết kế: [../plan/tr181_mtk_design.md](../plan/tr181_mtk_design.md).
 
 **Để cải tiến ở T7 (giữ tương đương TR-098 lúc này):** vài tham chiếu của sản phẩm là tên thiết bị Linux chứ không
 phải path TR-181: `IP.Diagnostics.TraceRoute.Interface`, `IP.Interface.{i}.LowerLayers`.
+
+## 68. TR-181 trên MTK: T2 LAN (`tr181-0003`) và hợp đồng input cho tên TR-181 (`tr181-0004`) (08/10 16:06–)
+
+**Trước khi làm (chatlog 91):** rà các tài liệu trạng thái so với kết quả T1. Có 9 chỗ lệch, đã sửa ở `ca71bf8`:
+header progress matrix (còn ghi 06/10, 0083), dòng test host, `docs/README.md`, kiến trúc §1.2/§2/§8, design,
+JSON (P6–P8 ghi "Board chưa" dù parity toàn cây đã PASS ở §63/§65), README issue ở workspace. Ngoài ra
+`progress.py` ngoài repo vẫn đọc JSON đóng băng ngày 06/10; nay nó đọc JSON của repo.
+
+**T2 (`a56e442`, `[icwmp tr181-0003]`):** 63 tham số LAN của cây TR-098 sản phẩm. Bảng TR-181 nằm cạnh bảng TR-098,
+dùng cùng getter/setter, nên cùng option UCI, cùng lệnh reload và cùng fault.
+
+| TR-098 | TR-181 | File |
+|---|---|---|
+| `LANHostConfigManagement.` | `DHCPv4.Server.Pool.1.` (`DHCPServerEnable` → `Enable`, `DHCPLeaseTime` → `LeaseTime`); mới: `Server.PoolNumberOfEntries`, `Pool.1.Interface` | `lan_mtk.c` |
+| `LANHostConfigManagement.IPInterface.1.` | `IP.Interface.{lan}.IPv4Address.1.` (`IPAddress`, `SubnetMask`, `AddressingType`) | `lan_mtk.c` |
+| `LANEthernetInterfaceConfig.{i}` (+`Stats`) | `Ethernet.Interface.{i}` (+`Stats`), 4 cổng cùng thứ tự; mới: `Upstream` = false | `laneth_mtk.c` |
+| `Hosts.Host.{i}` | `Hosts.Host.{i}` (`MACAddress` → `PhysAddress`, `Layer2Interface` → `Layer1Interface`); mới: `Layer3Interface` | `lanhosts_mtk.c` |
+
+- **`IPv4Address.1`:** chỉ có dưới instance `IP.Interface` của `network.lan` (tìm bằng `dip_section_of_instance`).
+  Object `Interface` vẫn do `device_ip_mtk.c` duyệt; `IPv4Address` gộp vào bằng registry merge, không claim path.
+  IPv4Address của WAN để T4.
+- **Giá trị viết theo TR-181 (loại B, 6):**
+  - `Ethernet.Interface.Status`: TR-098 sản phẩm trả `NoLink`/`Disable`, TR-181 trả `Down`.
+  - `MaxBitRate`: `-1` = Auto, dịch cả chiều ghi.
+  - `InterfaceNumberOfEntries`: TR-181 đếm số instance (4); TR-098 đếm cổng `eth` trong `br-lan`.
+  - `IPv4Address.Enable`: TR-181 trả `true`; TR-098 trả `false` cố định (giá trị giữ chỗ của sản phẩm).
+  - `Layer1Interface`: path TR-181 (`LAN3` → `Device.Ethernet.Interface.3`, `SSID2` → `Device.WiFi.SSID.2`).
+- **Không có tương ứng (D, 13):**
+  - Của `LANHostConfigManagement`: `MACAddress` (TR-181 đặt ở `Ethernet.Link`, chưa dựng), `DHCPServerConfigurable`,
+    `DHCPRelay`, `UseAllocatedWAN`, `AssociatedConnection`, `Passthrough*`, `AllowedMACAddresses`, hai lá đếm.
+  - Còn lại: `MACAddressControlEnabled`, `LANUSBInterfaceNumberOfEntries` (`Device.USB` là object ẩn của sản phẩm),
+    `Hosts.Host.InterfaceType`.
+  - `Layer2Bridging`: sản phẩm chỉ có object, không có tham số.
+- **Instance:** browse TR-181 dùng cấp instance 1 (`Device.Hosts.Host.{i}`, `Device.Ethernet.Interface.{i}`); TR-098
+  là cấp 2. Cấp này chỉ dùng khi đánh địa chỉ theo alias (`AliasBasedAddressing`, đang tắt).
+
+**Công cụ:**
+- `tr181_mapping.tsv` có quy tắc T2 (A 44, B 6, D 13). Ký hiệu `{lan}` là instance `IP.Interface` của LAN.
+- `tr181-map.py` thay `{lan}` bằng instance có `Name` = `lan` trong bản dump TR-181.
+- `equiv` coi tham chiếu `InternetGatewayDevice.Device.X` bằng `Device.X` ("equal ref"). Hai lá T1
+  (`DHCPv6.Server.Pool.1.Interface`, `RouterAdvertisement.InterfaceSetting.1.Interface`) chỉ có giá trị khi có LAN,
+  và lộ ra khi fixture có LAN. Chúng đúng theo thiết kế: tham chiếu đi theo root.
+
+**Hợp đồng input cho tên TR-181 (`[icwmp tr181-0004]`, Verified trên host):**
+- **Lỗ hổng:**
+  - `shelltypes_mtk.h` giữ kiểu shell (`xsd:int`, `unsignedInt`, `boolean`, IPv4/IPv6) theo path TR-098.
+  - `mtk_input_contract()` ([input_contract_mtk.c](../../userspace/public/libs/libicwmp_dm/src/sdk/mtk/input_contract_mtk.c),
+    hàm `mtk_input_contract`) tra bảng theo path. Path `Device.*` không có dòng nào nên chỉ qua `is_safe_input`.
+- **Bằng chứng trên build `a56e442`:** `Device.X_AIS_Conf.auto_upload_delay=abc` được nhận (fault 0). Setter của nó
+  dựa vào kiểm int đứng trước, nên qua tên TR-098 thì giá trị này bị 9007.
+- **Sửa:** `gen-shell-types.py` sinh thêm tên TR-181 của mọi cặp loại A/C theo `tr181_mapping.tsv`, cùng kiểu (88 dòng;
+  bảng 193 → 281). Loại B không đưa vào, vì setter TR-181 của chúng tự dịch và kiểm.
+- **Sau sửa:** `abc` → 9007. `Time.Enable=maybe` và `PeriodicInformInterval=-5` đã trả 9007 từ trước, vì setter của
+  chúng tự kiểm.
+
+**Kiểm (host, container `ubuntu:24.04`):**
+- `tr181-map.py check`: TR-181 mong đợi 372 = cây C 372, thiếu 0. Nguồn theo loại: A 280, B 7, C 80, D 37; chờ:
+  T3 75, T4 185, T5 136.
+- `run.sh tr181`: 627 tên. So cặp: 482 bằng, 2 bằng theo tham chiếu, B 14, D 41, động 4, 0 tên TR-181 thiếu cặp.
+- Các kiểm T2 trên fixture `network`/`dhcp`/`lanhost`:
+  - giá trị TR-181 và tham chiếu đúng;
+  - ghi `Pool.1.MinAddress`/`LeaseTime`, `IPv4Address.1.SubnetMask`, `Ethernet.Interface.3.MaxBitRate` 1000 rồi `-1`
+    vào đúng option;
+  - `MaxBitRate=abc` và `10` trên cổng 2.5G trả 9007.
+- Cổng tĩnh tại `tr181-0003`: `run.sh all` 25/25 PASS; check-c-sanity lib 69/0; verify-dm-paths tr098 thiếu 0;
+  claims 0 cặp chồng; automake 0; cross-gcc SDK lib 69 file 0 lỗi, không cảnh báo ở ba file đã sửa.
+- Chưa build SDK, chưa chạy board.
+
+**Chưa chứng minh được:**
+- `Layer1Interface` của host Wi-Fi là `Device.WiFi.SSID.<n>`, giả định T3 giữ số `WLANConfiguration` cho `WiFi.SSID`.
+  Chốt ở T3.
+- Số `IP.Interface` của LAN trên board: do `ip_int_instance` đã gán sẵn trên board quyết định (§61). Test host chỉ
+  thấy số của fixture.
