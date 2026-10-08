@@ -458,3 +458,21 @@ static const struct dm_module device_ddns_mtk_module = {
 	.paths = device_ddns_mtk_paths,
 };
 DM_MODULE_REGISTER(device_ddns_mtk_module);
+
+/* TR-181 (cwmp.cpe.datamodel=tr181): this branch is TR-181 already, the
+ * product grafted it under InternetGatewayDevice.Device.; the same tables at
+ * the root (type A of docs/plan/tr181_mtk_design.md).  References to
+ * IP.Interface follow the root (mtk_ipif_prefix()). */
+static const char *const device_ddns_mtk_paths181[] = {
+	"Device.DynamicDNS.",
+	NULL
+};
+
+static const struct dm_module device_ddns_mtk_module181 = {
+	.name  = "mtk-device-dynamicdns-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tDdDeviceObj,
+	.paths = device_ddns_mtk_paths181,
+};
+DM_MODULE_REGISTER(device_ddns_mtk_module181);

@@ -134,3 +134,19 @@ static const struct dm_module meshapi_mtk_module = {
 	.paths = meshapi_mtk_paths,
 };
 DM_MODULE_REGISTER(meshapi_mtk_module);
+
+/* TR-181 (cwmp.cpe.datamodel=tr181): the same tables under Device., type C
+ * of docs/plan/tr181_mtk_design.md */
+static const char *const meshapi_mtk_paths181[] = {
+	"Device.X_AIS_MeshAPI.",
+	NULL
+};
+
+static const struct dm_module meshapi_mtk_module181 = {
+	.name  = "mtk-x-ais-meshapi-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tMeshApiRoot,
+	.paths = meshapi_mtk_paths181,
+};
+DM_MODULE_REGISTER(meshapi_mtk_module181);

@@ -444,3 +444,77 @@ static const struct dm_module time_mtk_module = {
 	.paths = time_mtk_paths,
 };
 DM_MODULE_REGISTER(time_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181): Device.Time.                     */
+/* ------------------------------------------------------------------ */
+
+/* Device.Time.LocalTimeZone is the POSIX TZ string itself,
+ * system.@system[0].timezone ("<+07>-7").  A write must be the TZ of one of
+ * the product's cities (tz_table_mtk.h, what the WebUI offers): it goes
+ * through set_zonename() with the first such city, so zonename and
+ * timezone_dst follow exactly as for TR-098 LocalTimeZoneName.
+ * TR-181 has no LocalTimeZoneName, no offset form of LocalTimeZone and no
+ * DaylightSavings* (the rules are part of the TZ string). */
+static const struct mtk_tz_entry *tz_lookup_posix(const char *tz)
+{
+	int i;
+
+	if (!tz || !tz[0])
+		return NULL;
+	for (i = 0; mtk_tz_table[i].city; i++) {
+		if (strcmp(mtk_tz_table[i].tz, tz) == 0)
+			return &mtk_tz_table[i];
+	}
+	return NULL;
+}
+
+static int get_localtimezone181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *tz = mtk_uci("system", "@system[0]", "timezone");
+
+	*value = (tz && tz[0]) ? tz : "UTC";
+	return 0;
+}
+
+static int set_localtimezone181(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	const struct mtk_tz_entry *e = tz_lookup_posix(value);
+
+	if (!e)
+		return FAULT_9007;
+	return set_zonename(refparam, ctx, data, instance, (char *)e->city, action);
+}
+
+static DMLEAF tTime181Params[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMWRITE, DMT_BOOL, get_enable, set_enable, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_status, NULL, NULL, NULL},
+{"NTPServer1", &DMWRITE, DMT_STRING, get_ntp1, set_ntp1, NULL, NULL},
+{"NTPServer2", &DMWRITE, DMT_STRING, get_ntp2, set_ntp2, NULL, NULL},
+{"NTPServer3", &DMWRITE, DMT_STRING, get_ntp3, set_ntp3, NULL, NULL},
+{"NTPServer4", &DMWRITE, DMT_STRING, get_ntp4, set_ntp4, NULL, NULL},
+{"NTPServer5", &DMWRITE, DMT_STRING, get_ntp5, set_ntp5, NULL, NULL},
+{"CurrentLocalTime", &DMREAD, DMT_TIME, get_currentlocaltime, NULL, NULL, NULL},
+{"LocalTimeZone", &DMWRITE, DMT_STRING, get_localtimezone181, set_localtimezone181, NULL, NULL},
+{0}
+};
+
+static DMOBJ tTime181Obj[] = {
+{"Time", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tTime181Params, NULL},
+{0}
+};
+
+static const char *const time181_mtk_paths[] = {
+	"Device.Time.",
+	NULL
+};
+
+static const struct dm_module time181_mtk_module = {
+	.name  = "mtk-time-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tTime181Obj,
+	.paths = time181_mtk_paths,
+};
+DM_MODULE_REGISTER(time181_mtk_module);

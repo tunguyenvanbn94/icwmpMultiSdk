@@ -642,3 +642,13 @@ int mtk_parse_bool(const char *v)
 		return 0;
 	return -1;
 }
+
+const char *mtk_dev_prefix(void)
+{
+	return strcmp(dmroot, "Device") == 0 ? "Device." : "InternetGatewayDevice.Device.";
+}
+
+const char *mtk_ipif_prefix(void)
+{
+	return strcmp(dmroot, "Device") == 0 ? "Device.IP.Interface." : "InternetGatewayDevice.Device.IP.Interface.";
+}

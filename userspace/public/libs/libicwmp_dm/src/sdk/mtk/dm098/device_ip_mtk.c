@@ -766,3 +766,28 @@ static const struct dm_module device_ip_mtk_module = {
 	.paths = device_ip_mtk_paths,
 };
 DM_MODULE_REGISTER(device_ip_mtk_module);
+
+/* TR-181 (cwmp.cpe.datamodel=tr181): this branch is TR-181 already, the
+ * product grafted it under InternetGatewayDevice.Device.; the same tables at
+ * the root (type A of docs/plan/tr181_mtk_design.md).  References to
+ * IP.Interface follow the root (mtk_ipif_prefix()). */
+static const char *const device_ip_mtk_paths181[] = {
+	"Device.IP.Interface.",
+	"Device.IP.InterfaceNumberOfEntries",
+	"Device.IP.IPv4Capable",
+	"Device.IP.IPv4Enable",
+	"Device.IP.IPv4Status",
+	"Device.IP.IPv6Capable",
+	"Device.IP.IPv6Enable",
+	"Device.IP.IPv6Status",
+	NULL
+};
+
+static const struct dm_module device_ip_mtk_module181 = {
+	.name  = "mtk-device-ip-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tDeviceIpObj,
+	.paths = device_ip_mtk_paths181,
+};
+DM_MODULE_REGISTER(device_ip_mtk_module181);

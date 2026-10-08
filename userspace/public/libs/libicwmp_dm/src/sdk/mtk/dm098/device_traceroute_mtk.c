@@ -50,7 +50,7 @@
 
 #define TRC		(&diag_traceroute)
 #define TRC_RESULTS	"/var/state/trace_results.txt"
-#define TRC_HOPS_PATH	"InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops."
+#define TRC_HOPS_REST	"IP.Diagnostics.TraceRoute.RouteHops."	/* after mtk_dev_prefix() */
 
 /* get_default_interface: the device of the first default route */
 static char *trc_default_device(void)
@@ -166,10 +166,11 @@ static int set_dtr_interface(char *refparam, struct dmctx *ctx, void *data, char
 
 static int browse_dtr_hops(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
 {
-	char *idx, *idx_last = NULL;
+	char *idx, *idx_last = NULL, hops[96];
 	int i, count;
 
-	if (!dmctx->in_param || strncmp(dmctx->in_param, TRC_HOPS_PATH, strlen(TRC_HOPS_PATH)) != 0)
+	snprintf(hops, sizeof(hops), "%s" TRC_HOPS_REST, mtk_dev_prefix());
+	if (!dmctx->in_param || strncmp(dmctx->in_param, hops, strlen(hops)) != 0)
 		return 0;
 	if (strcmp(diag_get(TRC, "DiagnosticsState", NULL), "Complete") != 0)
 		return 0;
@@ -329,3 +330,50 @@ static const struct dm_module device_traceroute_mtk_module = {
 	.paths = device_traceroute_mtk_paths,
 };
 DM_MODULE_REGISTER(device_traceroute_mtk_module);
+
+/* TR-181 (cwmp.cpe.datamodel=tr181): this branch is TR-181 already, the
+ * product grafted it under InternetGatewayDevice.Device.; the same getters at
+ * the root (type A of docs/plan/tr181_mtk_design.md), but RouteHops.{i}
+ * with the TR-181 leaf names: the product kept the TR-098 ones
+ * (HopHost, HopHostAddress, HopErrorCode, HopRTTTimes). */
+static DMLEAF tDtr181HopParams[] = {
+{"Host", &DMREAD, DMT_STRING, get_dtr_hop_host, NULL, NULL, NULL},
+{"HostAddress", &DMREAD, DMT_STRING, get_dtr_hop_addr, NULL, NULL, NULL},
+{"ErrorCode", &DMREAD, DMT_UNINT, get_dtr_hop_error, NULL, NULL, NULL},
+{"RTTimes", &DMREAD, DMT_STRING, get_dtr_hop_rtt, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tDtr181ChildObj[] = {
+{"RouteHops", &DMREAD, NULL, NULL, NULL, browse_dtr_hops, NULL, NULL, NULL, tDtr181HopParams, NULL},
+{0}
+};
+
+static DMOBJ tDtr181DiagObj[] = {
+{"TraceRoute", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDtr181ChildObj, tDtrParams, NULL},
+{0}
+};
+
+static DMOBJ tDtr181IpObj[] = {
+{"Diagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDtr181DiagObj, NULL, NULL},
+{0}
+};
+
+static DMOBJ tDtr181DeviceObj[] = {
+{"IP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDtr181IpObj, NULL, NULL},
+{0}
+};
+
+static const char *const device_traceroute_mtk_paths181[] = {
+	"Device.IP.Diagnostics.",
+	NULL
+};
+
+static const struct dm_module device_traceroute_mtk_module181 = {
+	.name  = "mtk-device-ip-traceroute-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tDtr181DeviceObj,
+	.paths = device_traceroute_mtk_paths181,
+};
+DM_MODULE_REGISTER(device_traceroute_mtk_module181);

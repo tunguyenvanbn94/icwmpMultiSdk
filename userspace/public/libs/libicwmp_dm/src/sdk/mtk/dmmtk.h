@@ -138,6 +138,13 @@ char *mtk_ipv4_str(unsigned int v);
 int mtk_bool(const char *v);
 /* CWMP boolean spelling of a UCI flag, and back. */
 char *mtk_bool_str(int on);
+/* The TR-181 branches the product grafted into its TR-098 tree sit under
+ * InternetGatewayDevice.Device.; with cwmp.cpe.datamodel=tr181 they are at
+ * the root.  References between them (Interface = ...IP.Interface.<n>) follow
+ * the root of the running context: "Device." or "InternetGatewayDevice.Device.",
+ * and the same with "IP.Interface." appended. */
+const char *mtk_dev_prefix(void);
+const char *mtk_ipif_prefix(void);
 /* Accepts the CWMP spellings, returns 0/1, -1 when not a boolean. */
 int mtk_parse_bool(const char *v);
 

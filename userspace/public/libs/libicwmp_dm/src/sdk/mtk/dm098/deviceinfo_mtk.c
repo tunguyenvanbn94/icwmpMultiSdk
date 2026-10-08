@@ -597,3 +597,46 @@ static const struct dm_module deviceinfo_mtk_module = {
 	.paths = deviceinfo_mtk_paths,
 };
 DM_MODULE_REGISTER(deviceinfo_mtk_module);
+
+/* TR-181 (cwmp.cpe.datamodel=tr181): Device.DeviceInfo., the same getters
+ * and sub-objects (type A of docs/plan/tr181_mtk_design.md) without
+ * DeviceLog, which TR-181 does not have (it lists VendorLogFile.{i}) */
+static DMLEAF tDeviceInfo181Param[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Manufacturer", &DMREAD, DMT_STRING, get_manufacturer, NULL, &DMFINFRM, NULL},
+{"ManufacturerOUI", &DMREAD, DMT_STRING, get_oui, NULL, &DMFINFRM, NULL},
+{"ModelName", &DMREAD, DMT_STRING, get_modelname, NULL, &DMFINFRM, NULL},
+{"Description", &DMREAD, DMT_STRING, get_description, NULL, &DMFINFRM, NULL},
+{"ProductClass", &DMREAD, DMT_STRING, get_productclass, NULL, &DMFINFRM, NULL},
+{"SerialNumber", &DMREAD, DMT_STRING, get_serialnumber, NULL, &DMFINFRM, NULL},
+{"HardwareVersion", &DMREAD, DMT_STRING, get_hardwareversion, NULL, &DMFINFRM, NULL},
+{"SoftwareVersion", &DMREAD, DMT_STRING, get_softwareversion_param, NULL, &DMFINFRM, NULL},
+{"ProvisioningCode", &DMWRITE, DMT_STRING, get_provisioningcode, set_provisioningcode, &DMFINFRM, NULL},
+{"UpTime", &DMREAD, DMT_UNINT, get_uptime, NULL, NULL, NULL},
+{"X_AIS_CpuUsedResponse", &DMREAD, DMT_UNINT, get_cpu_used_response, NULL, &DMFINFRM, NULL},
+{"X_AIS_CpuUsed", &DMWRITE, DMT_UNINT, get_cpu_used, set_cpu_used, &DMFINFRM, NULL},
+{"X_AIS_MemUsedResponse", &DMREAD, DMT_UNINT, get_mem_used_response, NULL, &DMFINFRM, NULL},
+{"X_AIS_MemUsed", &DMWRITE, DMT_UNINT, get_mem_used, set_mem_used, &DMFINFRM, NULL},
+{"X_AIS_reuseCPE_cycles", &DMREAD, DMT_STRING, get_empty, NULL, &DMFINFRM, NULL},
+{"X_AIS_reuseCPE_status", &DMREAD, DMT_STRING, get_empty, NULL, &DMFINFRM, NULL},
+{0}
+};
+
+static DMOBJ tDeviceInfo181Root[] = {
+{"DeviceInfo", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, tDeviceInfoMtkObj, tDeviceInfo181Param, NULL},
+{0}
+};
+
+static const char *const deviceinfo181_mtk_paths[] = {
+	"Device.DeviceInfo.",
+	NULL
+};
+
+static const struct dm_module deviceinfo181_mtk_module = {
+	.name  = "mtk-deviceinfo-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tDeviceInfo181Root,
+	.paths = deviceinfo181_mtk_paths,
+};
+DM_MODULE_REGISTER(deviceinfo181_mtk_module);

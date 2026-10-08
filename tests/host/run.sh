@@ -1527,7 +1527,8 @@ PY
 # is latched when icwmpd starts and at every config reload: the Inform and
 # the RPCs use Device., an InternetGatewayDevice. path is 9005.  Writing
 # X_HNI_Icwmp.DataModel back to tr098 over ubus reloads at once (no session
-# running), the root is InternetGatewayDevice. again.  verify-dm-paths
+# running), the root is InternetGatewayDevice. again, and every TR-098 /
+# TR-181 pair of tr181_mapping.tsv reads the same value (tr181-map.py equiv).  verify-dm-paths
 # --model tr181 lists the tree the build declares; every name of the walk
 # must be one of them.
 do_tr181() {
@@ -1553,15 +1554,25 @@ names = [p["parameter"] for p in json.load(open(sys.argv[1]))["parameters"] if n
 print(sum(1 for n in names if re.sub(r"\.\d+\.", ".{i}.", n) not in decl))
 PY
 )" "0"
-	# back to TR-098 the way an ACS does it, over ubus: reload right away
-	$UBUS call tr069 dm '{"cmd":"set","path":"Device.X_HNI_Icwmp.DataModel","value":"tr098","key":"t181"}' >/dev/null 2>&1
+	$UBUS -t 120 call tr069 dm '{"cmd":"get","path":"Device."}' > "$RUN/tr181.gpv" 2>/dev/null
+	# back to TR-098 the way an ACS does it, over ubus: reload right away.
+	# Same ParameterKey as before, so that the pair comparison below does not
+	# see the key this very set would write
+	key=$(dm_value Device.ManagementServer.ParameterKey)
+	$UBUS call tr069 dm "{\"cmd\":\"set\",\"path\":\"Device.X_HNI_Icwmp.DataModel\",\"value\":\"tr098\",\"key\":\"$key\"}" >/dev/null 2>&1
 	sleep 1
 	expect "datamodel after the set" "$(uci -q get cwmp.cpe.datamodel)" "tr098"
 	expect "root after the reload" "$(dm_value InternetGatewayDevice.X_HNI_Icwmp.DataModelBackend)" "mtk-c"
+	# every mapped pair (docs/issue/tr181_mapping.tsv) reads the same value
+	# in both models: the same getter behind both names
+	$UBUS -t 120 call tr069 dm '{"cmd":"get","path":"InternetGatewayDevice."}' > "$RUN/tr098.gpv" 2>/dev/null
+	python3 "$REPO/docs/issue/tr181-map.py" equiv "$RUN/tr098.gpv" "$RUN/tr181.gpv" > "$RUN/tr181.equiv" 2>&1
+	grep -E '^  ' "$RUN/tr181.equiv" | head -5
+	expect "TR-098/TR-181 pairs" "$(tail -1 "$RUN/tr181.equiv")" "RESULT: PASS"
 	stop
 	restore_cfg cwmp
 	if [ $bad_n = 0 ]; then
-		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, DataModel back to tr098"
+		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, DataModel back to tr098; pairs: $(tail -2 "$RUN/tr181.equiv" | head -1)"
 	else
 		bad "tr181: $bad_n mismatches above"
 	fi

@@ -95,3 +95,19 @@ static const struct dm_module account_mtk_module = {
 	.paths = account_mtk_paths,
 };
 DM_MODULE_REGISTER(account_mtk_module);
+
+/* TR-181 (cwmp.cpe.datamodel=tr181): the same tables under Device., type A
+ * of docs/plan/tr181_mtk_design.md */
+static const char *const account_mtk_paths181[] = {
+	"Device.Account.",
+	NULL
+};
+
+static const struct dm_module account_mtk_module181 = {
+	.name  = "mtk-account-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tAccountRoot,
+	.paths = account_mtk_paths181,
+};
+DM_MODULE_REGISTER(account_mtk_module181);

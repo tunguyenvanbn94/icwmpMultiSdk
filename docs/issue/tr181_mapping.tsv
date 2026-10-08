@@ -1,0 +1,51 @@
+kind	tr098	tr181	type	note
+prefix	InternetGatewayDevice.Device.	Device.	A	TR-181 branches the product grafted under IGD.Device. (IP, PPP, DHCPv6, DynamicDNS, RouterAdvertisement, IP.Diagnostics.TraceRoute)
+leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.HopHost	Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.Host	A	TR-181 leaf name; the product kept the TR-098 one in its grafted branch
+leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.HopHostAddress	Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.HostAddress	A	TR-181 leaf name
+leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.HopErrorCode	Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.ErrorCode	A	TR-181 leaf name
+leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.HopRTTTimes	Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.RTTimes	A	TR-181 leaf name (the product spells HopRTTTimes)
+leaf	InternetGatewayDevice.CaptivePortal.CaptivePortalURL	Device.CaptivePortal.URL	A	TR-181 leaf name
+prefix	InternetGatewayDevice.DeviceInfo.	Device.DeviceInfo.	A	same getters, deviceinfo_mtk.c
+leaf	InternetGatewayDevice.DeviceInfo.DeviceLog	-	D	TR-181 has DeviceInfo.VendorLogFile.{i}, not DeviceLog
+prefix	InternetGatewayDevice.ManagementServer.	Device.ManagementServer.	A	same tables, managementserver_core_mtk.c + managementserver_mtk.c
+prefix	InternetGatewayDevice.Time.	Device.Time.	A	time_mtk.c
+leaf	InternetGatewayDevice.Time.LocalTimeZoneName	Device.Time.LocalTimeZone	B	city name (TR-098) vs POSIX TZ of that city (TR-181), same write path; values differ by design
+leaf	InternetGatewayDevice.Time.LocalTimeZone	-	D	TR-098 UTC offset form; TR-181 LocalTimeZone is the POSIX TZ
+leaf	InternetGatewayDevice.Time.DaylightSavingsStart	-	D	TR-181 keeps the DST rules in LocalTimeZone
+leaf	InternetGatewayDevice.Time.DaylightSavingsEnd	-	D	TR-181 keeps the DST rules in LocalTimeZone
+leaf	InternetGatewayDevice.Time.DaylightSavingsUsed	-	D	TR-181 keeps the DST rules in LocalTimeZone
+prefix	InternetGatewayDevice.UserInterface.	Device.UserInterface.	A	CarrierLocking and X_AIS_WebUserInfo are product/operator objects
+prefix	InternetGatewayDevice.Account.	Device.Account.	C	product object without vendor prefix, kept as the ACS knows it
+prefix	InternetGatewayDevice.XMPP.	Device.XMPP.	A	xmpp_mtk.c
+prefix	InternetGatewayDevice.Services.	Device.Services.	A	STBService, StorageService
+prefix	InternetGatewayDevice.SelfTestDiagnostics.	Device.SelfTestDiagnostics.	A	placeholder of the product
+prefix	InternetGatewayDevice.FaultMgmt.	Device.FaultMgmt.	A	placeholder of the product
+prefix	InternetGatewayDevice.BulkData.	Device.BulkData.	A	placeholder of the product
+prefix	InternetGatewayDevice.SoftwareModules.	Device.SoftwareModules.	A	placeholder of the product
+prefix	InternetGatewayDevice.CaptivePortal.	Device.CaptivePortal.	A	placeholder of the product
+prefix	InternetGatewayDevice.FAP.	Device.FAP.	A	placeholder of the product
+prefix	InternetGatewayDevice.USBHosts.	Device.USB.USBHosts.	A	one level lower in TR-181
+prefix	InternetGatewayDevice.User.	Device.Users.User.	A	one level lower in TR-181
+prefix	InternetGatewayDevice.X_AIS_	Device.X_AIS_	C	operator objects at the root, same tables
+leaf	InternetGatewayDevice.X_HNI_Icwmp.DataModel	Device.X_HNI_Icwmp.DataModel	B	the model switch itself: tr098 in one tree, tr181 in the other
+prefix	InternetGatewayDevice.X_HNI_Icwmp.	Device.X_HNI_Icwmp.	A	icwmpd's own settings, root181_mtk.c
+leaf	InternetGatewayDevice.DeviceSummary	-	D	TR-181 reports Device.RootDataModelVersion
+new	-	Device.RootDataModelVersion	A	TR-181 only, root181_mtk.c
+prefix	InternetGatewayDevice.LANDevice.	?	T2	LAN (IP.Interface LAN, Ethernet.Interface, DHCPv4.Server, Hosts); Wi-Fi rows are T3
+prefix	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.	?	T3	WiFi.Radio/SSID/AccessPoint
+prefix	InternetGatewayDevice.LANDevice.{i}.X_AIS_Mesh.	?	T3	Device.WiFi.X_AIS_Mesh
+prefix	InternetGatewayDevice.LANDevice.{i}.X-AIS_	?	T3	WiFi.Radio.{r}.TransmitPower
+prefix	InternetGatewayDevice.LANDevice.{i}.LANWLANConfigurationNumberOfEntries	?	T3	WiFi.SSIDNumberOfEntries
+prefix	InternetGatewayDevice.Layer2Bridging.	?	T2	Bridging.Bridge
+prefix	InternetGatewayDevice.WiFi.	?	T3	WiFi.NeighboringWiFiDiagnostic
+prefix	InternetGatewayDevice.WANDevice.	?	T4	IP.Interface WAN, PPP, DHCPv4/v6 Client, NAT, Routing, DNS, Ethernet/Optical
+prefix	InternetGatewayDevice.Layer3Forwarding.	?	T4	Routing.Router.1.IPv4Forwarding
+prefix	InternetGatewayDevice.IPPingDiagnostics.	?	T5	IP.Diagnostics.IPPing
+prefix	InternetGatewayDevice.TraceRouteDiagnostics.	?	T5	IP.Diagnostics.TraceRoute
+prefix	InternetGatewayDevice.DownloadDiagnostics.	?	T5	IP.Diagnostics.DownloadDiagnostics
+prefix	InternetGatewayDevice.UploadDiagnostics.	?	T5	IP.Diagnostics.UploadDiagnostics
+prefix	InternetGatewayDevice.NSLookupDiagnostics.	?	T5	DNS.Diagnostics.NSLookupDiagnostics
+prefix	InternetGatewayDevice.DNSDiagnostics.	?	T5	product diagnostics
+prefix	InternetGatewayDevice.Firewall.	?	T5	Firewall.X_AIS_*
+prefix	InternetGatewayDevice.LTE.	?	T5	Cellular
+prefix	InternetGatewayDevice.DOCSIS.	-	D	no TR-181 counterpart, static values of the product

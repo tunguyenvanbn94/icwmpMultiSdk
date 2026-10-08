@@ -43,7 +43,7 @@
 
 #define D6_PKG		"dhcp"
 #define D6_RELOAD	"/etc/init.d/odhcpd reload"
-#define D6_IF_PREFIX	"InternetGatewayDevice.Device.IP.Interface."
+#define D6_IF_PREFIX	mtk_ipif_prefix()	/* TR-098 or TR-181 root */
 
 struct d6_pool {
 	char *sec;	/* section name, "@dhcp[n]" for an anonymous one */
@@ -233,7 +233,7 @@ static int get_d6_interface(char *refparam, struct dmctx *ctx, void *data, char 
 		return 0;
 	inst = dip_instance_of(ifn);
 	if (d6_all_digits(inst))
-		dmasprintf(value, D6_IF_PREFIX "%s", inst);
+		dmasprintf(value, "%s%s", D6_IF_PREFIX, inst);
 	return 0;
 }
 
@@ -365,3 +365,21 @@ static const struct dm_module device_dhcpv6_mtk_module = {
 	.paths = device_dhcpv6_mtk_paths,
 };
 DM_MODULE_REGISTER(device_dhcpv6_mtk_module);
+
+/* TR-181 (cwmp.cpe.datamodel=tr181): this branch is TR-181 already, the
+ * product grafted it under InternetGatewayDevice.Device.; the same tables at
+ * the root (type A of docs/plan/tr181_mtk_design.md).  References to
+ * IP.Interface follow the root (mtk_ipif_prefix()). */
+static const char *const device_dhcpv6_mtk_paths181[] = {
+	"Device.DHCPv6.",
+	NULL
+};
+
+static const struct dm_module device_dhcpv6_mtk_module181 = {
+	.name  = "mtk-device-dhcpv6-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tD6DeviceObj,
+	.paths = device_dhcpv6_mtk_paths181,
+};
+DM_MODULE_REGISTER(device_dhcpv6_mtk_module181);

@@ -195,3 +195,19 @@ static const struct dm_module carrierlocking_mtk_module = {
 	.paths = carrierlocking_mtk_paths,
 };
 DM_MODULE_REGISTER(carrierlocking_mtk_module);
+
+/* TR-181 (cwmp.cpe.datamodel=tr181): the same tables under Device., type C
+ * of docs/plan/tr181_mtk_design.md */
+static const char *const carrierlocking_mtk_paths181[] = {
+	"Device.UserInterface.CarrierLocking.",
+	NULL
+};
+
+static const struct dm_module carrierlocking_mtk_module181 = {
+	.name  = "mtk-x-ais-carrierlocking-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tCarrierLockingRoot,
+	.paths = carrierlocking_mtk_paths181,
+};
+DM_MODULE_REGISTER(carrierlocking_mtk_module181);

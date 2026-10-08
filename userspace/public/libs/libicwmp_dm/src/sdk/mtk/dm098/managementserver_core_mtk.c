@@ -27,3 +27,13 @@ static const struct dm_module ms_core_module = {
 	/* no .paths: the mtk-managementserver module claims the object */
 };
 DM_MODULE_REGISTER(ms_core_module);
+
+/* TR-181 (cwmp.cpe.datamodel=tr181): the same tables under Device., type A
+ * of docs/plan/tr181_mtk_design.md */
+static const struct dm_module ms_core_module181 = {
+	.name  = "mtk-managementserver-core-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tManagementServerCoreRoot,
+};
+DM_MODULE_REGISTER(ms_core_module181);
