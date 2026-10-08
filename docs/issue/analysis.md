@@ -4933,7 +4933,7 @@ So với G9 trên image `9f393e4` (§66, 11 giờ): cùng fd 12 và 11 thread; V
 cho thấy agent ổn định lúc rảnh, chưa cho thấy ổn định dưới nhiều phiên (phần đó có soak host 300 phiên ở §57). CSV ở
 workspace `issues/…/logs/20261009_g9_soak_image_dev181_084ef3a.csv`.
 
-## 77. T7 (1): hai lỗi ngữ nghĩa TR-181 thấy trên board, và vì sao `LowerLayers` chưa đổi (`tr181-0011`) (09/10 04:50–)
+## 77. T7 (1): hai lỗi ngữ nghĩa TR-181 thấy trên board, và vì sao `LowerLayers` chưa đổi (`tr181-0011`) (09/10 04:47–05:10)
 
 §74 ghi ba chỗ giá trị TR-181 bằng giá trị TR-098 của sản phẩm nhưng sai theo TR-181. Hai chỗ sửa ở lượt này. Chỗ thứ
 ba (`LowerLayers`) là hợp đồng ghi của sản phẩm, cần quyết định trước khi đổi.
