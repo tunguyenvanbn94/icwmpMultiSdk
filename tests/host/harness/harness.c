@@ -44,6 +44,8 @@ int dm_entry_get_notification(struct dmctx *c) { return 0; }
 int dm_entry_get_value(struct dmctx *c) { return 0; }
 int dm_entry_inform(struct dmctx *c) { return 0; }
 int dm_entry_set_notification(struct dmctx *c) { return 0; }
+int dm_entry_model(void) { return DM_MODEL_TR098; }	/* the harness walks TR-098 */
+DMOBJ *dm_registry_entry(enum dm_model m) { (void)m; return NULL; }
 char *dm_get_parameter_notification(struct dmctx *c, char *p) { return "0"; }
 int dm_set_parameter_notification(struct dmctx *c, char *p, char *v) { return 0; }
 void dm_update_enabled_notify_byname(char *n, char *v) {}

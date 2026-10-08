@@ -21,7 +21,7 @@ busybox valgrind libjson-c-dev libcurl4-openssl-dev libssl-dev zlib1g-dev`.
 ```sh
 tests/host/build.sh            # deps (pinned libubox/uci/ubus), microxml, libtr098, icwmp_tr098d
 sudo tests/host/setup.sh --yes # fake CPE: UCI config (cwmp, easycwmp, stun), ubusd, stuncd stand-in, data model shell, external script
-tests/host/run.sh all          # unit full smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b p8c wan valgrind, exit 1 on any FAIL
+tests/host/run.sh all          # unit full tr181 smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b p8c wan valgrind, exit 1 on any FAIL
 ```
 
 Work files go to `$ICWMP_HOST_WORK` (default `/tmp/icwmp-host`); `build.sh`
@@ -59,6 +59,7 @@ too: use 24.04.
 | `p8c` | P8c in C (0099): STBService placeholders; StorageService instances, Capabilities and LogicalVolume figures computed from this host's `/sys` the way the shell did (the container cannot mount: mount, unmount and relabel are left to the board); Enable on a disk without a `/dev` node and an invalid value fault; AddObject 9005 |
 | `wan` | K8 (0100): AddObject/DeleteObject of `WANIPConnection`/`WANPPPConnection` in C against a `hni.wan` stand-in (add returns the number of entries, delete by position queues `hni_wan_reload.sh`, hni FAIL 9002, no instance 9005); the shell is never asked a path below `WANDevice.`; the GPN writable flag of every object equals the shell's (coverage matrix), except `WLANConfiguration` (read only on purpose) |
 | `full` | PH5, the build the product ships: `X_HNI_Icwmp.DataModelBackend` is `mtk-c`, a session and a whole-tree GPV/GPN never start the data model shell (`fake_dm.py` logs every command), every name of the tree is in the coverage matrix, icwmpd's own object or the 11 K3 leaves (objects without an instance on the host are counted, not failed) |
+| `tr181` | TR-181 (branch `dev_181`): `cwmp.cpe.datamodel=tr181` latched at start; the Inform and an ACS walk (`acs.py --walk Device.`) on `Device.` without fault; `RootDataModelVersion`; an `InternetGatewayDevice.` path is 9005; every name is one the build declares (`verify-dm-paths.py --model tr181 --dump`); `X_HNI_Icwmp.DataModel=tr098` over ubus switches back at the reload that follows |
 
 Logs: `$ICWMP_HOST_WORK/run/` (`acs.log`, `icwmpd.out`, `vg.log`,
 `fake_dm.cmds` = every request the data model shell got).

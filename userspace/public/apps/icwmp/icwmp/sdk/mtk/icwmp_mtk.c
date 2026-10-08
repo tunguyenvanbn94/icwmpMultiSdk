@@ -31,6 +31,7 @@
 #include "config.h"
 #include "icwmp_mtk.h"
 #include "sdk/sdk.h"
+#include <icwmp_dm/dmentry.h>
 
 enum mtk_xform {
 	XF_NONE,
@@ -253,6 +254,8 @@ int icwmp_platform_init(void)
 		}
 	}
 	icwmp_mtk_sync_easycwmp_to_cwmp();
+	/* TR-098 or TR-181 (cwmp.cpe.datamodel), latched until the next reload */
+	CWMP_LOG(INFO, "data model: %s", dm_entry_load_model() ? "TR-181 Device." : "TR-098 InternetGatewayDevice.");
 	return 0;
 }
 
@@ -271,6 +274,9 @@ void icwmp_platform_config_reloaded(struct cwmp *cwmp)
 	FREE(cwmp->deviceid.productclass);
 	FREE(cwmp->deviceid.softwareversion);
 	cwmp_get_deviceid(cwmp);
+	/* cwmp.cpe.datamodel may have been switched (ACS X_HNI_Icwmp.DataModel,
+	 * WebUI, uci): the next session serves the new root */
+	CWMP_LOG(INFO, "data model: %s", dm_entry_load_model() ? "TR-181 Device." : "TR-098 InternetGatewayDevice.");
 }
 
 int icwmp_platform_uloop_register(void)

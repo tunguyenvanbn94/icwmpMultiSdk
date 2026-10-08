@@ -1133,10 +1133,16 @@ const char *dm_platform_name(void)
 #endif
 }
 
+/* TR-181 when icwmpd latched cwmp.cpe.datamodel=tr181 between sessions
+ * (dm_entry_load_model, called by sdk/mtk/icwmp_mtk.c at start and at every
+ * config reload); the tree is whatever sdk/mtk/dm181/ registered */
 int dm_platform_select_root(struct dmctx *ctx)
 {
-	(void)ctx;
-	return 0;
+	if (ctx->dm_type != DM_CWMP || dm_entry_model() != DM_MODEL_TR181)
+		return 0;
+	strcpy(dmroot, "Device");
+	ctx->dm_entryobj = dm_registry_entry(DM_MODEL_TR181);
+	return 1;
 }
 
 int dm_platform_param_method(struct dmctx *ctx, int cmd, char *inparam, char *arg1, int *fault)

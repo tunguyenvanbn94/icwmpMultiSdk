@@ -474,6 +474,46 @@ int dm_entry_reload_enabled_notify(unsigned int dm_type, unsigned int amd_versio
 	return 0;
 }
 
+/* Data model the agent serves, latched from cwmp.cpe.datamodel.  icwmpd
+ * calls dm_entry_load_model() at start and at every config reload, i.e.
+ * between sessions, so a DataModel the ACS writes (X_HNI_Icwmp.DataModel)
+ * takes effect at the next session, never half way through one.  Following
+ * it is up to the SDK (dm_platform_select_root(): mtk does; bdk still reads
+ * the option at every context).  "tr181" needs TR-181 modules in this
+ * build: without them TR-098 stays and the log says why. */
+static int dm_latched_model = DM_MODEL_TR098;
+
+int dm_entry_load_model(void)
+{
+	/* a private UCI context, same default confdir as uci_ctx: no dm
+	 * context, so this is safe while another thread walks the tree (the
+	 * reload after "ubus call tr069 dm set" runs outside mutex_session_send) */
+	struct uci_context *c = uci_alloc_context();
+	struct uci_ptr ptr = {0};
+	char key[] = "cwmp.cpe.datamodel";
+	int m = DM_MODEL_TR098;
+
+	if (c) {
+		if (uci_lookup_ptr(c, &ptr, key, true) == UCI_OK && (ptr.flags & UCI_LOOKUP_COMPLETE) &&
+		    ptr.o && ptr.o->type == UCI_TYPE_STRING && ptr.o->v.string &&
+		    strcasecmp(ptr.o->v.string, "tr181") == 0) {
+			if (dm_registry_count(DM_MODEL_TR181) > 0)
+				m = DM_MODEL_TR181;
+			else
+				fprintf(stderr, "libtr098: cwmp.cpe.datamodel=tr181 but this build has no TR-181 tree, "
+				        "serving TR-098\n");
+		}
+		uci_free_context(c);
+	}
+	dm_latched_model = m;
+	return m;
+}
+
+int dm_entry_model(void)
+{
+	return dm_latched_model;
+}
+
 int adm_entry_get_linker_param(struct dmctx *ctx, char *param, char *linker, char **value)
 {
 	struct dmctx dmctx = {0};

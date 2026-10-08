@@ -30,6 +30,10 @@ TABLE_RE = re.compile(
 MODULE_RE = re.compile(r"\.objs\s*=\s*(\w+)")
 # struct dm_module.params: leaves merged at the root level (DeviceSummary)
 PARAMS_RE = re.compile(r"\.params\s*=\s*(\w+)")
+# một struct dm_module: .model chọn cây (TR-098 mặc định, TR-181 từ dev_181)
+MODBLOCK_RE = re.compile(r"struct\s+dm_module\s+\w+\s*=\s*\{(.*?)\};", re.S)
+MODEL_RE = re.compile(r"\.model\s*=\s*DM_MODEL_(TR098|TR181)")
+ROOT_OF = {"tr098": "InternetGatewayDevice.", "tr181": "Device."}
 INSTANCE_RE = re.compile(r"\$\d+")
 # Bộ trích xuất giữ lại số instance viết cứng trong script shell
 # (IPInterface.1., WANDevice.1.).  Quy mọi segment toàn chữ số về {i}.
@@ -172,10 +176,13 @@ def parse_file(path, defines):
         tables[name] = (kind, rows)
         if not is_static:
             shared.add(name)
-    for m in MODULE_RE.finditer(src):
-        roots.append(m.group(1))
-    for m in PARAMS_RE.finditer(src):
-        params.append(m.group(1))
+    for blk in MODBLOCK_RE.findall(src):
+        mm = MODEL_RE.search(blk)
+        model = mm.group(1).lower() if mm else "tr098"
+        for m in MODULE_RE.finditer(blk):
+            roots.append((model, m.group(1)))
+        for m in PARAMS_RE.finditer(blk):
+            params.append((model, m.group(1)))
     return tables, roots, shared, params
 
 
@@ -313,6 +320,8 @@ def main():
     ap.add_argument("--prefix")
     ap.add_argument("--dump", action="store_true", help="in mọi path cây C dựng được")
     ap.add_argument("--claims", action="store_true", help="chỉ kiểm .paths có chồng nhau không")
+    ap.add_argument("--model", default="tr098", choices=sorted(ROOT_OF),
+                    help="cây đem so: module có .model tương ứng, root InternetGatewayDevice. hoặc Device.")
     args = ap.parse_args()
     global ACTIVE_MACROS
     ACTIVE_MACROS = BUILD_MACROS.get(args.sdk, set())
@@ -338,10 +347,12 @@ def main():
                 print("CẢNH BÁO: bảng dùng chung %s khai ở hai file đang build (%s)"
                       % (k, rel), file=sys.stderr)
             all_tables[k] = tables[k]
-        for r in roots:
-            all_roots.append((rel, r))
-        for r in params:
-            all_params.append((rel, r))
+        for model, r in roots:
+            if model == args.model:
+                all_roots.append((rel, r))
+        for model, r in params:
+            if model == args.model:
+                all_params.append((rel, r))
 
     tree = {}
     for fn, root in all_roots:
@@ -351,7 +362,8 @@ def main():
             continue
         merge(Scope(per_file[fn], all_tables), root, tree, frozenset())
     got = set()
-    emit(tree, "InternetGatewayDevice.", got)
+    root = ROOT_OF[args.model]
+    emit(tree, root, got)
     for fn, name in all_params:
         kind, rows = Scope(per_file[fn], all_tables).get(name, (None, []))
         if kind != "DMLEAF":
@@ -359,7 +371,7 @@ def main():
                   % (fn, name), file=sys.stderr)
             continue
         for lname, _ in rows:
-            got.add(("param", "InternetGatewayDevice." + lname))
+            got.add(("param", root + lname))
     got = {(k, norm(p)) for k, p in got}
 
     want = set()

@@ -18,7 +18,8 @@
 #   run.sh p8c             P8c Services: STBService, StorageService over /sys
 #   run.sh wan             K8: WANIP/WANPPPConnection AddObject/DeleteObject in C (hni.wan stand-in)
 #   run.sh full            PH5: backend mtk-c, no shell call, whole tree inside the coverage matrix
-#   run.sh all             unit full smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b p8c wan valgrind
+#   run.sh tr181           TR-181 (dev_181): cwmp.cpe.datamodel=tr181 latched, Inform/walk on Device., switch back
+#   run.sh all             unit full tr181 smoke notify rpc msrv stun ptime p6 fw p7 p7c p8 p8b p8c wan valgrind
 # Needs build.sh, then setup.sh --yes (root, throwaway container).  build.sh
 # builds what the product ships, --disable-dm-script-compat; ICWMP_HOST_DM_COMPAT=1
 # builds the shell bridge in (full then fails, the other tests still run).
@@ -1522,6 +1523,50 @@ PY
 	fi
 }
 
+# TR-181 (dev_181, docs/plan/tr181_mtk_design.md).  cwmp.cpe.datamodel=tr181
+# is latched when icwmpd starts and at every config reload: the Inform and
+# the RPCs use Device., an InternetGatewayDevice. path is 9005.  Writing
+# X_HNI_Icwmp.DataModel back to tr098 over ubus reloads at once (no session
+# running), the root is InternetGatewayDevice. again.  verify-dm-paths
+# --model tr181 lists the tree the build declares; every name of the walk
+# must be one of them.
+do_tr181() {
+	bad_n=0
+	save_cfg cwmp
+	uci set cwmp.cpe.datamodel=tr181
+	uci commit cwmp
+	start 1 "--walk Device."
+	if ! wait_done 60 || ! alive; then bad "tr181: session"; stop; restore_cfg cwmp; return; fi
+	sleep 1
+	expect "Inform root" "$(sed -n 's/^session 1 .* root=\([^ ]*\) .*/\1/p' "$RUN/acs.log")" "Device"
+	expect "faults in the Device. walk" "$(grep -c '^fault' "$RUN/acs.log")" "0"
+	expect "RootDataModelVersion" "$(dm_value Device.RootDataModelVersion)" "2.19"
+	expect "backend under Device." "$(dm_value Device.X_HNI_Icwmp.DataModelBackend)" "mtk-c"
+	expect "an InternetGatewayDevice. path" "$($UBUS call tr069 dm '{"cmd":"get","path":"InternetGatewayDevice.DeviceInfo."}' 2>/dev/null |
+		python3 -c 'import json, sys; print(json.load(sys.stdin).get("fault"))')" "9005"
+	$UBUS call tr069 dm '{"cmd":"names","path":"Device.","next_level":false}' > "$RUN/tr181.gpn" 2>/dev/null
+	python3 "$REPO/docs/issue/verify-dm-paths.py" --src "$LIB_SRC" --sdk mtk --model tr181 --dump > "$RUN/tr181.declared"
+	expect "names not declared by the build" "$(python3 - "$RUN/tr181.gpn" "$RUN/tr181.declared" <<'PY'
+import json, re, sys
+decl = set(l.strip() for l in open(sys.argv[2]) if l.strip())
+names = [p["parameter"] for p in json.load(open(sys.argv[1]))["parameters"] if not p["parameter"].endswith(".")]
+print(sum(1 for n in names if re.sub(r"\.\d+\.", ".{i}.", n) not in decl))
+PY
+)" "0"
+	# back to TR-098 the way an ACS does it, over ubus: reload right away
+	$UBUS call tr069 dm '{"cmd":"set","path":"Device.X_HNI_Icwmp.DataModel","value":"tr098","key":"t181"}' >/dev/null 2>&1
+	sleep 1
+	expect "datamodel after the set" "$(uci -q get cwmp.cpe.datamodel)" "tr098"
+	expect "root after the reload" "$(dm_value InternetGatewayDevice.X_HNI_Icwmp.DataModelBackend)" "mtk-c"
+	stop
+	restore_cfg cwmp
+	if [ $bad_n = 0 ]; then
+		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, DataModel back to tr098"
+	else
+		bad "tr181: $bad_n mismatches above"
+	fi
+}
+
 do_soak() {
 	start "${1:-300}" ""
 	touch "$RUN/load.on"; load 2
@@ -1556,7 +1601,8 @@ case "$1" in
 	p8c) do_p8c ;;
 	wan) do_wan ;;
 	full) do_full ;;
-	all) do_unit; do_full; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_p7c; do_p8; do_p8b; do_p8c; do_wan; do_valgrind ;;
+	tr181) do_tr181 ;;
+	all) do_unit; do_full; do_tr181; do_smoke; do_notify; do_rpc; do_msrv; do_stun; do_ptime; do_p6; do_fw; do_p7; do_p7c; do_p8; do_p8b; do_p8c; do_wan; do_valgrind ;;
 	*) sed -n '2,/^# Needs/p' "$0"; exit 1 ;;
 esac
 exit $fail

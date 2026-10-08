@@ -19,9 +19,8 @@
  *	global_conf_init(); nothing is applied half way inside the session.
  *
  *	  DataModel             RW  tr098 | tr181   root the ACS talks to
- *	                            (cwmp.cpe.datamodel), effective next session,
- *	                            BDK only (9001 elsewhere: the mtk platform has
- *	                            no TR-181 tree)
+ *	                            (cwmp.cpe.datamodel), effective next session;
+ *	                            9001 when this build has no TR-181 modules
  *	  AmdVersion            RW  1..5            CWMP amendment in the Inform
  *	                            namespace (cwmp.cpe.amd_version; 3 = cwmp-1-2)
  *	  LogSeverity           RW  EMERG..DEBUG    /var/log/icwmpd.log level
@@ -48,6 +47,7 @@
 #include "dmuci.h"
 #include "sdk/sdk.h"
 #include "icwmpcfg.h"
+#include "dm_registry.h"
 
 static const char *const icwmp_log_levels[] = {
 	"EMERG", "ALERT", "CRITIC", "ERROR", "WARNING", "NOTICE", "INFO", "DEBUG", NULL
@@ -96,8 +96,8 @@ static int set_icwmp_uci(const char *opt, char *value, int action)
 static int set_icwmp_datamodel(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
 	(void)refparam; (void)ctx; (void)data; (void)instance;
-	if (strcmp(dm_platform_name(), "bdk") != 0)
-		return FAULT_9001;                     /* only the BDK build has a TR-181 root */
+	if (dm_registry_count(DM_MODEL_TR181) == 0)
+		return FAULT_9001;                     /* no TR-181 tree in this build */
 	if (strcasecmp(value, "tr098") != 0 && strcasecmp(value, "tr181") != 0)
 		return FAULT_9007;
 	return set_icwmp_uci("datamodel", strcasecmp(value, "tr181") == 0 ? "tr181" : "tr098", action);

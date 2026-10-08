@@ -132,11 +132,17 @@ class H(BaseHTTPRequestHandler):
                     state["queue"] = [addobj(p) if op == "add" else delobj(p) for op, p in (args.ops or [])]
                     if args.set:
                         state["queue"].append(spv("kset", *(tuple(a.split("=", 1)) for a in args.set)))
+                if args.walk:
+                    state["queue"] = [gpn(args.walk, "false"), gpv(args.walk)]
                 if args.download_every and state["sessions"] % args.download_every == 0:
                     state["queue"].append(DOWNLOAD)
                 ev = ",".join(re.findall(r"<EventCode>([^<]*)</EventCode>", body))
                 dv = body.count("<Name>InternetGatewayDevice.X_AIS_Logging.")
-                sys.stdout.write("session %d events=%s device_params=%d t=%.0fs\n" % (state["sessions"], ev, dv, time.time() - state["start"]))
+                # data model of the Inform: root of its parameter names
+                roots = sorted(set(re.findall(r"<Name>([A-Za-z]+)\.", body)))
+                sys.stdout.write("session %d events=%s device_params=%d t=%.0fs root=%s names=%d\n" % (
+                    state["sessions"], ev, dv, time.time() - state["start"], ",".join(roots) or "-",
+                    body.count("<Name>")))
                 sys.stdout.flush()
                 out = env("<cwmp:InformResponse><MaxEnvelopes>1</MaxEnvelopes></cwmp:InformResponse>")
             elif ":TransferComplete>" in body:
@@ -183,6 +189,7 @@ ap.add_argument("--sessions", type=int, default=20)
 ap.add_argument("--gap", type=float, default=0.5)
 ap.add_argument("--download-every", type=int, default=0)
 ap.add_argument("--readonly", action="store_true", help="no SPV/AddObject/DeleteObject")
+ap.add_argument("--walk", metavar="ROOT.", help="only GPN (next level false) + GPV of ROOT. per session")
 ap.add_argument("--plan", default="", choices=[""] + sorted(BAD), help="only this one RPC per session")
 ap.add_argument("--set", action="append", metavar="NAME=VALUE",
                 help="only one SetParameterValues of these per session")

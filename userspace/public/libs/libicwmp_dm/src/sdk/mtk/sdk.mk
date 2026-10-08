@@ -55,14 +55,15 @@ libtr098_la_SOURCES +=	\
 	../sdk/mtk/dm098/device_ppp_mtk.c	\
 	../sdk/mtk/dm098/device_ddns_mtk.c	\
 	../sdk/mtk/dm098/device_ra_mtk.c	\
-	../sdk/mtk/dm098/services_mtk.c
+	../sdk/mtk/dm098/services_mtk.c	\
+	../sdk/mtk/dm181/root181_mtk.c
 
 if DM_MTK_SCRIPT_COMPAT
 libtr098_la_SOURCES +=	\
 	../sdk/mtk/compat/dmscript.c
 endif
 
-libtr098_la_CFLAGS += -I../sdk/mtk/ -I../sdk/mtk/dm098/
+libtr098_la_CFLAGS += -I../sdk/mtk/ -I../sdk/mtk/dm098/ -I../sdk/mtk/dm181/
 # vendor prefix of the product tree (X_AIS_ is the operator's, X_HNI_ ours)
 libtr098_la_CFLAGS += -DCUSTOM_PREFIX=\"X_HNI_\"
 libtr098_la_CFLAGS += -DDMSCRIPT_PATH=\"/usr/share/icwmp/icwmp_dm.sh\"
