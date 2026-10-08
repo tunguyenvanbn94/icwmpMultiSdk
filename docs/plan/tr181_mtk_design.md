@@ -158,7 +158,7 @@ phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đ�
 | T3 Wi-Fi — **xong trên host** (`tr181-0005`, analysis §69) | WiFi.Radio 1..2, SSID/AccessPoint 1..12 (số của WLANConfiguration), Security.ModeEnabled, WPS, AssociatedDevice (+Stats), `WiFi.X_AIS_Mesh`, `WiFi.X-AIS_*` | `check` thiếu 0; `run.sh tr181`: 884 cặp bằng, ghi qua tên TR-181 vào đúng option |
 | T4 WAN | T4a **xong trên host** (`tr181-0006`, §70): cổng WAN `Ethernet.Interface.5`, `Optical.Interface.1`, `Routing.Router.1.IPv4Forwarding`. T4b **xong trên host** (`tr181-0007`, §71): kết nối → IP.Interface, IPv4Address, DHCPv4.Client, NAT.InterfaceSetting, DNS.Client.Server, route mặc định, PPP.Interface. T4c + T4d **xong trên host** (`tr181-0008`, §72): `X_AIS_*`/`X_AIS_IPv6`/ServiceList trên IP.Interface, `NAT.PortMapping` (+Add/Delete). Add/Delete kết nối: `PPP.Interface` AddObject (T1) tạo `wan.@entry` PPPoE; **IPoE chưa tương đương**: `IP.Interface` AddObject của sản phẩm chỉ tạo section `network`, không gọi `hni.wan add` như `WANIPConnection` AddObject (T7) | như trên + `hni.wan` thật trên board |
 | T5 Chẩn đoán, firewall — **xong trên host** (`tr181-0009`, analysis §73) | IP.Diagnostics.IPPing/TraceRoute/Download/Upload, DNS.Diagnostics.NSLookupDiagnostics, `Device.DNSDiagnostics`, `Device.Firewall` (path interface → tham chiếu), `Device.LTE` | `check` thiếu 0; `run.sh tr181`: 1224 cặp bằng, không còn phase chờ |
-| T6 Board | so cặp TR-098 ↔ TR-181 trên board, phiên ACS thật ở chế độ `tr181` | 0 cặp lệch không giải thích được |
+| T6 Board — **so cặp trên board xong** (`tr181-0010`, analysis §74); phiên ACS `tr181` chờ user cho phép | so cặp TR-098 ↔ TR-181 trên board (`tests/board/tr181_window.sh`, ACS bị chặn suốt cửa sổ), phiên ACS thật ở chế độ `tr181` | 0 cặp lệch không giải thích được: đạt trên board (1272 bằng, 0 tên thiếu cặp, TR-098 parity với shell PASS); còn phiên ACS |
 | T7 Theo BDK | tham số TR-181 mà ACS dùng trên BDK nhưng chưa có ở đây (không làm tất cả) | danh sách chốt với user |
 
 ## Công cụ
@@ -170,6 +170,7 @@ phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đ�
 | `docs/issue/tr181-map.py equiv <tr098.json> <tr181.json>` | giá trị từng cặp trên hai bản dump thật (host `run.sh tr181`, board sau) |
 | `docs/issue/tr181-schema.py <bcm963xx>/data-model --check <file>` | tên có trong TR-181 chuẩn (bảng tra BDK); tên BBF mà XML Broadcom không có thì xét tay |
 | `docs/issue/verify-dm-paths.py --model tr181 --dump` | cây TR-181 build khai báo |
+| `tests/board/tr181_window.sh` (chạy trên board) | dump TR-098 rồi TR-181 của cùng board, ACS bị chặn suốt lúc ở `tr181`, trả model và trạng thái agent trước khi mở ACS (T6) |
 
 Số phủ sau T5 (hết phần tương đương TR-098): nguồn TR-098 (ma trận + tên chỉ có ở C, 800 tên) theo loại: A 458, B 34, C 218,
 D 90, không còn mục chờ. Tên TR-181 trong cây C: 651.
@@ -205,9 +206,12 @@ của section `network.if<id>` (bridge: `if_wanbr<id>`), đánh số bằng `ip_
 - Giá trị `RootDataModelVersion`: đang đặt `2.19` (`MTK_TR181_ROOT_VERSION`). Chưa đối chiếu từng lá với đúng phiên bản
   TR-181 đó; chốt cùng T6 khi có ACS thật ở chế độ `tr181`.
 - ACS lab (GenieACS) làm việc với thiết bị ở chế độ `tr181`: chưa thử. Đổi model làm ACS nhận cây `Device.` cho thiết bị
-  này (thay đổi phía ACS), cần user cho phép trước khi làm ở T6.
+  này (thay đổi phía ACS), cần user cho phép. Phần so cặp T6 đã làm trên board mà ACS không thấy (analysis §74).
 - Danh sách tham số TR-181 ACS thật sự dùng trên BDK: chưa trích (T7).
-- `ChannelsInUse`, `PossibleChannels`, `AssociatedDevice` đọc `ubus hni`: chỉ kiểm được trên board (T6).
+- `AssociatedDevice` (`ubus hni`): lúc T6 không có client Wi-Fi, instance chưa được thử trên board. `ChannelsInUse`,
+  `PossibleChannels` đúng trên board (§74).
+- Ngữ nghĩa TR-181 mà so cặp không bắt được vì giá trị bằng TR-098 của sản phẩm (§74, T7): `IPv4Address.AddressingType`
+  của PPPoE là `DHCP` (TR-181: `IPCP`), `LowerLayers` là tên netdev, `WiFi.Radio.Channel` = 0 khi kênh tự động.
 - Tạo kết nối IPoE từ ACS ở chế độ `tr181`: `IP.Interface` AddObject không tạo `wan.@entry` qua `hni.wan` (analysis §72). Cần
   quyết định cách làm cùng ACS (T7).
 - `MruEnable` (tên sản phẩm không tiền tố vendor) chưa có chỗ trong TR-181: cần tên `X_AIS_`/`X_HNI_` thống nhất với nhà

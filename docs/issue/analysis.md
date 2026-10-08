@@ -4794,3 +4794,80 @@ dạng khác; để T7.
   - `MruEnable`;
   - `Cellular`;
   - lá `X_AIS_*` trên mọi IP.Interface.
+
+## 74. TR-181 trên MTK: T6 build SDK + board, so cặp TR-098 ↔ TR-181 trên board thật (`tr181-0010`) (08/10 22:33–23:04)
+
+User (chatlog 93) đổi cây build MTK sang bản clone mới `/home/nvtu/workspace/openwrt/2_src/2025q3` (git `8b98d6b3c`, đã
+build sẵn), BDK ở `/home/vtanh/workspaceBRCM/tunv/2_src/bcm963xx`; yêu cầu build và test MTK, image giữ dev-access.
+
+**Kết luận:** code `dev_181` (`084ef3a`) build được trên cây mới; trên board thật, TR-098 không lùi (parity với shell PASS)
+và TR-181 tương đương TR-098 (so cặp PASS, 0 tên TR-181 thiếu cặp). Không phiên ACS nào ở chế độ `tr181`: ACS bị chặn
+suốt cửa sổ TR-181 nên GenieACS không có nhánh `Device.` của thiết bị.
+
+**Build (cây `2_src`):**
+- dev-access v1 đã có sẵn trong cây (`git apply --check -R 1000-…` đạt).
+- `./apply --sdk mtk` bundle `084ef3a` (backup `.icwmp-backups/20261008-223558-7nf49r7d`). Profile `config_7583`:
+  `cwmpclient` tắt, `libtr098`/`icwmp_tr098` bật. Cây mới chưa bật hai gói này trong `.config`, nên phải chạy
+  `airoha-compile.sh -c 7583 -f -m HP2236B -w Griffin_logan` rồi mới `make`.
+- **Bẫy môi trường:** `docker exec … bash -lc` không có node của nvm (chỉ nạp ở shell interactive). Feed làm mới thì
+  gói vendor `backend` phải build lại, bước `frontend` gọi `yarn`/`npm` → `Error 127`. Hai gói icwmp đã build xong ở lần
+  đó. Sửa: `export PATH=/home/nvtu/.nvm/versions/node/v12.0.0/bin:$PATH` trước `make` → `make -j 16 MSDK=1` rc 0.
+- E6: `usr/share/icwmp` 0, chuỗi gọi shell trong `libtr098` 0, có `dev_access`, không có `cwmpclient`.
+  md5: `libtr098.so.3.0.0` `833486e2…`, `icwmp_tr098d` `937c508d…`, `tclinux.bin` `4c6adab9…`
+  (`2_src/2025q3/.icwmp-images/tclinux_t6_084ef3a_devaccess.bin`).
+
+**Nạp và kiểm TR-098 (G/S của build guide):**
+- F1–F5 đạt (`Model validation successful: HP-2236B`, `"valid": true`, `sysupgrade -T` rc 0), sysupgrade 22:52:25,
+  board lên lại sau 144 s, dev-access tự mở SSH/telnet.
+- G1–G6: md5 trùng build, không `/usr/share/icwmp`, một tiến trình `icwmp_tr098d -b`, `"status": "up"`, 3 phiên success,
+  0 failure, `DataModelBackend` = `mtk-c`, GPV toàn cây `fault 0`, `count 1753`.
+- S1–S4 parity C ↔ shell: **PASS**. 1735 tham số chung: 1581 bằng, 107 động, 15 đã biết, 32 nháy, 0 `UNEXPECTED`;
+  writable lệch 13 (K24 như cũ). Hơn bản giao 11 tham số vì board có thêm instance (count 1742 → 1753).
+- G9 trên image cũ `9f393e4` (đọc trước khi nạp đè): 66 mẫu 11:42→22:33, pid 10252 không đổi, VmRSS 5724–6104 kB (không
+  tăng), fd 12, 11 thread, failure 0. CSV trong workspace (`issues/…/logs/20261008_g9_soak_image_9f393e4.csv`).
+
+**Cửa sổ TR-181 không chạm ACS** (`tests/board/tr181_window.sh`, mới):
+1. GPV `InternetGatewayDevice.` (tr098 như cấu hình).
+2. `iptables -I OUTPUT 1 -d <host của cwmp.acs.url> -j REJECT`, dừng icwmpd, giữ `.icwmpd_backup_session.xml`,
+   `.dm_enabled_notify`, `/etc/config`.
+3. `cwmp.cpe.datamodel=tr181`, start, GPV/GPN `Device.`, ghi thử qua tên TR-181 bằng ParameterKey đang có.
+4. Dừng, trả model và hai file trạng thái, start, rồi mới bỏ chặn ACS.
+
+Chạy hai lần (22:56 bằng bản nháp, 23:01 bằng đúng bản trong repo), cùng kết quả:
+- `RootDataModelVersion` `2.19`, `DataModelBackend` `mtk-c`, path `InternetGatewayDevice.` → 9005.
+- GPV `Device.` 1573 giá trị trong khoảng 1 s; GPN 1853 tên (1573 lá, 1047 writable); mọi lá có trong khai báo của
+  build (`verify-dm-paths.py --model tr181 --dump`, 0 tên lạ).
+- `Device.Time.NTPServer3` set → `system.ntp.server` vị trí 3 đổi, trả lại → như cũ (fault 0 cả hai). SPV
+  `Device.X_AIS_Conf.auto_upload_delay=abc` → **9007** (K29 trên board). ParameterKey không đổi.
+- Trong cửa sổ agent thử 2 phiên, cả 2 failure (bị chặn). Sau cửa sổ: model `tr098`, Inform TR-098 thành công.
+- `/etc/config` trước/sau: lần 1 chỉ khác vị trí dòng `option datamodel 'tr098'` trong `cwmp`, lần 2 không khác dòng nào.
+- ACS (GET NBI, chỉ đọc, từ board): `_lastInform` 15:57:40Z là Inform TR-098 sau cửa sổ (ProductClass dưới
+  `InternetGatewayDevice`), projection `Device.RootDataModelVersion`/`Device.DeviceInfo` rỗng, `faults` rỗng.
+
+**So cặp trên board (`tr181-map.py equiv`):** lần đầu **FAIL** vì 52 cặp bộ đếm (`WLANConfiguration.{i}.Total*` ↔
+`WiFi.SSID.{i}.Stats.*`, `WANCommonInterfaceConfig.Total*` ↔ `Ethernet.Interface.5.Stats.*`) đọc cách nhau ~25 s.
+Cả 52 cặp tăng đơn điệu (TR-181 đọc sau ≥ TR-098), tức cùng bộ đếm. Lỗi của công cụ: danh sách `DYNAMIC` chỉ so với
+tên TR-098, mà `TotalBytesSent` không khớp `\.BytesSent$`. Sửa: xét cả tên TR-181 (`Stats.`). Lần hai thêm một cặp đo
+sống `X_AIS_GPON.TxPower` (2.5 ↔ 2.4 dBm) → thêm `X_AIS_GPON.(Rx|Tx)Power` vào `DYNAMIC`. Kết quả sau sửa, cả hai
+lần: **PASS**. TR-098 1753, TR-181 1573: bằng 1272 (lần 2: 1271) + 2 theo tham chiếu, B 168, D 206, động 105 (106),
+rỗng ở instance khác 79, 0 tên TR-181 thiếu cặp. Host `run.sh tr181` vẫn PASS sau khi sửa.
+
+**Giá trị chỉ kiểm được trên board:**
+- `WiFi.Radio.{1,2}.PossibleChannels` (1–13; 36…128), `ChannelsInUse` (9; 116) đọc `ubus hni` đúng.
+- `AssociatedDevice`: 0 client trên mọi AP lúc test, instance chưa được thử trên board.
+- Kết nối PPPoE `if0`: `IP.Interface.2` Up, `IPv4Address.1` 30.1.1.153, `PPP.Interface.1` Connected, `IPCP.RemoteIPAddress`
+  30.1.1.1, route mặc định `IPv4Forwarding.65` (`Origin` IPCP, gateway 30.1.1.1), `DNS.Client.Server.1/2`,
+  `NAT.InterfaceSetting.1` cùng trỏ `Device.IP.Interface.2`. `Enable`: TR-098 `true` (`wan.@entry.active`), TR-181 `1`
+  (`network.if0.auto`), cùng nghĩa.
+- `Optical.Interface.1.Status` Up; `Ethernet.Interface.5` (cổng WAN Ethernet) Down vì WAN đang là PON.
+
+**Lệch ngữ nghĩa TR-181 thấy trên board (giá trị bằng TR-098 của sản phẩm, nên so cặp không bắt được), thêm vào T7:**
+- `IP.Interface.{n}.IPv4Address.1.AddressingType` của kết nối PPPoE là `DHCP`, vì `WANPPPConnection.AddressingType` của
+  sản phẩm trả `DHCP`. TR-181 cho địa chỉ lấy qua PPP là `IPCP`.
+- `IP.Interface.{n}.LowerLayers` và `PPP.Interface.1.LowerLayers` là tên netdev (`br-lan`, `pon.10`, `if0`), chưa phải
+  tham chiếu TR-181 (đã có trong danh sách T7).
+- `WiFi.Radio.{i}.Channel` = 0 khi chọn kênh tự động (cấu hình), kênh thật nằm ở `ChannelsInUse`. TR-181 coi `Channel`
+  là kênh đang dùng.
+
+**Chưa làm ở T6:** phiên ACS thật ở chế độ `tr181` (GenieACS sẽ nhận cây `Device.` của thiết bị, cần user cho phép);
+soak trên image này; BDK.
