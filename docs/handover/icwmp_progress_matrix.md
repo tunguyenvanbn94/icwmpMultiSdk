@@ -16,8 +16,8 @@ Chú thích màu: xanh lá = xong, vàng = đang làm, xám = chưa bắt đầu
 
 ```mermaid
 flowchart LR
-    subgraph NOW["Đang đóng"]
-        PH0["PH0<br/>baseline MTK TR-098<br/>gate board G1-G9"]
+    subgraph NOW["Xong"]
+        PH0["PH0<br/>baseline MTK TR-098<br/>tag 08/10"]
     end
     subgraph NEXT["Kiến trúc"]
         PH1["PH1<br/>model resolver"]
@@ -26,7 +26,7 @@ flowchart LR
     end
     subgraph LATER["Mở rộng"]
         PH4["PH4<br/>P6-P8, lớp product"]
-        PH5["PH5<br/>full C, tắt compat"]
+        PH5["PH5<br/>full C, tắt compat<br/>đang làm"]
         PH6["PH6<br/>TR-181 trên MTK"]
         PH7["PH7<br/>BDK cùng contract"]
         PH8["PH8<br/>CI, release, ABI"]
@@ -38,14 +38,14 @@ flowchart LR
     style NOW fill:#ffffff,stroke:#bbbbbb
     style NEXT fill:#ffffff,stroke:#bbbbbb
     style LATER fill:#ffffff,stroke:#bbbbbb
-    style PH0 fill:#fff3c4,stroke:#b58900
+    style PH0 fill:#d8f0d8,stroke:#2e7d32
     style PH2 fill:#dbe8fb,stroke:#1565c0
     style PH7 fill:#dbe8fb,stroke:#1565c0
     style PH8 fill:#dbe8fb,stroke:#1565c0
     style PH1 fill:#eeeeee,stroke:#888888
     style PH3 fill:#eeeeee,stroke:#888888
     style PH4 fill:#eeeeee,stroke:#888888
-    style PH5 fill:#eeeeee,stroke:#888888
+    style PH5 fill:#fff3c4,stroke:#b58900
     style PH6 fill:#eeeeee,stroke:#888888
 ```
 
@@ -58,7 +58,8 @@ flowchart LR
 | `apply --sdk-only` | Xong (0083) | MTK SDK build trên cây chỉ còn MTK |
 | BDK | Prototype; **build image đạt 06/10 tại 0088** (bundle một SDK, analysis §56) | SDK build BDK; board BDK chưa (PH7) |
 | Test host | Chạy được trên máy build: container `ubuntu:24.04` (§55) | **`run.sh all` PASS 06/10** trên repo (code 0086) và từ chính bundle MTK `e273359` |
-| **PH0 (đóng băng baseline)** | **Đang làm** | Board chạy image `0fa9d31` (0101). G9 24 h chạy lại từ 08/10 10:27:56, mốc 09/10 10:28; rồi PH0.5 (user duyệt 07/10). K15 hoãn theo quyết định 07/10; xem WebUI (G6) chưa có tài khoản |
+| **PH0 (đóng băng baseline)** | **Xong 08/10** (PH0.5, tag `baseline/ph0-mtk-tr098-20261008`) | Board image `0fa9d31` (0101), parity PASS. Mang sang sau: G9 24 h (không chặn, quyết định 08/10), WebUI (G6), K15 hoãn (§64) |
+| **PH5 (tắt compat)** | **Đang làm** (kéo lên trước PH1–PH3) | Build MTK `--disable-dm-script-compat`; parity board là phép thử thật của 783/783 |
 
 ---
 
@@ -126,7 +127,7 @@ Runbook: [../plan/ph0_gate_runbook.md](../plan/ph0_gate_runbook.md).
 | G6 | ACS ghi ManagementServer, còn sau phiên, WebUI thấy, còn sau reboot; K10 | **PASS** qua ACS: ghi, mirror, không restart, còn sau reboot; **K10 PASS**. WebUI **NOT RUN** (không có tài khoản) | §52, §54 |
 | G7 | STUN, UDP Connection Request | Phía router **PASS** (UDP CR ký đúng đánh thức phiên, ký sai bị bỏ). ACS dùng HTTP CR trực tiếp được nên không gửi UDP CR; `NATDetected` do vendor ghi 0 dù địa chỉ map khác IP WAN | §49, §54 |
 | G8 | Download/ScheduleDownload thiếu FileType hoặc 1 window | **NOT RUN** trên board (host 5/5 PASS) | — |
-| G9 | Soak 24 h | Image 0080: 8 h 41 phẳng (VmRSS 5344→5352 kB, fd 14–15, thread 11). Lần trên image 0083 (06/10) dừng vì board mất WAN 07/10. **Đang chạy trên image `0fa9d31`** từ 08/10 10:27:56 (`/tmp/g9.csv`, 600 s), mốc 09/10 10:28 | §52–§54, §63.5 |
+| G9 | Soak 24 h | Image 0080: 8 h 41 phẳng (VmRSS 5344→5352 kB, fd 14–15, thread 11). Lần trên image 0083 (06/10) dừng vì board mất WAN 07/10. Image `0fa9d31`: 2 mẫu 10 phút phẳng (pid không đổi, VmRSS 5960→5748 kB, fd 14, thread 11, 50 phiên, 0 lỗi). **24 h không còn chặn** (user 08/10): kiểm khi board chạy đủ lâu | §52–§54, §63.5, §64 |
 
 ### 2.2 Known issue
 
@@ -168,11 +169,11 @@ Bảng đầy đủ: `python3 docs/issue/progress.py` hoặc JSON.
 | 3 | G6: ~~ACS ghi + reboot~~ xong (§54); còn **xem WebUI** | người có tài khoản WebUI | ConnectionRequestUsername không đổi để không làm hỏng CR của ACS |
 | 4 | G8: Download thiếu FileType, ScheduleDownload 1 TimeWindow → fault đúng, pid không đổi | quyết định sau | User chọn bỏ khi test bằng NBI (GenieACS không gửi được Download sai nếu không upload file lên ACS) |
 | 5 | G7: UDP CR từ ACS | — | Topology hiện tại ACS tới thẳng board bằng HTTP CR; chỉ cần nếu sản phẩm thật nằm sau NAT. Xem thêm `NATDetected` = 0 (§54) |
-| 6 | G9: soak 24 h trên **image cuối của PH0** (0083) | dev | Đang chạy từ 06/10 08:14 (sau reboot G6); chu kỳ Inform 12 h nên đường session ít được thử |
+| 6 | G9: soak 24 h trên image cuối | dev | **Không chặn** (user 08/10): board nạp lại liên tục khi dev; kiểm khi chạy được đủ lâu, bằng chứng tới nay ở §64 |
 | 7 | ~~BDK: apply + build tại HEAD, chạy runbook §0.2~~ | — | **Xong 06/10** trên máy `192.168.100.38`: apply bundle `--sdk bdk` tại `9b75ed9`, component + image `MO77300EB` rc 0 (§56) |
 | 8 | ~~Test host: `tests/host/run.sh all`~~ | — | **Xong 06/10** trong container `ubuntu:24.04` trên máy build, cả repo lẫn bundle MTK (§55). Ghi chú cũ "không vào GitHub/Docker Hub" là sai |
 | 9 | ~~K15: quyết định sản phẩm~~ | — | **07/10:** STUN chưa cần, dùng app STUN đang có; ưu tiên icwmp chạy ổn định và đủ tham số theo kế hoạch; agent sau controller làm khi cần hoặc có lỗi |
-| 10 | PH0.5: tag `baseline/ph0-mtk-tr098-<ngày>` trên `dev`, fast-forward `main`, JSON PH0 = DONE | dev | **User duyệt 07/10** ("làm theo đề xuất"): làm khi G9 đạt |
+| 10 | ~~PH0.5: tag `baseline/ph0-mtk-tr098-<ngày>` trên `dev`, fast-forward `main`, JSON PH0 = DONE~~ | — | **Xong 08/10**: `baseline/ph0-mtk-tr098-20261008`, §64 |
 
 ### 3.2 Lộ trình PH1–PH8
 

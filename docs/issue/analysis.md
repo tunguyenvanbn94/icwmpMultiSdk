@@ -4082,3 +4082,39 @@ cũng từ chối. Giá trị sai `abc` và `a;b` → 9007, giá trị cũ giữ
 - `/tmp/g9.sh` lấy mẫu mỗi 600 s × 150 mẫu vào `/tmp/g9.csv` (chạy bằng `start-stop-daemon`);
 - mẫu đầu: pid 10704, VmRSS 5960 kB, fd 14, thread 11, 10 phiên success, 0 failure, MemAvailable 134296 kB;
 - mốc 24 h: 09/10 10:28.
+
+## 64. PH0.5: đóng băng baseline, G9 không còn chặn (08/10 10:36–)
+
+**Quyết định của user (08/10 10:36, chatlog 87):** G9 không chặn tiến độ nữa. Trong lúc phát triển, board sẽ được nạp
+lại liên tục nên khó giữ uptime 24 h. Board chạy được đủ lâu thì kiểm; không thì ghi lại bằng chứng đã có. PH0.5
+(đã duyệt 07/10) làm ngay, không chờ G9.
+
+**Bằng chứng soak đã có:**
+
+| Nơi | Image / code | Thời gian | Kết quả |
+|---|---|---|---|
+| Board | 0080 (05–06/10, §52) | 8 h 41, 100 mẫu | VmRSS 5344→5352 kB, fd 14–15, thread 11, MemAvailable không giảm |
+| Host | 0088 (07/10, §57) | 300 phiên | VmRSS 13,2–14,3 MB không tăng, fd 14–18, thread 11 |
+| Host | 0100 (08/10, §62) | valgrind 12 phiên, 196 RPC | 0 lost, 0 lỗi |
+| Board | `0fa9d31` (0101) | 10:27:56–10:37:56, 2 mẫu | pid 10704 không đổi, VmRSS 5960→5748 kB, fd 14, thread 11, 50 phiên success, 0 failure, start vẫn 2 |
+
+G9 24 h trên image cuối: **chưa có**. Rủi ro còn lại là rò rỉ chậm chỉ lộ sau nhiều giờ trên board thật. Hai lần
+trước trên board (0080, 8 h 41) và soak host không thấy dấu hiệu nào.
+
+**Baseline:**
+- Tag `baseline/ph0-mtk-tr098-20261008` trên `dev` tại commit tài liệu của mục này; `main` fast-forward tới đó.
+- Code: 0101 (`9d342c5`) + 0102 (`b433d29`, chỉ công cụ test).
+- Board: image `0fa9d31` (`tclinux.bin` md5 `727f3862…`, `libtr098` md5 `ca8dffc5…`), build compat-on: shell vẫn được
+  cài nhưng không còn tham số hay RPC nào đi qua nó (§62).
+
+**Đã qua:** G1–G7 phía router (§48–§54), parity toàn cây với shell sản phẩm (§63), K8 qua `hni.wan` thật (§63.3).
+
+**Mở, mang sang sau:**
+- G9 24 h trên board: kiểm khi có dịp.
+- G6: xem WebUI (cần tài khoản).
+- G8: Download sai trên board (user bỏ khi test bằng NBI).
+- K15: hoãn theo quyết định 07/10.
+
+Mọi thay đổi kiến trúc từ đây so với baseline này. Bước kế tiếp là PH5 (tắt compat), kéo lên trước PH1–PH3 vì PH4
+(P6–P8) đã xong theo cách làm thực tế (0089–0101). Tắt compat là cách duy nhất chứng minh "783/783 bằng C" trên
+board: khi compat còn bật, parity không bắt được tham số C thiếu, vì shell trả lời thay ở cả hai bản dump.
