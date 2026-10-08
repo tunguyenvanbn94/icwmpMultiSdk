@@ -17,7 +17,8 @@ import collections, json, os, re, sys
 
 DYNAMIC = [r"\.Stats\.", r"\.(Bytes|Packets)(Sent|Received)$", r"\.Total(Bytes|Packets)(Sent|Received)$",
            r"\.UpTime$", r"\.Uptime$", r"\.LastChange$", r"\.CurrentLocalTime$", r"MemoryStatus\.Free$",
-           r"ProcessStatus\.CPUUsage$", r"\.LeaseTimeRemaining$"]
+           r"ProcessStatus\.CPUUsage$", r"\.LeaseTimeRemaining$",
+           r"ManagementServer\.UDPConnectionRequestAddress$"]   # the vendor STUN client re-maps the port
 
 # (path regex, test on (c, s), where it is written down)
 KNOWN = [
