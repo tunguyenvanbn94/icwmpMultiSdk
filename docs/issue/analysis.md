@@ -4118,3 +4118,106 @@ trước trên board (0080, 8 h 41) và soak host không thấy dấu hiệu nà
 Mọi thay đổi kiến trúc từ đây so với baseline này. Bước kế tiếp là PH5 (tắt compat), kéo lên trước PH1–PH3 vì PH4
 (P6–P8) đã xong theo cách làm thực tế (0089–0101). Tắt compat là cách duy nhất chứng minh "783/783 bằng C" trên
 board: khi compat còn bật, parity không bắt được tham số C thiếu, vì shell trả lời thay ở cả hai bản dump.
+
+## 65. PH5: build MTK không còn shell bridge (`0103`, 08/10 10:45–)
+
+**Vì sao làm ngay:** từ 0099/0100 không còn tham số hay RPC nào đi qua shell, nhưng bridge vẫn được build và
+`icwmp_dm.sh` vẫn được cài. Khi bridge còn, một path cây C thiếu vẫn được shell trả lời. Vì vậy cả test host lẫn parity
+board (§63) đều không chứng minh được cây C đủ. Build compat-off là phép thử thật.
+
+**Thay đổi (`aab44c6`, 0103):**
+- `feeds/libtr098`: configure `--disable-dm-script-compat`, không cài `icwmp_dm.sh`. Thư viện hàm easycwmp vẫn cài:
+  diagnostics C chạy `*_launch` của nó (`diag_mtk.h` `DIAG_FUNCTION_PATH`), `stuncd` của sản phẩm cũng dùng. Rollback:
+  bỏ cờ, trả hai dòng cài lại (ghi sẵn trong file).
+- `tests/host/build.sh`: configure libtr098 như sản phẩm; `ICWMP_HOST_DM_COMPAT=1` build lại có bridge. Đổi biến thể
+  thì build lại từ sạch: cờ là `-D` trên dòng lệnh, không có `config.h`.
+- `run.sh full` (mới):
+  - `X_HNI_Icwmp.DataModelBackend` = `mtk-c`;
+  - một phiên ACS và GPV/GPN toàn cây không khởi động shell lần nào (`fake_dm.py` ghi mọi lệnh nhận được);
+  - mọi tên trong cây thuộc ma trận coverage, object của icwmpd hoặc 11 lá K3.
+- `run.sh wan`: với compat-off, shell không được chạy lần nào. Bản cũ đòi shell phải được hỏi khi duyệt `IGD.`.
+- `parity_dump.sh`: `DM_SH=` trỏ tới bản `icwmp_dm.sh` chép vào board.
+- `verify-dm-paths.py`: macro build MTK bỏ `DM_MTK_SCRIPT_COMPAT`. Kết quả không đổi: thiếu 0, dôi 17, claim chồng 0.
+
+**Host (container `ubuntu:24.04`):**
+- `run.sh all` trên build compat-off: mọi test PASS, gồm valgrind 12 phiên / 196 RPC. Lần chạy đầu `wan` FAIL vì đúng
+  giả định cũ nói trên; sửa test rồi chạy lại thì PASS.
+- `full`: 1204 giá trị, 1481 tên, 0 tên ngoài ma trận. 603/967 mẫu path của ma trận có mặt; phần còn lại là object
+  không có instance trên host, phần đó do `verify-dm-paths.py` kiểm tĩnh.
+- `smoke`: 25 fault, bằng bản compat-on (các fault cố ý của `acs.py`).
+- `ICWMP_HOST_DM_COMPAT=1`: `wan` và `smoke` PASS, `full` FAIL đúng thiết kế (`DataModelBackend` = `mtk-c+script`).
+
+**MTK SDK build tại `2cca863` (11:00–11:06):**
+- Export sha256 `00031d97…`, apply vào `1_src` (backup `.icwmp-backups/20261008-110023-z8q5as1q`).
+- Gói rc 0, image rc 0, có `Enabling dev_access`; configure có `--disable-dm-script-compat`; không cảnh báo mới ở file
+  icwmp.
+- `root.squashfs`:
+  - không còn `usr/share/icwmp/`;
+  - có `dev_access`, `stuncd`, `easycwmp/functions/ipping_launch`;
+  - `libtr098.so.3.0.0` 777 680 B, md5 `8287bba1…`, trùng `root-airoha`. Không còn chuỗi `icwmp_dm.sh`, `set_apply`,
+    `mtk-c+script`; có `mtk-c`.
+- `tclinux.bin` md5 `4ff59ae971e12d67366c8be43e28b363`, chép ra
+  `1_src/2025q3/.icwmp-images/tclinux_ph5_2cca863_devaccess.bin`.
+
+**G9 trên `0fa9d31` trước khi nạp đè (§64):**
+- 4 mẫu, 10:27:56–10:57:57;
+- pid 10704 không đổi, VmRSS 5748–6000 kB, fd 14, thread 11;
+- 130 phiên success, 0 failure, start vẫn 2.
+
+**Nạp (Claude, user cho phép trong phiên):**
+- md5 hai đầu khớp, `Model validation successful: HP-2236B`, `"valid": true`, `sysupgrade -T` rc 0;
+- `start-stop-daemon … sysupgrade` 11:07:39; board vào `Commencing upgrade` 11:07:41.
+
+**Board với image `2cca863` (kiểm 11:10:59, uptime 153 s):**
+- `libtr098` md5 `8287bba1…` đúng image; không có `/usr/share/icwmp`; không có tiến trình shell nào;
+- `X_HNI_Icwmp.DataModelBackend` = `mtk-c`; 7 phiên ACS success, 0 failure; 2 dòng start, không crash.
+
+**Parity compat-off** (`DM_SH=/tmp/icwmp_dm.sh`, `icwmp_dm.sh` chép từ repo):
+- Thời gian: GPV toàn cây C **1 s** (compat-on 3–4 s), GPN 1 s; shell 23 s.
+- **Tên: không có tên nào chỉ có ở shell.** Cây C đủ trên board thật, lần đầu chứng minh được khi không còn shell trả
+  lời thay. Tên chỉ có ở C là những tên đã biết (K3, `X_HNI_Icwmp`); writable lệch 13 tên, đều là `WLANConfiguration`
+  (K24).
+- Giá trị, 1724 tham số chung: 1577 bằng, 99 động, 15 đã biết, 29 nháy. Còn lại:
+  - `TemperatureSensor.1.Value`: C 56, shell 57, đọc cách nhau vài giây → đưa vào lớp động của `parity.py`;
+  - `Time.NTPServer1`/`2` rỗng, `NTPServer3` = `h\x8f\u0016fU`: **K28**, dưới đây. `parity.py` dừng vì byte không phải
+    UTF-8; nay đọc bằng `errors="replace"` để báo thành UNEXPECTED.
+- Stderr của shell sản phẩm (`sh_get.err`): `wan_common_get_access_type: not found`,
+  `traceroute_routehops_browse_instances: not found`, 12 lần `Failed to parse json data`. Đây là lỗi sẵn có của thư viện
+  shell, không thuộc C.
+
+### 65.1 K28: giá trị `NTPServer` đọc sau khi bộ nhớ UCI bị giải phóng
+
+**Hiện tượng:** trên board, GPV toàn cây trả `NTPServer3` là rác, `NTPServer1/2` rỗng. Thử lại 5 lần (3 lần nhánh
+`Time.`, 2 lần toàn cây) không tái lập: lỗi chập chờn.
+
+**Cơ chế (Verified trên host dưới valgrind):**
+- `ntp_server_get()` (`time_mtk.c`, có từ P1) trả `e->name`, tức con trỏ vào phần tử list `system.ntp.server` trong
+  package UCI đã nạp.
+- `add_list_paramameter()` (`dmtr098.c:686`) giữ nguyên con trỏ giá trị; quy ước của engine là getter tự cấp phát
+  (`dmstrdup`).
+- Sau khi duyệt xong, `dm_entry_param_method()` gọi `dmuci_commit()` (`dmentry.c:333`). Hàm này commit mọi package trong
+  `/etc/config`. Package nào có delta chưa commit (tiến trình khác vừa `uci set`) thì `uci_file_commit` của libuci giải
+  phóng rồi nạp lại.
+- Reply được ghi sau đó (`icwmp_dm.c:258`, cũng như XML của phiên CWMP) và đọc vào vùng đã giải phóng.
+- Valgrind trên host: tạo `system` có 3 server cộng một delta chưa commit, rồi GPV toàn cây.
+  - `Invalid read` trong `dm_add_param_list`.
+  - Khối 14 byte (`"time.nist.gov\0"`) bị giải phóng bởi `uci_free_package` ← `uci_file_commit` ← `dmuci_commit` ←
+    `dm_entry_param_method`.
+- Trên board, delta của `system` do tiến trình sản phẩm để lại; tiến trình nào thì **chưa xác định**.
+
+**Ảnh hưởng:** GPV của ACS (phiên CWMP đi cùng đường) có thể nhận rác hoặc chuỗi rỗng ở `NTPServer1..5`. Chưa thấy crash,
+vì vùng đọc vẫn nằm trong heap.
+
+**Sửa (0104):**
+- `ntp_server_get()` trả `dmstrdup(e->name)`.
+- Rà mọi getter MTK: `time_mtk.c` là nơi duy nhất trả `e->name`. `mtk_uci`, `mtk_state`, `mtk_uci_default` đã sao chép.
+  `mtk_varstate` thì không: `dmuci_get_varstate_string` trả `v.string` của `uci_varstate_ctx`, chỉ hỏng nếu trong cùng
+  request có ghi varstate (một getter dùng, chưa thấy lỗi). Sửa luôn cho sao chép.
+
+**Test hồi quy:** `run.sh valgrind` dựng `system` có NTP server. Mỗi vòng tải ubus để lại một `uci set system…` chưa
+commit rồi GET `Time.`.
+- Code cũ: FAIL, 1560 lỗi valgrind.
+- Code sửa: PASS, 0 lost, 0 lỗi.
+
+**Phát hiện phụ:** `dmuci_commit()` sau mọi lệnh, kể cả GET, commit luôn thay đổi chưa commit của tiến trình khác (hành vi
+upstream). Ghi ở `other-findings/icwmp-get-commits-other-uci-changes.md` của workspace, không sửa trong phạm vi này.
