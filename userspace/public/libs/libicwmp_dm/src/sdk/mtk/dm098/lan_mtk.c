@@ -31,6 +31,7 @@
 #include "dm_registry.h"
 #include "dmmtk.h"
 #include "device_ip_mtk.h"
+#include "wanconn_mtk.h"
 
 /* wireless.<radio> of this board, functions/tr098/lan_device:14 */
 #define RADIO_DEVICE_2G		"MT7993_1_1"
@@ -759,24 +760,79 @@ static int get_pool_interface181(char *refparam, struct dmctx *ctx, void *data, 
 	return 0;
 }
 
-/* IPv4Address.1 hangs under the IP.Interface instance of network.lan only;
- * the WAN interfaces get theirs with the WAN phase (T4) */
+/* IPv4Address.1 hangs under the IP.Interface instance of network.lan (data
+ * NULL, the LAN getters above) and under the one of a routed or PPP WAN
+ * connection (data its wan_entry, the getters of wanip_mtk.c through
+ * wan181_get/set: ExternalIPAddress, SubnetMask, AddressingType).  A bridged
+ * connection has no address of its own. */
 static int browseLanIpv4Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
 {
-	char *sec = dip_section_of_instance(prev_instance);
+	char *sec = dip_section_of_instance(prev_instance), *idx, *idx_last = NULL;
+	struct wan_entry *e;
 
-	if (!sec || strcmp(sec, "lan") != 0)
+	if (!sec)
 		return 0;
-	return browseIPInterfaceInst(dmctx, parent_node, prev_data, prev_instance);
+	if (strcmp(sec, "lan") == 0)
+		return browseIPInterfaceInst(dmctx, parent_node, NULL, prev_instance);
+	e = dmcalloc(1, sizeof(*e));
+	if (!e || !wan_entry_of_sec(sec, e) || e->bridge)
+		return 0;
+	idx = handle_update_instance(2, dmctx, &idx_last, update_instance_without_section, 1, 1);
+	DM_LINK_INST_OBJ(dmctx, parent_node, (void *)e, idx);
+	return 0;
+}
+
+static int get_ipv4_alias181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	if (data) {
+		*value = "";
+		return 0;
+	}
+	return get_ipif_alias(refparam, ctx, data, instance, value);
+}
+
+static int get_ipv4_ipaddr181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	if (data)
+		return wan181_get((struct wan_entry *)data, "ExternalIPAddress", value);
+	return get_ip_routers(refparam, ctx, data, instance, value);
+}
+
+static int set_ipv4_ipaddr181(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	if (data)
+		return wan181_set((struct wan_entry *)data, "ExternalIPAddress", value, action);
+	return set_ip_routers(refparam, ctx, data, instance, value, action);
+}
+
+static int get_ipv4_mask181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	if (data)
+		return wan181_get((struct wan_entry *)data, "SubnetMask", value);
+	return get_subnet_mask(refparam, ctx, data, instance, value);
+}
+
+static int set_ipv4_mask181(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	if (data)
+		return wan181_set((struct wan_entry *)data, "SubnetMask", value, action);
+	return set_subnet_mask(refparam, ctx, data, instance, value, action);
+}
+
+static int get_ipv4_addressing181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	if (data)
+		return wan181_get((struct wan_entry *)data, "AddressingType", value);
+	return get_ipif_addressing(refparam, ctx, data, instance, value);
 }
 
 static DMLEAF tLanIpv4181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Enable", &DMWRITE, DMT_BOOL, get_ipv4_enable181, set_accept_and_drop, NULL, NULL},
-{"Alias", &DMWRITE, DMT_STRING, get_ipif_alias, set_accept_and_drop, NULL, NULL},
-{"IPAddress", &DMWRITE, DMT_STRING, get_ip_routers, set_ip_routers, NULL, NULL},
-{"SubnetMask", &DMWRITE, DMT_STRING, get_subnet_mask, set_subnet_mask, NULL, NULL},
-{"AddressingType", &DMREAD, DMT_STRING, get_ipif_addressing, NULL, NULL, NULL},
+{"Alias", &DMWRITE, DMT_STRING, get_ipv4_alias181, set_accept_and_drop, NULL, NULL},
+{"IPAddress", &DMWRITE, DMT_STRING, get_ipv4_ipaddr181, set_ipv4_ipaddr181, NULL, NULL},
+{"SubnetMask", &DMWRITE, DMT_STRING, get_ipv4_mask181, set_ipv4_mask181, NULL, NULL},
+{"AddressingType", &DMREAD, DMT_STRING, get_ipv4_addressing181, NULL, NULL, NULL},
 {0}
 };
 
@@ -847,7 +903,7 @@ static DMOBJ tLan181Root[] = {
 /* Device.IP. is device_ip_mtk.c's claim; IPv4Address joins it by the merge,
  * unclaimed, the way managementserver_core_mtk.c extends ManagementServer */
 static const char *const lan181_mtk_paths[] = {
-	"Device.DHCPv4.",
+	"Device.DHCPv4.Server.",
 	"Device.WiFi.X-AIS_2-4GHzTransmitPower",
 	"Device.WiFi.X-AIS_5GHzTransmitPower",
 	NULL

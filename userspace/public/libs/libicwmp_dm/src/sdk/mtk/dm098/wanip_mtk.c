@@ -85,6 +85,7 @@
 #include "dm_registry.h"
 #include "dmmtk.h"
 #include "wanconn_mtk.h"
+#include "device_ip_mtk.h"
 
 #define WAN_MAX_LAN_PORTS	4	/* MAX_LAN_PORTS of the shell */
 #define WAN_MAX_WLAN_PORTS	8	/* MAX_WLAN_PORTS */
@@ -1678,3 +1679,467 @@ static const struct dm_module wanip_mtk_module = {
 	.objs  = tWanDeviceIpRoot,
 };
 DM_MODULE_REGISTER(wanip_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181)                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * A WAN connection (both objects above, instance id + 1) is anchored on the
+ * Device.IP.Interface of its network section: if<id>, if_wanbr<id> for a
+ * bridge (device_ip_mtk.c numbers it).  Its leaves spread the TR-181 way,
+ * each through the TR-098 getter/setter of the connection's own kind
+ * (wan181_get/set look the leaf up in tWanIpConnParam or tWanPppConnParam):
+ *
+ *   ExternalIPAddress, SubnetMask, AddressingType -> IP.Interface.{n}.IPv4Address.1 (lan_mtk.c)
+ *   Alias, MaxMTUSize, Uptime, Stats.*           -> IP.Interface.{n} (device_ip_mtk.c)
+ *   NATEnabled                                   -> NAT.InterfaceSetting.{id+1}            (here)
+ *   DNSServers                                   -> DNS.Client.Server.{3*id+pos+1}, one
+ *                                                   per address, at most three          (here)
+ *   AddressingType (the switch)                  -> DHCPv4.Client.{id+1}.Enable, routed IP (here)
+ *   DefaultGateway                               -> Routing.Router.1.IPv4Forwarding.{64+id+1}
+ *                                                   (layer3forwarding_mtk.c)
+ *   Username, Password, MRU, Reset, RemoteIPAddress -> PPP.Interface.{p} (device_ppp_mtk.c)
+ *
+ * The numbers follow the connection's id, never a position, so they do not
+ * move when another connection or a static route comes or goes.
+ */
+
+static int entry_idx_cmp(const void *a, const void *b)
+{
+	const struct wan_entry *x = a, *y = b;
+
+	return x->idx - y->idx;
+}
+
+int wan_entries_all(struct wan_entry **out, int max)
+{
+	struct wan_entry *ppp;
+	int n, m, i;
+
+	if (!out)
+		return wan_entries_kind(NULL, 0, WAN_KIND_IP) + wan_entries_kind(NULL, 0, WAN_KIND_PPP);
+	n = wan_entries_kind(out, max, WAN_KIND_IP);
+	if (n > max)
+		n = max;
+	ppp = dmcalloc(WAN_MAX_ENTRIES, sizeof(*ppp));
+	if (!ppp)
+		return n;
+	m = wan_entries_kind(&ppp, WAN_MAX_ENTRIES, WAN_KIND_PPP);
+	if (m > WAN_MAX_ENTRIES)
+		m = WAN_MAX_ENTRIES;
+	for (i = 0; i < m && n < max; i++)
+		out[0][n++] = ppp[i];
+	qsort(out[0], n, sizeof(**out), entry_idx_cmp);
+	return n;
+}
+
+static int wan_entry_find(const char *sec, int idx, struct wan_entry *out)
+{
+	struct wan_entry *list = dmcalloc(2 * WAN_MAX_ENTRIES, sizeof(*list));
+	int n, i;
+
+	if (!list)
+		return 0;
+	n = wan_entries_all(&list, 2 * WAN_MAX_ENTRIES);
+	for (i = 0; i < n; i++) {
+		if ((sec && strcmp(list[i].if4, sec) == 0) || (!sec && list[i].idx == idx)) {
+			*out = list[i];
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int wan_entry_of_sec(const char *sec, struct wan_entry *out)
+{
+	return sec && *sec ? wan_entry_find(sec, -1, out) : 0;
+}
+
+int wan_entry_of_idx(int idx, struct wan_entry *out)
+{
+	return wan_entry_find(NULL, idx, out);
+}
+
+static DMLEAF *wan181_leaf(struct wan_entry *e, const char *leaf)
+{
+	DMLEAF *t = e->ppp ? tWanPppConnParam : tWanIpConnParam;
+
+	for (; t->parameter; t++) {
+		if (strcmp(t->parameter, leaf) == 0)
+			return t;
+	}
+	return NULL;
+}
+
+int wan181_get(struct wan_entry *e, const char *leaf, char **value)
+{
+	DMLEAF *l = e ? wan181_leaf(e, leaf) : NULL;
+
+	*value = "";
+	if (!l || !l->getvalue)
+		return 0;
+	return l->getvalue(NULL, NULL, e, NULL, value);
+}
+
+/* 9008 where the TR-098 leaf of that kind is read only */
+int wan181_set(struct wan_entry *e, const char *leaf, char *value, int action)
+{
+	DMLEAF *l = e ? wan181_leaf(e, leaf) : NULL;
+
+	if (!l || !l->setvalue || l->permission != &DMWRITE)
+		return FAULT_9008;
+	return l->setvalue(NULL, NULL, e, NULL, value, action);
+}
+
+char *wan181_ipif(struct wan_entry *e)
+{
+	char *inst = e ? dip_update_instance(e->if4) : "", *v;
+
+	if (!*inst)
+		return "";
+	dmasprintf(&v, "%s%s", mtk_ipif_prefix(), inst);
+	return v;
+}
+
+/* is the TR-098 boolean string true */
+static int wan181_true(struct wan_entry *e, const char *leaf)
+{
+	char *v = NULL;
+
+	wan181_get(e, leaf, &v);
+	return v && (strcmp(v, "true") == 0 || strcmp(v, "1") == 0);
+}
+
+static int get_c181_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = wan181_ipif((struct wan_entry *)data);
+	return 0;
+}
+
+/* DHCPv4.Client.{id+1}: routed IPoE connections ---------------------- */
+
+static int get_dhcpc181_dhcp(void *data)
+{
+	char *v = NULL;
+
+	wan181_get((struct wan_entry *)data, "AddressingType", &v);
+	return v && strcmp(v, "DHCP") == 0;
+}
+
+static int get_dhcpc181_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = get_dhcpc181_dhcp(data) ? "true" : "false";
+	return 0;
+}
+
+/* the TR-181 way to switch AddressingType: DHCP on, or static */
+static int set_dhcpc181_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	int b = mtk_parse_bool(value);
+
+	if (b < 0)
+		return FAULT_9007;
+	return wan181_set((struct wan_entry *)data, "AddressingType", b ? "DHCP" : "Static", action);
+}
+
+static int get_dhcpc181_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = get_dhcpc181_dhcp(data) ? "Enabled" : "Disabled";
+	return 0;
+}
+
+#define WAN181_GET(name, leaf)							\
+static int get_c181_##name(char *refparam, struct dmctx *ctx, void *data,	\
+			   char *instance, char **value)			\
+{										\
+	return wan181_get((struct wan_entry *)data, leaf, value);		\
+}
+
+WAN181_GET(ipaddr, "ExternalIPAddress")
+WAN181_GET(mask, "SubnetMask")
+WAN181_GET(routers, "DefaultGateway")
+WAN181_GET(dns, "DNSServers")
+WAN181_GET(nat, "NATEnabled")
+
+static int set_c181_nat(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	return wan181_set((struct wan_entry *)data, "NATEnabled", value, action);
+}
+
+static int get_nat181_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = wan181_true((struct wan_entry *)data, "NATEnabled") ? "Enabled" : "Disabled";
+	return 0;
+}
+
+/* the connections a browse publishes, numbered id + 1 */
+static int wan181_browse(struct dmctx *dmctx, DMNODE *parent_node, int routed_only)
+{
+	struct wan_entry *list = dmcalloc(2 * WAN_MAX_ENTRIES, sizeof(*list));
+	char *idx, *idx_last = NULL;
+	int n, i;
+
+	if (!list)
+		return 0;
+	n = wan_entries_all(&list, 2 * WAN_MAX_ENTRIES);
+	for (i = 0; i < n; i++) {
+		if (routed_only && (list[i].bridge || list[i].ppp))
+			continue;
+		idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section,
+					     1, list[i].id + 1);
+		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)&list[i], idx) == DM_STOP)
+			break;
+	}
+	return 0;
+}
+
+static int browseDhcpc181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	return wan181_browse(dmctx, parent_node, 1);
+}
+
+static int browseNat181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	return wan181_browse(dmctx, parent_node, 0);
+}
+
+/* routed IPoE connections: the WANIPConnection entries that are not bridges */
+static int get_dhcpc181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct wan_entry *list = dmcalloc(WAN_MAX_ENTRIES, sizeof(*list));
+	int n, i, c = 0;
+
+	n = list ? wan_entries_kind(&list, WAN_MAX_ENTRIES, WAN_KIND_IP) : 0;
+	for (i = 0; i < n && i < WAN_MAX_ENTRIES; i++)
+		c += !list[i].bridge;
+	dmasprintf(value, "%d", c);
+	return 0;
+}
+
+static int get_nat181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	dmasprintf(value, "%d", wan_entries_all(NULL, 0));
+	return 0;
+}
+
+/* DNS.Client.Server.{3*id+pos+1}: one per address of a routed or PPP
+ * connection, the list DNSServers reads (at most three) -------------- */
+
+struct dns181 {
+	struct wan_entry e;
+	int pos;
+	char *addr;
+};
+
+/* the pos-th address of the comma separated list, NULL past the end */
+static char *dns181_nth(const char *list, int pos)
+{
+	char *copy = dmstrdup(list ? list : ""), *tok, *save = NULL;
+	int i = 0;
+
+	for (tok = strtok_r(copy, ",", &save); tok; tok = strtok_r(NULL, ",", &save), i++) {
+		if (i == pos)
+			return tok;
+	}
+	return NULL;
+}
+
+static int browseDns181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	struct wan_entry *list = dmcalloc(2 * WAN_MAX_ENTRIES, sizeof(*list));
+	char *idx, *idx_last = NULL;
+	int n, i, pos;
+
+	if (!list)
+		return 0;
+	n = wan_entries_all(&list, 2 * WAN_MAX_ENTRIES);
+	for (i = 0; i < n; i++) {
+		char *servers = NULL, *addr;
+
+		if (list[i].bridge)
+			continue;
+		wan181_get(&list[i], "DNSServers", &servers);
+		for (pos = 0; pos < 3 && (addr = dns181_nth(servers, pos)) != NULL; pos++) {
+			struct dns181 *d = dmcalloc(1, sizeof(*d));
+
+			if (!d)
+				return 0;
+			d->e = list[i];
+			d->pos = pos;
+			d->addr = addr;
+			idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section,
+						     1, 3 * list[i].id + pos + 1);
+			if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)d, idx) == DM_STOP)
+				return 0;
+		}
+	}
+	return 0;
+}
+
+static int get_dns181_server(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = ((struct dns181 *)data)->addr;
+	return 0;
+}
+
+/* writes that position of the connection's list through the DNSServers
+ * setter: static DNS only (9001 otherwise), as on WANIPConnection */
+static int set_dns181_server(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	struct dns181 *d = (struct dns181 *)data;
+	char *servers = NULL, *addr, buf[256];
+	size_t len = 0;
+	int pos;
+
+	if (mtk_ipv4_parse(value, NULL) != 0)
+		return FAULT_9007;
+	wan181_get(&d->e, "DNSServers", &servers);
+	buf[0] = '\0';
+	for (pos = 0; pos < 3; pos++) {
+		addr = (pos == d->pos) ? value : dns181_nth(servers, pos);
+		if (!addr)
+			break;
+		len += snprintf(buf + len, sizeof(buf) - len, "%s%s", len ? "," : "", addr);
+		if (len >= sizeof(buf))
+			return FAULT_9007;
+	}
+	return wan181_set(&d->e, "DNSServers", buf, action);
+}
+
+static int get_dns181_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = wan181_ipif(&((struct dns181 *)data)->e);
+	return 0;
+}
+
+static int get_dns181_type(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct wan_entry *e = &((struct dns181 *)data)->e;
+
+	if (wan181_true(e, "DNSOverrideAllowed"))
+		*value = "Static";
+	else
+		*value = e->ppp ? "IPCP" : "DHCPv4";
+	return 0;
+}
+
+static int get_dns181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct wan_entry *list = dmcalloc(2 * WAN_MAX_ENTRIES, sizeof(*list));
+	int n, i, pos, c = 0;
+
+	n = list ? wan_entries_all(&list, 2 * WAN_MAX_ENTRIES) : 0;
+	for (i = 0; i < n; i++) {
+		char *servers = NULL;
+
+		if (list[i].bridge)
+			continue;
+		wan181_get(&list[i], "DNSServers", &servers);
+		for (pos = 0; pos < 3 && dns181_nth(servers, pos); pos++)
+			c++;
+	}
+	dmasprintf(value, "%d", c);
+	return 0;
+}
+
+static int get_c181_true(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "true";
+	return 0;
+}
+
+static int get_c181_enabled(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "Enabled";
+	return 0;
+}
+
+static DMLEAF tDhcpc181Param[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMWRITE, DMT_BOOL, get_dhcpc181_enable, set_dhcpc181_enable, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_dhcpc181_status, NULL, NULL, NULL},
+{"Interface", &DMREAD, DMT_STRING, get_c181_interface, NULL, NULL, NULL},
+{"IPAddress", &DMREAD, DMT_STRING, get_c181_ipaddr, NULL, NULL, NULL},
+{"SubnetMask", &DMREAD, DMT_STRING, get_c181_mask, NULL, NULL, NULL},
+{"IPRouters", &DMREAD, DMT_STRING, get_c181_routers, NULL, NULL, NULL},
+{"DNSServers", &DMREAD, DMT_STRING, get_c181_dns, NULL, NULL, NULL},
+{0}
+};
+
+static DMLEAF tNat181IfParam[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_c181_nat, set_c181_nat, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_nat181_status, NULL, NULL, NULL},
+{"Interface", &DMREAD, DMT_STRING, get_c181_interface, NULL, NULL, NULL},
+{0}
+};
+
+static DMLEAF tDns181ServerParam[] = {
+{"Enable", &DMREAD, DMT_BOOL, get_c181_true, NULL, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_c181_enabled, NULL, NULL, NULL},
+{"DNSServer", &DMWRITE, DMT_STRING, get_dns181_server, set_dns181_server, NULL, NULL},
+{"Interface", &DMREAD, DMT_STRING, get_dns181_interface, NULL, NULL, NULL},
+{"Type", &DMREAD, DMT_STRING, get_dns181_type, NULL, NULL, NULL},
+{0}
+};
+
+static DMLEAF tDhcp4181CountParam[] = {
+{"ClientNumberOfEntries", &DMREAD, DMT_UNINT, get_dhcpc181_count, NULL, NULL, NULL},
+{0}
+};
+
+static DMLEAF tNat181CountParam[] = {
+{"InterfaceSettingNumberOfEntries", &DMREAD, DMT_UNINT, get_nat181_count, NULL, NULL, NULL},
+{0}
+};
+
+static DMLEAF tDnsClient181Param[] = {
+{"ServerNumberOfEntries", &DMREAD, DMT_UNINT, get_dns181_count, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tDhcp4181WanObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Client", &DMREAD, NULL, NULL, NULL, browseDhcpc181Inst, NULL, NULL, NULL, tDhcpc181Param, NULL},
+{0}
+};
+
+static DMOBJ tNat181Obj[] = {
+{"InterfaceSetting", &DMREAD, NULL, NULL, NULL, browseNat181Inst, NULL, NULL, NULL, tNat181IfParam, NULL},
+{0}
+};
+
+static DMOBJ tDnsClient181Obj[] = {
+{"Server", &DMREAD, NULL, NULL, NULL, browseDns181Inst, NULL, NULL, NULL, tDns181ServerParam, NULL},
+{0}
+};
+
+static DMOBJ tDns181Obj[] = {
+{"Client", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDnsClient181Obj, tDnsClient181Param, NULL},
+{0}
+};
+
+static DMOBJ tWanIp181Root[] = {
+{"DHCPv4", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDhcp4181WanObj, tDhcp4181CountParam, NULL},
+{"NAT", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tNat181Obj, tNat181CountParam, NULL},
+{"DNS", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDns181Obj, NULL, NULL},
+{0}
+};
+
+static const char *const wanip181_mtk_paths[] = {
+	"Device.DHCPv4.Client.",
+	"Device.DHCPv4.ClientNumberOfEntries",
+	"Device.NAT.InterfaceSetting.",
+	"Device.NAT.InterfaceSettingNumberOfEntries",
+	"Device.DNS.Client.",
+	NULL
+};
+
+static const struct dm_module wanip181_mtk_module = {
+	.name  = "mtk-wanip-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tWanIp181Root,
+	.paths = wanip181_mtk_paths,
+};
+DM_MODULE_REGISTER(wanip181_mtk_module);

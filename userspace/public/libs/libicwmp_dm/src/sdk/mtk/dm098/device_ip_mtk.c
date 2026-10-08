@@ -65,6 +65,7 @@
 #include "dm_registry.h"
 #include "dmmtk.h"
 #include "device_ip_mtk.h"
+#include "wanconn_mtk.h"
 
 #define IP_PKG		"network"
 #define WAN_RELOAD	"/usr/sbin/hni_wan_reload.sh"
@@ -783,11 +784,77 @@ static const char *const device_ip_mtk_paths181[] = {
 	NULL
 };
 
+/*
+ * TR-181 leaves of Interface.{i} the TR-098 branch does not have, from the
+ * WAN connection whose network section this interface is (wanip_mtk.c,
+ * wan181_get/set): Alias (cpe-internet ...), MaxMTUSize.  Empty, and not
+ * writable, on an interface that carries no WAN connection.
+ */
+static struct wan_entry *dip_wan(void *data)
+{
+	struct wan_entry *e = dmcalloc(1, sizeof(*e));
+
+	return (e && wan_entry_of_sec(DIP_SEC(data), e)) ? e : NULL;
+}
+
+static int get_dip181_wan(void *data, const char *leaf, char **value)
+{
+	struct wan_entry *e = dip_wan(data);
+
+	*value = "";
+	return e ? wan181_get(e, leaf, value) : 0;
+}
+
+static int get_dip181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	return get_dip181_wan(data, "Alias", value);
+}
+
+static int get_dip181_mtu(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	return get_dip181_wan(data, "MaxMTUSize", value);
+}
+
+static int set_dip181_mtu(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	struct wan_entry *e = dip_wan(data);
+
+	return e ? wan181_set(e, "MaxMTUSize", value, action) : FAULT_9008;
+}
+
+static DMLEAF tDip181InterfaceParams[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Name", &DMREAD, DMT_STRING, get_dip_name, NULL, NULL, NULL},
+{"Alias", &DMREAD, DMT_STRING, get_dip181_alias, NULL, NULL, NULL},
+{"Enable", &DMWRITE, DMT_BOOL, get_dip_enable, set_dip_enable, NULL, NULL},
+{"IPv4Enable", &DMWRITE, DMT_BOOL, get_dip_v4, set_dip_v4, NULL, NULL},
+{"IPv6Enable", &DMWRITE, DMT_BOOL, get_dip_v6, set_dip_v6, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_dip_status, NULL, NULL, NULL},
+{"LastChange", &DMREAD, DMT_UNINT, get_dip_lastchange, NULL, NULL, NULL},
+{"LowerLayers", &DMREAD, DMT_STRING, get_dip_lowerlayers, NULL, NULL, NULL},
+{"MaxMTUSize", &DMWRITE, DMT_UNINT, get_dip181_mtu, set_dip181_mtu, NULL, NULL},
+{"IPv4AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip_v4_count, NULL, NULL, NULL},
+{"IPv6AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip_v6_count, NULL, NULL, NULL},
+{"IPv6PrefixNumberOfEntries", &DMREAD, DMT_UNINT, get_dip_prefix_count, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tDip181Obj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Interface", &DMWRITE, add_dip, del_dip, NULL, browse_dip, NULL, NULL, tDipInterfaceChildObj, tDip181InterfaceParams, NULL},
+{0}
+};
+
+static DMOBJ tDeviceIp181Obj[] = {
+{"IP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDip181Obj, tDipParams, NULL},
+{0}
+};
+
 static const struct dm_module device_ip_mtk_module181 = {
 	.name  = "mtk-device-ip-181",
 	.model = DM_MODEL_TR181,
 	.order = DM_ORDER_SDK,
-	.objs  = tDeviceIpObj,
+	.objs  = tDeviceIp181Obj,
 	.paths = device_ip_mtk_paths181,
 };
 DM_MODULE_REGISTER(device_ip_mtk_module181);

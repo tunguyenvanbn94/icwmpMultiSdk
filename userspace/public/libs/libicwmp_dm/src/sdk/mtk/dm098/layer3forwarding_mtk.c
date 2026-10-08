@@ -669,19 +669,104 @@ DM_MODULE_REGISTER(l3f_mtk_module);
  * the TR-098 setter's WAN path needs the "hniwan" package the product does
  * not have (header), the TR-181 reference names the network section itself.
  * No TR-181 counterpart: Type, DefaultConnectionService.
+ *
+ * The default route of every routed or PPP WAN connection (its TR-098
+ * DefaultGateway) is an entry too, StaticRoute false, numbered
+ * L3F_MAX_ROUTES + id + 1: past every static number, so adding or deleting
+ * a static route never moves it.  Its GatewayIPAddress is DefaultGateway
+ * (wanip_mtk.c, wan181_get/set: writable on a static IPoE connection only);
+ * the rest is read only and it cannot be deleted.
  */
 
-static int get_rt_status181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+struct l3f181 {
+	struct uci_section *s;		/* a static route, or */
+	struct wan_entry *e;		/* the default route of a connection */
+};
+
+#define L3F181_S(data)	(((struct l3f181 *)(data))->s)
+#define L3F181_E(data)	(((struct l3f181 *)(data))->e)
+
+/* a static route leaf: its TR-098 getter on the section */
+#define L3F181_STATIC_GET(name, getter, dyn_value)					\
+static int get_rt181_##name(char *refparam, struct dmctx *ctx, void *data,		\
+			    char *instance, char **value)				\
+{											\
+	if (L3F181_E(data)) {								\
+		*value = dyn_value;							\
+		return 0;								\
+	}										\
+	return getter(refparam, ctx, L3F181_S(data), instance, value);			\
+}
+
+#define L3F181_STATIC_SET(name, setter)							\
+static int set_rt181_##name(char *refparam, struct dmctx *ctx, void *data,		\
+			    char *instance, char *value, int action)			\
+{											\
+	if (L3F181_E(data))								\
+		return FAULT_9008;							\
+	return setter(refparam, ctx, L3F181_S(data), instance, value, action);		\
+}
+
+L3F181_STATIC_GET(enable, get_rt_enable, "true")
+L3F181_STATIC_SET(enable, set_rt_enable)
+L3F181_STATIC_GET(static, get_rt_static, "false")
+L3F181_STATIC_GET(dest, get_rt_dest, "0.0.0.0")
+L3F181_STATIC_SET(dest, set_rt_dest)
+L3F181_STATIC_GET(mask, get_rt_mask, "0.0.0.0")
+L3F181_STATIC_SET(mask, set_rt_mask)
+L3F181_STATIC_GET(metric, get_rt_metric, "0")
+L3F181_STATIC_SET(metric, set_rt_metric)
+
+static int get_rt181_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = l3f_route_enabled((struct uci_section *)data) ? "Enabled" : "Disabled";
+	if (L3F181_E(data))
+		*value = "Enabled";
+	else
+		*value = l3f_route_enabled(L3F181_S(data)) ? "Enabled" : "Disabled";
 	return 0;
 }
 
-static int get_rt_interface181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+static int get_rt181_gateway(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	char *itf = l3f_opt((struct uci_section *)data, "interface");
-	char *inst;
+	if (L3F181_E(data))
+		return wan181_get(L3F181_E(data), "DefaultGateway", value);
+	return get_rt_gateway(refparam, ctx, L3F181_S(data), instance, value);
+}
 
+static int set_rt181_gateway(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	if (L3F181_E(data))
+		return wan181_set(L3F181_E(data), "DefaultGateway", value, action);
+	return set_rt_gateway(refparam, ctx, L3F181_S(data), instance, value, action);
+}
+
+static int get_rt181_origin(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct wan_entry *e = L3F181_E(data);
+	char *type = NULL;
+
+	if (!e) {
+		*value = "Static";
+		return 0;
+	}
+	if (e->ppp) {
+		*value = "IPCP";
+		return 0;
+	}
+	wan181_get(e, "AddressingType", &type);
+	*value = (type && strcmp(type, "DHCP") == 0) ? "DHCPv4" : "Static";
+	return 0;
+}
+
+static int get_rt181_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *itf, *inst;
+
+	if (L3F181_E(data)) {
+		*value = wan181_ipif(L3F181_E(data));
+		return 0;
+	}
+	itf = l3f_opt(L3F181_S(data), "interface");
 	*value = "";
 	if (!*itf)
 		return 0;
@@ -691,12 +776,14 @@ static int get_rt_interface181(char *refparam, struct dmctx *ctx, void *data, ch
 	return 0;
 }
 
-static int set_rt_interface181(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+static int set_rt181_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
 	const char *prefix = mtk_ipif_prefix();
 	size_t l = strlen(prefix);
 	char *sec;
 
+	if (L3F181_E(data))
+		return FAULT_9008;
 	if (!value || strncmp(value, prefix, l) != 0)
 		return FAULT_9007;
 	sec = dip_section_of_instance(value + l);
@@ -704,9 +791,17 @@ static int set_rt_interface181(char *refparam, struct dmctx *ctx, void *data, ch
 		return FAULT_9007;
 	if (action == VALUECHECK)
 		return 0;
-	dmuci_set_value_by_section((struct uci_section *)data, "interface", sec);
+	dmuci_set_value_by_section(L3F181_S(data), "interface", sec);
 	wan_reload();
 	return 0;
+}
+
+/* a connection's default route is not the ACS's to delete */
+static int del_rt181(char *refparam, struct dmctx *ctx, void *data, char *instance, unsigned char del_action)
+{
+	if (del_action == DEL_INST && L3F181_E(data))
+		return FAULT_9001;
+	return del_l3f_route(refparam, ctx, del_action == DEL_INST ? L3F181_S(data) : data, instance, del_action);
 }
 
 static int browseRouter181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
@@ -718,9 +813,26 @@ static int browseRouter181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *p
 	return 0;
 }
 
+/* the WAN connections that carry a default route: routed IPoE and PPP */
+static int l3f181_wan_routes(struct wan_entry **list)
+{
+	int n, i, m = 0;
+
+	*list = dmcalloc(2 * WAN_MAX_ENTRIES, sizeof(**list));
+	if (!*list)
+		return 0;
+	n = wan_entries_all(list, 2 * WAN_MAX_ENTRIES);
+	for (i = 0; i < n; i++) {
+		if (!(*list)[i].bridge)
+			(*list)[m++] = (*list)[i];
+	}
+	return m;
+}
+
 static int browseIpv4Fwd181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
 {
 	struct uci_section *list[L3F_MAX_ROUTES];
+	struct wan_entry *wan = NULL;
 	char *idx, *idx_last = NULL;
 	int n, i;
 
@@ -728,10 +840,27 @@ static int browseIpv4Fwd181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *
 	if (n > L3F_MAX_ROUTES)
 		n = L3F_MAX_ROUTES;
 	for (i = 0; i < n; i++) {
+		struct l3f181 *r = dmcalloc(1, sizeof(*r));
+
+		if (!r)
+			return 0;
+		r->s = list[i];
 		idx = handle_update_instance(2, dmctx, &idx_last, update_instance_without_section,
 					     1, i + 1);
-		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)list[i], idx) == DM_STOP)
-			break;
+		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)r, idx) == DM_STOP)
+			return 0;
+	}
+	n = l3f181_wan_routes(&wan);
+	for (i = 0; i < n; i++) {
+		struct l3f181 *r = dmcalloc(1, sizeof(*r));
+
+		if (!r)
+			return 0;
+		r->e = &wan[i];
+		idx = handle_update_instance(2, dmctx, &idx_last, update_instance_without_section,
+					     1, L3F_MAX_ROUTES + wan[i].id + 1);
+		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)r, idx) == DM_STOP)
+			return 0;
 	}
 	return 0;
 }
@@ -742,28 +871,41 @@ static int get_router181_count(char *refparam, struct dmctx *ctx, void *data, ch
 	return 0;
 }
 
+/* static routes and connection default routes */
+static int get_fwd181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct wan_entry *wan = NULL;
+	int n = l3f_routes(NULL, 0);
+
+	if (n > L3F_MAX_ROUTES)
+		n = L3F_MAX_ROUTES;
+	dmasprintf(value, "%d", n + l3f181_wan_routes(&wan));
+	return 0;
+}
+
 static DMLEAF tIpv4Fwd181Params[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
-{"Enable", &DMWRITE, DMT_BOOL, get_rt_enable, set_rt_enable, NULL, NULL},
-{"Status", &DMREAD, DMT_STRING, get_rt_status181, NULL, NULL, NULL},
-{"StaticRoute", &DMREAD, DMT_BOOL, get_rt_static, NULL, NULL, NULL},
-{"DestIPAddress", &DMWRITE, DMT_STRING, get_rt_dest, set_rt_dest, NULL, NULL},
-{"DestSubnetMask", &DMWRITE, DMT_STRING, get_rt_mask, set_rt_mask, NULL, NULL},
-{"GatewayIPAddress", &DMWRITE, DMT_STRING, get_rt_gateway, set_rt_gateway, NULL, NULL},
-{"Interface", &DMWRITE, DMT_STRING, get_rt_interface181, set_rt_interface181, NULL, NULL},
-{"ForwardingMetric", &DMWRITE, DMT_INT, get_rt_metric, set_rt_metric, NULL, NULL},
+{"Enable", &DMWRITE, DMT_BOOL, get_rt181_enable, set_rt181_enable, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_rt181_status, NULL, NULL, NULL},
+{"StaticRoute", &DMREAD, DMT_BOOL, get_rt181_static, NULL, NULL, NULL},
+{"DestIPAddress", &DMWRITE, DMT_STRING, get_rt181_dest, set_rt181_dest, NULL, NULL},
+{"DestSubnetMask", &DMWRITE, DMT_STRING, get_rt181_mask, set_rt181_mask, NULL, NULL},
+{"GatewayIPAddress", &DMWRITE, DMT_STRING, get_rt181_gateway, set_rt181_gateway, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_rt181_interface, set_rt181_interface, NULL, NULL},
+{"ForwardingMetric", &DMWRITE, DMT_INT, get_rt181_metric, set_rt181_metric, NULL, NULL},
+{"Origin", &DMREAD, DMT_STRING, get_rt181_origin, NULL, NULL, NULL},
 {0}
 };
 
 static DMLEAF tRouter181Params[] = {
 {"Enable", &DMWRITE, DMT_BOOL, get_l3f_enable, set_l3f_enable, NULL, NULL},
-{"IPv4ForwardingNumberOfEntries", &DMREAD, DMT_UNINT, get_l3f_count, NULL, NULL, NULL},
+{"IPv4ForwardingNumberOfEntries", &DMREAD, DMT_UNINT, get_fwd181_count, NULL, NULL, NULL},
 {0}
 };
 
 static DMOBJ tRouter181Obj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"IPv4Forwarding", &DMWRITE, add_l3f_route, del_l3f_route, NULL, browseIpv4Fwd181Inst, NULL, NULL, NULL, tIpv4Fwd181Params, NULL},
+{"IPv4Forwarding", &DMWRITE, add_l3f_route, del_rt181, NULL, browseIpv4Fwd181Inst, NULL, NULL, NULL, tIpv4Fwd181Params, NULL},
 {0}
 };
 

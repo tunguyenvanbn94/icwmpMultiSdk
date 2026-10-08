@@ -18,6 +18,8 @@
 #ifndef __WANCONN_MTK_H
 #define __WANCONN_MTK_H
 
+#include <json-c/json.h>
+
 #include "dmtr098.h"
 
 struct wan_entry {
@@ -61,5 +63,23 @@ void wan_reload(void);
 int wan_ubus_set(int index, const char *action, const char *param, const char *value);
 /* that call with action "modify", plus the reload; a FAULT_ code on failure */
 int wan_modify(struct wan_entry *e, const char *param, const char *value);
+
+/*
+ * TR-181 (cwmp.cpe.datamodel=tr181).  A connection is anchored on the
+ * Device.IP.Interface of its network section (if<id>, if_wanbr<id>); the
+ * TR-181 tables of the other objects borrow its leaves from here, by their
+ * TR-098 name, so the IP/PPP differences of wanip_mtk.c stay where they are.
+ */
+/* every connection of both objects, in config order */
+int wan_entries_all(struct wan_entry **out, int max);
+/* the connection whose network section is <sec>; 1 and *out when found */
+int wan_entry_of_sec(const char *sec, struct wan_entry *out);
+/* the connection at wan.@entry[idx]; 1 and *out when found */
+int wan_entry_of_idx(int idx, struct wan_entry *out);
+/* a leaf of WANIPConnection or WANPPPConnection (the entry's kind) */
+int wan181_get(struct wan_entry *e, const char *leaf, char **value);
+int wan181_set(struct wan_entry *e, const char *leaf, char *value, int action);
+/* "Device.IP.Interface.<n>" of the connection, "" when not numbered */
+char *wan181_ipif(struct wan_entry *e);
 
 #endif

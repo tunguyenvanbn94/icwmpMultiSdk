@@ -50,6 +50,7 @@
 #include "dmcommon.h"
 #include "dm_registry.h"
 #include "dmmtk.h"
+#include "wanconn_mtk.h"
 
 #define WAN_PKG		"wan"
 #define WAN_RELOAD	"/usr/sbin/hni_wan_reload.sh"
@@ -505,11 +506,89 @@ static const char *const device_ppp_mtk_paths181[] = {
 	NULL
 };
 
+/*
+ * TR-181 leaves of Interface.{i} this branch did not have, the
+ * WANPPPConnection leaves of the same entry (wanip_mtk.c, wan181_get/set):
+ * MaxMRUSize, CurrentMRUSize, Reset and IPCP.RemoteIPAddress.
+ */
+static struct wan_entry *ppp_wan(void *data)
+{
+	struct wan_entry *e = dmcalloc(1, sizeof(*e));
+	int n;
+
+	if (!e || sscanf(PPP_SEC(data), "@entry[%d]", &n) != 1 || !wan_entry_of_idx(n, e) || !e->ppp)
+		return NULL;
+	return e;
+}
+
+#define PPP181_GET(name, leaf)							\
+static int get_ppp181_##name(char *refparam, struct dmctx *ctx, void *data,	\
+			     char *instance, char **value)			\
+{										\
+	struct wan_entry *e = ppp_wan(data);					\
+										\
+	*value = "";								\
+	return e ? wan181_get(e, leaf, value) : 0;				\
+}
+
+#define PPP181_SET(name, leaf)							\
+static int set_ppp181_##name(char *refparam, struct dmctx *ctx, void *data,	\
+			     char *instance, char *value, int action)		\
+{										\
+	struct wan_entry *e = ppp_wan(data);					\
+										\
+	return e ? wan181_set(e, leaf, value, action) : FAULT_9002;		\
+}
+
+PPP181_GET(mru, "MaxMRUSize")
+PPP181_SET(mru, "MaxMRUSize")
+PPP181_GET(current_mru, "CurrentMRUSize")
+PPP181_GET(reset, "Reset")
+PPP181_SET(reset, "Reset")
+PPP181_GET(remote_ip, "RemoteIPAddress")
+
+static DMLEAF tPpp181IfParams[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMWRITE, DMT_BOOL, get_ppp_enable, set_ppp_enable, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_ppp_status, NULL, NULL, NULL},
+{"Name", &DMREAD, DMT_STRING, get_ppp_name, NULL, NULL, NULL},
+{"LastChange", &DMREAD, DMT_UNINT, get_ppp_lastchange, NULL, NULL, NULL},
+{"LowerLayers", &DMWRITE, DMT_STRING, get_ppp_lowerlayers, set_ppp_lowerlayers, NULL, NULL},
+{"Reset", &DMWRITE, DMT_BOOL, get_ppp181_reset, set_ppp181_reset, NULL, NULL},
+{"ConnectionStatus", &DMREAD, DMT_STRING, get_ppp_connstatus, NULL, NULL, NULL},
+{"LastConnectionError", &DMREAD, DMT_STRING, get_ppp_lasterror, NULL, NULL, NULL},
+{"Username", &DMWRITE, DMT_STRING, get_ppp_username, set_ppp_username, NULL, NULL},
+{"Password", &DMWRITE, DMT_STRING, get_ppp_password, set_ppp_password, NULL, NULL},
+{"MaxMRUSize", &DMWRITE, DMT_UNINT, get_ppp181_mru, set_ppp181_mru, NULL, NULL},
+{"CurrentMRUSize", &DMREAD, DMT_UNINT, get_ppp181_current_mru, NULL, NULL, NULL},
+{0}
+};
+
+static DMLEAF tPpp181IpcpParams[] = {
+{"RemoteIPAddress", &DMREAD, DMT_STRING, get_ppp181_remote_ip, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tPpp181IfObj[] = {
+{"IPCP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tPpp181IpcpParams, NULL},
+{0}
+};
+
+static DMOBJ tPpp181Obj[] = {
+{"Interface", &DMWRITE, add_ppp, del_ppp, NULL, browse_ppp, NULL, NULL, tPpp181IfObj, tPpp181IfParams, NULL},
+{0}
+};
+
+static DMOBJ tPpp181DeviceObj[] = {
+{"PPP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tPpp181Obj, NULL, NULL},
+{0}
+};
+
 static const struct dm_module device_ppp_mtk_module181 = {
 	.name  = "mtk-device-ppp-181",
 	.model = DM_MODEL_TR181,
 	.order = DM_ORDER_SDK,
-	.objs  = tPppDeviceObj,
+	.objs  = tPpp181DeviceObj,
 	.paths = device_ppp_mtk_paths181,
 };
 DM_MODULE_REGISTER(device_ppp_mtk_module181);

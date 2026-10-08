@@ -1533,7 +1533,7 @@ PY
 # must be one of them.
 # T2 (LAN) fixtures: a LAN, a WAN, four switch ports, a DHCP pool and two
 # hosts, one on Wi-Fi and one on a LAN port.  Saved and put back like p8's.
-TR181_CONFIGS="network dhcp lanhost wireless"
+TR181_CONFIGS="network dhcp lanhost wireless wan"
 tr181_fixtures() {
 	for c in $TR181_CONFIGS; do
 		if [ -f "/etc/config/$c" ]; then cp "/etc/config/$c" "$RUN/$c.t181saved"; else rm -f "${RUN:?}/${c:?}.t181saved"; fi
@@ -1553,6 +1553,14 @@ config interface 'lan'
 config interface 'if0'
 	option device 'pon.10'
 	option proto 'dhcp'
+
+config interface 'if1'
+	option device 'pon'
+	option proto 'pppoe'
+
+config interface 'if_wanbr2'
+	option device 'dev_wanbr2'
+	option proto 'none'
 
 config SwitchPara
 	option enable 'Yes'
@@ -1615,6 +1623,61 @@ config host
 	option layer2interface 'LAN3'
 EOF2
 	echo "$(( $(date +%s) + 3600 )) aa:bb:cc:11:22:33 192.168.1.101 phone-a *" > /tmp/dhcp.leases
+	# T4b (WAN connections): routed IPoE on DHCP, PPPoE, a bridge; netifd's
+	# view of the first two comes from the ubus stand-in below
+	cat > /etc/config/wan <<'EOF2'
+config entry
+	option id '0'
+	option name 'internet'
+	option switch_mode '0'
+	option conn_type '0'
+	option service_type '3'
+	option active '1'
+	option v4_mode '0'
+	option v4_static_dns '0'
+
+config entry
+	option id '1'
+	option name 'pppwan'
+	option switch_mode '0'
+	option conn_type '2'
+	option service_type '1'
+	option active '1'
+	option ppp_username 'user1'
+
+config entry
+	option id '2'
+	option name 'iptv'
+	option switch_mode '1'
+	option active '1'
+EOF2
+	mkdir -p "$RUN/t181bin"
+	cat > "$RUN/t181bin/ubus" <<'UBUS'
+#!/bin/sh
+# netifd and hni.wan for the engine's "ubus -S -t N call <obj> <method> [json]"
+a="$*"
+case "$a" in
+*"call network.interface.if0 status"*)
+	echo '{"up":true,"uptime":120,"l3_device":"pon.10","ipv4-address":[{"address":"100.64.1.10","mask":24}],"route":[{"target":"0.0.0.0","mask":0,"nexthop":"100.64.1.1"}],"dns-server":["8.8.4.4","9.9.9.9"]}'
+	exit 0 ;;
+*"call network.interface.if1 status"*)
+	echo '{"up":true,"uptime":60,"l3_device":"pppoe-if1","ipv4-address":[{"address":"10.20.30.40","mask":32,"ptpaddress":"10.20.30.1"}],"route":[{"target":"0.0.0.0","mask":0,"nexthop":"10.20.30.1"}],"dns-server":["1.0.0.1"]}'
+	exit 0 ;;
+*"call hni.wan set "*)
+	j=${a#*call hni.wan set }
+	act=$(echo "$j" | sed -n 's/.*"action": *"\([^"]*\)".*/\1/p')
+	par=$(echo "$j" | sed -n 's/.*"param": *"\([^"]*\)".*/\1/p')
+	val=$(echo "$j" | sed -n 's/.*"value": *"\([^"]*\)".*/\1/p')
+	idx=$(echo "$j" | sed -n 's/.*"index": *\([0-9]*\).*/\1/p')
+	echo "$act $idx $par=$val" >> @CALLS@
+	echo '{ "result": "SUCCESS" }'
+	exit 0 ;;
+esac
+exec /usr/bin/ubus "$@"
+UBUS
+	sed -i "s|@CALLS@|$RUN/t181.hni|g" "$RUN/t181bin/ubus"
+	chmod +x "$RUN/t181bin/ubus"
+	rm -f "${RUN:?}/t181.hni"
 	# T3 (Wi-Fi): the two radios and the twelve interfaces of the fixed map,
 	# one encryption of each kind on the fronthaul ones
 	{ printf "config wifi-device 'MT7993_1_1'\n\toption channel '6'\n\toption htmode 'EHT40'\n\toption txpower '60'\n\toption country 'TH'\n\toption map_mode '0'\n\n"
@@ -1647,7 +1710,7 @@ do_tr181() {
 	tr181_fixtures
 	uci set cwmp.cpe.datamodel=tr181
 	uci commit cwmp
-	start 1 "--walk Device."
+	start 1 "--walk Device." env PATH="$RUN/t181bin:$PATH"
 	if ! wait_done 60 || ! alive; then bad "tr181: session"; stop; restore_cfg cwmp; tr181_fixtures_restore; return; fi
 	sleep 1
 	expect "Inform root" "$(sed -n 's/^session 1 .* root=\([^ ]*\) .*/\1/p' "$RUN/acs.log")" "Device"
@@ -1684,8 +1747,8 @@ PY
 	expect "Host 2 Layer3Interface" "$(dm_value $H.2.Layer3Interface)" "Device.IP.Interface.$lan"
 	expect "Host 2 PhysAddress" "$(dm_value $H.2.PhysAddress)" "aa:bb:cc:11:22:44"
 	expect "LAN IPv4Address" "$(dm_value Device.IP.Interface.$lan.IPv4Address.1.IPAddress)" "192.168.1.1"
-	expect "IPv4Address only on the LAN" "$(python3 -c 'import json, re, sys
-print(sum(1 for p in json.load(open(sys.argv[1]))["parameters"] if re.match(r"Device\.IP\.Interface\.\d+\.IPv4Address\.\d+\.IPAddress$", p["parameter"])))' "$RUN/tr181.gpn")" "1"
+	expect "IPv4Address on the LAN, the IPoE and the PPP WAN" "$(python3 -c 'import json, re, sys
+print(sum(1 for p in json.load(open(sys.argv[1]))["parameters"] if re.match(r"Device\.IP\.Interface\.\d+\.IPv4Address\.\d+\.IPAddress$", p["parameter"])))' "$RUN/tr181.gpn")" "3"
 	expect "set Pool MinAddress" "$(dm_set_fault $P.MinAddress 192.168.1.50 "$key")" "0"
 	expect "  dhcp.lan.start" "$(uci -q get dhcp.lan.start)" "50"
 	expect "set Pool LeaseTime" "$(dm_set_fault $P.LeaseTime 7200 "$key")" "0"
@@ -1713,7 +1776,33 @@ print(sum(1 for p in json.load(open(sys.argv[1]))["parameters"] if re.match(r"De
 	expect "set route 1 Interface not an IP.Interface" "$(dm_set_fault $F.1.Interface Device.IP.Interface.99 "$key")" "9007"
 	expect "add IPv4Forwarding" "$($UBUS call tr069 dm '{"cmd":"add","path":"Device.Routing.Router.1.IPv4Forwarding."}' 2>/dev/null |
 		python3 -c 'import json, sys; r = json.load(sys.stdin); print(r.get("fault"), r.get("instance"))')" "0 2"
-	expect "  IPv4ForwardingNumberOfEntries" "$(dm_value Device.Routing.Router.1.IPv4ForwardingNumberOfEntries)" "2"
+	expect "  IPv4ForwardingNumberOfEntries (2 static, 2 default routes)" "$(dm_value Device.Routing.Router.1.IPv4ForwardingNumberOfEntries)" "4"
+	# T4b: WAN connections on the IP.Interface of their network section,
+	# IPv4Address.1, NAT.InterfaceSetting.{id+1}, DNS.Client.Server.{3id+pos+1},
+	# DHCPv4.Client.{id+1}, default routes IPv4Forwarding.{64+id+1}, PPP.Interface
+	w0=$(uci -q get network.if0.ip_int_instance) w2=$(uci -q get network.if_wanbr2.ip_int_instance)
+	I=Device.IP.Interface N=Device.NAT.InterfaceSetting D=Device.DNS.Client.Server C=Device.DHCPv4.Client.1
+	expect "NAT 1/2/3 Enable" "$(dm_value $N.1.Enable) $(dm_value $N.2.Enable) $(dm_value $N.3.Enable)" "true true false"
+	expect "NAT 1/3 Interface" "$(dm_value $N.1.Interface) $(dm_value $N.3.Interface)" "Device.IP.Interface.$w0 Device.IP.Interface.$w2"
+	expect "IPoE IPv4Address" "$(dm_value $I.$w0.IPv4Address.1.IPAddress) $(dm_value $I.$w0.IPv4Address.1.SubnetMask) $(dm_value $I.$w0.IPv4Address.1.AddressingType)" "100.64.1.10 255.255.255.0 DHCP"
+	expect "IPoE Alias, LAN Alias empty" "$(dm_value $I.$w0.Alias)|$(dm_value $I.$lan.Alias)" "cpe-internet-tr069|"
+	expect "bridge has no IPv4Address" "$(dm_value $I.$w2.IPv4Address.1.IPAddress)" "<none>"
+	expect "DNS servers" "$(dm_value $D.1.DNSServer) $(dm_value $D.2.DNSServer) $(dm_value $D.4.DNSServer) $(dm_value Device.DNS.Client.ServerNumberOfEntries)" "8.8.4.4 9.9.9.9 1.0.0.1 3"
+	expect "DNS types" "$(dm_value $D.1.Type) $(dm_value $D.4.Type)" "DHCPv4 IPCP"
+	expect "DHCPv4.Client.1" "$(dm_value $C.Enable) $(dm_value $C.IPRouters) $(dm_value $C.DNSServers) $(dm_value Device.DHCPv4.ClientNumberOfEntries)" "true 100.64.1.1 8.8.4.4,9.9.9.9 1"
+	expect "default routes 65/66" "$(dm_value $F.65.GatewayIPAddress) $(dm_value $F.65.Origin) $(dm_value $F.65.StaticRoute) $(dm_value $F.66.GatewayIPAddress) $(dm_value $F.66.Origin)" "100.64.1.1 DHCPv4 false 10.20.30.1 IPCP"
+	p=$(python3 -c 'import json, sys
+for x in json.load(open(sys.argv[1]))["parameters"]:
+    if x["parameter"].startswith("Device.PPP.Interface.") and x["parameter"].endswith(".Username"): print(x["parameter"].split(".")[3])' "$RUN/tr181.gpn" | head -1)
+	expect "PPP.Interface Username/MRU/peer" "$(dm_value Device.PPP.Interface.$p.Username) $(dm_value Device.PPP.Interface.$p.MaxMRUSize) $(dm_value Device.PPP.Interface.$p.IPCP.RemoteIPAddress)" "user1 1492 10.20.30.1"
+	expect "set NAT 1 Enable false" "$(dm_set_fault $N.1.Enable false "$key")" "0"
+	expect "set DHCPv4.Client.1 Enable false" "$(dm_set_fault $C.Enable false "$key")" "0"
+	expect "  hni.wan calls" "$(cat "$RUN/t181.hni" 2>/dev/null | tr '\n' '|')" "modify 0 nat_enable=0|modify 0 v4_mode=1|"
+	expect "set DNS server on DHCP DNS (9001)" "$(dm_set_fault $D.1.DNSServer 1.1.1.1 "$key")" "9001"
+	expect "set default route gateway on DHCP (9001)" "$(dm_set_fault $F.65.GatewayIPAddress 1.2.3.4 "$key")" "9001"
+	expect "set PPP default route gateway (9008)" "$(dm_set_fault $F.66.GatewayIPAddress 1.2.3.4 "$key")" "9008"
+	expect "delete a default route (9001)" "$($UBUS call tr069 dm '{"cmd":"del","path":"Device.Routing.Router.1.IPv4Forwarding.65."}' 2>/dev/null |
+		python3 -c 'import json, sys; print(json.load(sys.stdin).get("fault"))')" "9001"
 	# T3 Wi-Fi: Radio from the radio sections, SSID/AccessPoint numbered like
 	# WLANConfiguration, Security.ModeEnabled from wireless.<iface>.encryption
 	R=Device.WiFi.Radio S=Device.WiFi.SSID A=Device.WiFi.AccessPoint
@@ -1762,7 +1851,7 @@ print(sum(1 for p in json.load(open(sys.argv[1]))["parameters"] if re.match(r"De
 	restore_cfg cwmp
 	tr181_fixtures_restore
 	if [ $bad_n = 0 ]; then
-		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, LAN (T2), Wi-Fi (T3), WAN port and routing (T4a) values and writes, DataModel back to tr098; pairs: $(tail -2 "$RUN/tr181.equiv" | head -1)"
+		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, LAN (T2), Wi-Fi (T3), WAN port and routing (T4a), WAN connections (T4b) values and writes, DataModel back to tr098; pairs: $(tail -2 "$RUN/tr181.equiv" | head -1)"
 	else
 		bad "tr181: $bad_n mismatches above"
 	fi

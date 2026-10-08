@@ -5,7 +5,7 @@ Tài liệu tiến độ để chuyển giao. Kiến trúc và cách chia code �
 
 | | |
 |---|---|
-| Cập nhật | 2026-10-08 17:01. `dev` = `main` = `dc3d7f7` (tag `release/mtk-20261008`, đã push). TR-181 trên branch `dev_181` tới `[icwmp tr181-0006]` (local, chưa push). Board chạy image `9f393e4` (0104) |
+| Cập nhật | 2026-10-08 17:33. `dev` = `main` = `dc3d7f7` (tag `release/mtk-20261008`, đã push). TR-181 trên branch `dev_181` tới `[icwmp tr181-0007]` (local, chưa push). Board chạy image `9f393e4` (0104) |
 | Nguồn trạng thái có cấu trúc | [../issue/implementation-status.json](../issue/implementation-status.json), xem nhanh: `python3 docs/issue/progress.py` |
 | Bằng chứng chi tiết | [../issue/analysis.md](../issue/analysis.md) (§ theo thời gian, mới nhất ở cuối) |
 | Quy ước | Trạng thái không cao hơn bằng chứng thấp nhất trên HEAD. "Đạt" ở đây luôn ghi rõ mức: STATIC, SDK build, BOARD, HOST |
@@ -27,7 +27,7 @@ flowchart LR
     subgraph LATER["Mở rộng"]
         PH4["PH4<br/>P6-P8, lớp product"]
         PH5["PH5<br/>full C, tắt compat<br/>board 08/10"]
-        PH6["PH6<br/>TR-181 trên MTK<br/>dev_181: T0 đến T4a"]
+        PH6["PH6<br/>TR-181 trên MTK<br/>dev_181: T0 đến T4b"]
         PH7["PH7<br/>BDK cùng contract"]
         PH8["PH8<br/>CI, release, ABI"]
     end
@@ -59,7 +59,7 @@ flowchart LR
 | BDK | Prototype; **build image đạt 06/10 tại 0088** (bundle một SDK, analysis §56) | SDK build BDK; board BDK chưa (PH7) |
 | Test host | Chạy được trên máy build: container `ubuntu:24.04` (§55) | **`run.sh all` 24/24 PASS 08/10** tại 0104 và từ chính bundle `release/mtk-20261008` (§66); trên `dev_181` 25/25 (thêm `tr181`, §67) |
 | **PH0 (đóng băng baseline)** | **Xong 08/10** (PH0.5, tag `baseline/ph0-mtk-tr098-20261008`) | Board image `0fa9d31` (0101), parity PASS. Mang sang sau: G9 24 h (không chặn, quyết định 08/10), WebUI (G6), K15 hoãn (§64) |
-| **PH6 TR-181 MTK** (branch `dev_181`) | **Đang làm**: T0 nền, T1 object hệ thống, T2 LAN, T3 Wi-Fi, T4a (cổng WAN, PON, định tuyến) xong trên host; K29 (kiểm kiểu cho tên TR-181) sửa | 456 tên TR-181, `tr181-map.py check` thiếu 0, `run.sh tr181` so cặp 910 bằng + 2 theo tham chiếu (§67–§70); còn T4b–d kết nối WAN (151), T5 (136), T6 board, T7: [../plan/tr181_mtk_design.md](../plan/tr181_mtk_design.md) |
+| **PH6 TR-181 MTK** (branch `dev_181`) | **Đang làm**: T0 nền, T1 object hệ thống, T2 LAN, T3 Wi-Fi, T4a (cổng WAN, PON, định tuyến), T4b (lá chuẩn của kết nối WAN) xong trên host; K29 (kiểm kiểu cho tên TR-181) sửa | 481 tên TR-181, `tr181-map.py check` thiếu 0, `run.sh tr181` so cặp 994 bằng + 2 theo tham chiếu (§67–§71); còn T4c–d `X_AIS_*`/PortMapping của kết nối (86), T5 (136), T6 board, T7: [../plan/tr181_mtk_design.md](../plan/tr181_mtk_design.md) |
 | **Bản giao MTK** | **`release/mtk-20261008`** (08/10): full C, không còn shell data model | bundle `--sdk mtk` kiểm sha256, apply = code image `9f393e4` (board PASS), `run.sh all` từ bundle 24/24 PASS; làm lại từng bước: [icwmp_mtk_build_verify_guide.md](icwmp_mtk_build_verify_guide.md) (§66) |
 | **PH5 (tắt compat)** | **Đạt board 08/10** (0103, 0104; kéo lên trước PH1–PH3) | Build MTK `--disable-dm-script-compat`, không cài `icwmp_dm.sh`. Image `9f393e4`: parity compat-off PASS, không tên nào chỉ ở shell → **cây C đủ trên board**; GPV toàn cây 1 s. Tìm và sửa K28 (§65) |
 

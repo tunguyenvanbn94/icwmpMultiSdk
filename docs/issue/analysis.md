@@ -4587,3 +4587,87 @@ Hướng ánh xạ theo ma trận BDK (`projects/brcm_ap_wifi7_mvn/docs/icwmp_tr
 - Uplink PON hay Ethernet đều đặt ở `Ethernet.Interface.5`, `Name` = netdev uplink (`pon`, `eth0`…). Trong TR-181,
   uplink PON đúng ra nằm dưới `Optical.Interface`. Có cần tách theo `clay.opermode.uplink` không thì xét ở T7 cùng
   ACS.
+
+## 71. TR-181 trên MTK: T4b lá chuẩn của kết nối WAN (`tr181-0007`) (08/10 17:20–)
+
+**User (chatlog 92):** đồng ý đề xuất T4b–d. Nếu khi làm thấy chỗ nào không đúng thì được chỉnh.
+
+**Neo:**
+- Mỗi kết nối (`WANIPConnection`/`WANPPPConnection`, instance id+1) gắn vào `Device.IP.Interface` của section
+  `network.if<id>`. Bridge gắn vào `if_wanbr<id>`. Section đó do `device_ip_mtk.c` đánh số từ T1.
+- Bảng TR-181 của các object khác mượn lá của kết nối qua `wan181_get/set` (`wanip_mtk.c`). Hàm này tra lá theo tên
+  TR-098 trong chính bảng `tWanIpConnParam` hoặc `tWanPppConnParam` của loại kết nối, nên khác biệt IP/PPP giữ
+  nguyên. Ví dụ: `MaxMTUSize` của PPP vẫn rỗng (lỗi sản phẩm được giữ), `DefaultGateway` của PPP vẫn read-only.
+
+| TR-098 | TR-181 | File |
+|---|---|---|
+| `ExternalIPAddress`, `SubnetMask`, `AddressingType` | `IP.Interface.{n}.IPv4Address.1` (IPoE và PPP; bridge không có) | `lan_mtk.c` |
+| `Alias`, `MaxMTUSize`, `Uptime` (→ `LastChange`), `Stats.Ethernet*` | `IP.Interface.{n}` | `device_ip_mtk.c` (bảng TR-181 riêng) |
+| `NATEnabled` | `NAT.InterfaceSetting.{id+1}` (+`Status`, `Interface`) | `wanip_mtk.c` |
+| `DNSServers` | `DNS.Client.Server.{3·id+pos+1}`, mỗi địa chỉ một instance (+`Type` DHCPv4/IPCP/Static) | `wanip_mtk.c` |
+| công tắc `AddressingType` | `DHCPv4.Client.{id+1}.Enable`, IPoE routed (+`IPRouters`, `DNSServers`, `IPAddress`…) | `wanip_mtk.c` |
+| `DefaultGateway` | `Routing.Router.1.IPv4Forwarding.{64+id+1}` (`StaticRoute` false, `Origin`) | `layer3forwarding_mtk.c` |
+| PPP: `Username`, `Password`, `MaxMRUSize`, `CurrentMRUSize`, `Reset`, `RemoteIPAddress` | `PPP.Interface.{p}` (+`IPCP`) | `device_ppp_mtk.c` (bảng TR-181 riêng) |
+
+**Điều chỉnh so với đề xuất (user cho phép):**
+1. **Route mặc định đánh số `64+id+1`, không xếp sau route tĩnh.**
+   - Nếu xếp sau route tĩnh, số của chúng trượt mỗi khi thêm/xoá route tĩnh.
+   - `AddObject` (trả số route tĩnh mới) có thể trả lại đúng số ACS đã thấy cho route mặc định của một kết nối.
+   - 64 là `L3F_MAX_ROUTES`, trần số route tĩnh.
+   - Route mặc định không xoá được (9001). Chỉ `GatewayIPAddress` ghi được, qua setter `DefaultGateway`: IPoE tĩnh
+     ghi được, DHCP trả 9001, PPP trả 9008.
+2. **Lá chỉ có ở TR-181 vào bảng TR-181 riêng.**
+   - Áp dụng cho `IP.Interface` (`Alias`, `MaxMTUSize`) và `PPP.Interface` (MRU, `Reset`, `IPCP`).
+   - Bảng cũ dùng chung với nhánh `IGD.Device.IP`/`IGD.Device.PPP` của cây TR-098, mà cây TR-098 không được đổi.
+3. **`DNSServers` là loại B**, vì một danh sách TR-098 ứng với nhiều instance `DNS.Client.Server`. Số instance cố
+   định theo id và vị trí (`3·id+pos+1`, tối đa 3 địa chỉ như getter TR-098). Ghi `DNSServer` thay đúng vị trí đó
+   rồi đi qua setter `DNSServers` (chỉ khi DNS tĩnh, không thì 9001 như TR-098).
+4. **`IPv4ForwardingNumberOfEntries` thành loại B** (đếm cả route mặc định). **`Enable` của PPP** loại B vì cây PPP
+   sẵn có của sản phẩm viết `1`/`0`.
+
+**Loại B khác:**
+- `WANIPConnection.Enable` đọc `wan.@entry.active`, còn `IP.Interface.Enable` đọc `network.<sec>.auto`; setter
+  TR-181 ghi cả hai.
+- `ConnectionStatus` (có địa chỉ) khác `Status`/`ConnectionStatus` (netifd up).
+- `LastConnectionError` của PPP.
+
+**Loại D:**
+- `Name` (tên hiển thị của sản phẩm), `PossibleConnectionTypes`, `ConnectionType`, `DNSEnabled`.
+- `DNSOverrideAllowed`: TR-181 thể hiện bằng `Server.Type` = Static.
+- `MACAddress`/`MACAddressOverride` (`Ethernet.Link`, T7), `TransportType`, `LastConnectionError` của IPoE, hai lá
+  đếm của `WANConnectionDevice`.
+
+**Công cụ:**
+- `tr181-map.py` thêm các resolver:
+  - `{wanif:iN}`: tra qua `NAT.InterfaceSetting.N.Interface`;
+  - `{ppp:iN}`: tra theo `Name`;
+  - `{dns:iN}` = 3N−2, `{gw:iN}` = 64+N.
+- Hai trường hợp được chấp nhận, đều có đếm riêng:
+  - cặp có giá trị TR-098 rỗng hoặc `0.0.0.0` và không có instance TR-181 (bridge);
+  - lá của bảng dùng chung, đọc rỗng ở instance không có lá TR-098 đó.
+- `wanconn_mtk.h` tự include json-c.
+
+**Kiểm (host):**
+- `tr181-map.py check`: 481 = 481, thiếu 0. Theo loại: A 383, B 24, C 88, D 83; chờ T4 86 (`X_AIS_*`, ServiceList,
+  PortMapping), T5 136.
+- `run.sh tr181`: fixture `wan` (IPoE DHCP, PPPoE, bridge); script `ubus` giả đóng vai netifd
+  (`network.interface.if0/if1 status`) và `hni.wan`.
+  - NAT 1/2/3: `true true false`.
+  - IPv4Address IPoE: `100.64.1.10 255.255.255.0 DHCP`; bridge không có `IPv4Address`.
+  - DNS: `8.8.4.4 9.9.9.9 1.0.0.1`, type DHCPv4/IPCP.
+  - DHCPv4.Client.1: `true 100.64.1.1 8.8.4.4,9.9.9.9`.
+  - Route 65/66: `100.64.1.1 DHCPv4`, `10.20.30.1 IPCP`.
+  - PPP: `user1 1492 10.20.30.1`.
+  - Ghi `NAT.InterfaceSetting.1.Enable` và `DHCPv4.Client.1.Enable` → `hni.wan modify` đúng param.
+  - Từ chối: DNS trên kết nối DHCP 9001, gateway DHCP 9001, gateway PPP 9008, xoá route mặc định 9001.
+- So cặp: **994 bằng** + 2 theo tham chiếu, B 126, D 223, động 31, 5 thiếu vì TR-098 rỗng (bridge), 4 rỗng ở
+  instance khác, 0 tên TR-181 thiếu cặp.
+- Cổng tĩnh: check-c-sanity 69/0, verify-dm-paths tr098 thiếu 0, claims 0 cặp chồng, automake 0, cross-gcc SDK
+  69 file 0 lỗi, schema: tên mới đều chuẩn.
+- Chưa build SDK, chưa chạy board.
+
+**Chưa chứng minh được:**
+- `Stats` của kết nối: TR-098 đọc sysfs netdev (PPP: netdev ppp), TR-181 `IP.Interface.Stats` đọc
+  `network.device status` của `network.<sec>.device`. Với PPPoE hai netdev này khác nhau. Host không có netdev nên
+  không so được; cần board (T6).
+- `IP.Interface.Enable` và `WANIPConnection.Enable` có luôn cùng giá trị trên board không (hai option khác nhau).

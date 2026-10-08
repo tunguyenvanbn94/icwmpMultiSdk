@@ -156,7 +156,7 @@ phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đ�
 | T1 Hệ thống (loại A) — **xong trên host** (`tr181-0002`, analysis §67) | DeviceInfo, ManagementServer, Time, UserInterface, Users, XMPP, BulkData, FaultMgmt, SoftwareModules, Services, CaptivePortal, FAP, USB, `X_AIS_*` ở root, nhánh `Device.*` của sản phẩm (IP, PPP, DHCPv6, DynamicDNS, RouterAdvertisement, TraceRoute) | `tr181-map.py check` thiếu 0; `run.sh tr181`: 306 cặp bằng, 0 tên TR-181 thiếu cặp |
 | T2 LAN — **xong trên host** (`tr181-0003`, analysis §68) | DHCPv4.Server.Pool.1, IP.Interface LAN IPv4Address.1, Ethernet.Interface 1..4 (+Stats), Hosts.Host; Bridging: sản phẩm không có tham số (D) | `check` thiếu 0; `run.sh tr181`: 482 cặp bằng + 2 bằng theo tham chiếu, ghi qua tên TR-181 vào đúng option |
 | T3 Wi-Fi — **xong trên host** (`tr181-0005`, analysis §69) | WiFi.Radio 1..2, SSID/AccessPoint 1..12 (số của WLANConfiguration), Security.ModeEnabled, WPS, AssociatedDevice (+Stats), `WiFi.X_AIS_Mesh`, `WiFi.X-AIS_*` | `check` thiếu 0; `run.sh tr181`: 884 cặp bằng, ghi qua tên TR-181 vào đúng option |
-| T4 WAN | T4a **xong trên host** (`tr181-0006`, analysis §70): cổng WAN `Ethernet.Interface.5`, `Optical.Interface.1`, `Routing.Router.1.IPv4Forwarding`. Còn T4b lá chuẩn của kết nối (IP.Interface, IPv4Address, DHCPv4.Client, NAT.InterfaceSetting, DNS.Client, PPP.Interface), T4c `X_AIS_*` của kết nối, T4d `NAT.PortMapping`, Add/Delete kết nối | như trên + `hni.wan` thật trên board |
+| T4 WAN | T4a **xong trên host** (`tr181-0006`, §70): cổng WAN `Ethernet.Interface.5`, `Optical.Interface.1`, `Routing.Router.1.IPv4Forwarding`. T4b **xong trên host** (`tr181-0007`, §71): kết nối → IP.Interface, IPv4Address, DHCPv4.Client, NAT.InterfaceSetting, DNS.Client.Server, route mặc định, PPP.Interface. Còn T4c `X_AIS_*` của kết nối, T4d `NAT.PortMapping`, Add/Delete kết nối | như trên + `hni.wan` thật trên board |
 | T5 Chẩn đoán, firewall | IP.Diagnostics.*, DNS.Diagnostics, SelfTest, `Firewall.X_AIS_*` | như trên |
 | T6 Board | so cặp TR-098 ↔ TR-181 trên board, phiên ACS thật ở chế độ `tr181` | 0 cặp lệch không giải thích được |
 | T7 Theo BDK | tham số TR-181 mà ACS dùng trên BDK nhưng chưa có ở đây (không làm tất cả) | danh sách chốt với user |
@@ -171,10 +171,10 @@ phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đ�
 | `docs/issue/tr181-schema.py <bcm963xx>/data-model --check <file>` | tên có trong TR-181 chuẩn (bảng tra BDK); tên BBF mà XML Broadcom không có thì xét tay |
 | `docs/issue/verify-dm-paths.py --model tr181 --dump` | cây TR-181 build khai báo |
 
-Số phủ sau T4a: nguồn TR-098 (ma trận + tên chỉ có ở C) theo loại: A 344, B 16, C 88, D 65, chờ T4 151, T5 136.
-Tên TR-181 trong cây C: 456.
+Số phủ sau T4b: nguồn TR-098 (ma trận + tên chỉ có ở C) theo loại: A 383, B 24, C 88, D 83, chờ T4 86, T5 136.
+Tên TR-181 trong cây C: 481.
 
-## T4b–T4d: đề xuất (08/10, chờ user xác nhận trước khi code)
+## T4b–T4d: đề xuất (08/10, user đồng ý ở chatlog 92; T4b đã làm, điều chỉnh ở analysis §71)
 
 Mỗi kết nối WAN (`WANIPConnection.{id+1}`/`WANPPPConnection.{id+1}`, `wan.@entry` có `id`) neo vào `Device.IP.Interface`
 của section `network.if<id>` (bridge: `if_wanbr<id>`), đánh số bằng `ip_int_instance` như từ T1. Hướng theo ma trận BDK.
@@ -184,7 +184,7 @@ của section `network.if<id>` (bridge: `if_wanbr<id>`), đánh số bằng `ip_
 | `ExternalIPAddress`, `SubnetMask`, `AddressingType` | `IP.Interface.{n}.IPv4Address.1.` | mở rộng browse `IPv4Address` của T2 sang WAN |
 | `NATEnabled` | `NAT.InterfaceSetting.{id+1}.Enable` (+`Interface`) | số theo kết nối, không trùng giữa IP và PPP vì `id` duy nhất |
 | `DNSServers` | `DNS.Client.Server.{k}` mỗi địa chỉ một instance (+`Interface`, `Type`) | TR-181 `DNSServer` là một địa chỉ; loại B |
-| `DefaultGateway` | `Routing.Router.1.IPv4Forwarding` mục động (`StaticRoute` false, `Origin`), sau các route tĩnh | số mục động đổi khi thêm/xoá route tĩnh |
+| `DefaultGateway` | `Routing.Router.1.IPv4Forwarding.{64+id+1}` (`StaticRoute` false, `Origin`) | **đã chỉnh:** số cố định ngoài dải route tĩnh, không trượt khi thêm/xoá route tĩnh |
 | `Enable`, `ConnectionStatus`, `Alias`, `Stats.*`, `MaxMTUSize` | lá của `IP.Interface.{n}` | `Enable` TR-098 đọc `wan.@entry.active`, TR-181 đọc `network.<sec>.auto`: kiểm trên board |
 | `Username`, `Password`, `MaxMRUSize`, `CurrentMRUSize`, `RemoteIPAddress`… (PPP) | `PPP.Interface.{p}` (đã có từ T1) + `IPCP` | |
 | `X_AIS_*` (VLAN, IPMode, DefaultRoute, LanInterface, ServiceList, `X_AIS_IPv6.*`) | `IP.Interface.{n}.X_AIS_*`, cùng tên lá (nguyên tắc 5) | rỗng ở instance không phải WAN |

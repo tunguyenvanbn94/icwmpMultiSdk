@@ -10,8 +10,11 @@ rules in tr181_mapping.tsv:
 A rule maps a TR-098 path (instances spelled {i}) to a TR-181 one.  On the
 TR-181 side {iN} is the Nth instance of the TR-098 path, {i} the next one, and
 {lan} the Device.IP.Interface instance whose Name is "lan", {radio:iN} the
-Device.WiFi.Radio of the SSID numbered like the Nth instance (both read from
-the TR-181 dump; "{i}" for check):
+Device.WiFi.Radio of the SSID numbered like the Nth instance, {wanif:iN} the
+Device.IP.Interface of WAN connection N (NAT.InterfaceSetting.N.Interface),
+{ppp:iN} its Device.PPP.Interface (by Name: the connection's, else if<N-1>)
+-- read from the dumps, "{i}" for check -- and {dns:iN} / {gw:iN} the fixed
+numbers 3N-2 (first DNS.Client.Server) / 64+N (default route):
   prefix  the longest matching prefix wins, the rest of the path is kept
   leaf    exactly that TR-098 parameter (wins over every prefix)
   new     a TR-181 name with no TR-098 source
@@ -24,7 +27,10 @@ check: every A/B/C name must be in the tree (verify-dm-paths.py --model tr181
 equiv: an A/C pair must be present in both dumps with the same value
 (counters and clocks excepted; a TR-098 value that is a path reference into
 the product's InternetGatewayDevice.Device. branch equals the same reference
-under Device., "equal ref"); exit 1 on a missing name or a different
+under Device., "equal ref"); a pair whose TR-098 value is empty or 0.0.0.0
+may have no TR-181 instance (a bridge has no address, no DNS list); a TR-181
+name no pair reaches is fine when it reads empty and a rule targets its
+pattern (a leaf of a shared table on an instance without that TR-098 leaf); exit 1 on a missing name or a different
 value.  Pending (T2..) and D rows are counted, not checked."""
 import json, os, re, subprocess, sys
 
@@ -39,7 +45,7 @@ DYNAMIC = [r"\.Stats\.", r"\.(Bytes|Packets)(Sent|Received)$", r"\.UpTime$", r"\
 
 def pat(p):
     p = p.replace("{lan}", "{i}")
-    p = re.sub(r"\{radio:(\d+|\{i\})\}", "{i}", p)
+    p = re.sub(r"\{(radio|wanif|ppp):(\d+|\{i\})\}", "{i}", p)
     p = re.sub(r"\$\d", "{i}", p)
     p = re.sub(r"\.\d+\.", ".{i}.", p)
     p = re.sub(r"\.\d+\.", ".{i}.", p)
@@ -91,7 +97,8 @@ def target(rule, m, path):
     if not rule or rule[3] not in ("A", "B", "C") or rule[2] in ("?", "-"):
         return None
     caps = list(m.groups())
-    out = re.sub(r"\{radio:i(\d)\}", lambda x: "{radio:%s}" % caps[int(x.group(1)) - 1], rule[2])
+    out = re.sub(r"\{(radio|wanif|ppp):i(\d)\}", lambda x: "{%s:%s}" % (x.group(1), caps[int(x.group(2)) - 1]), rule[2])
+    out = re.sub(r"\{(dns|gw):i(\d)\}", lambda x: fixed(x.group(1), caps[int(x.group(2)) - 1]), out)
     out = re.sub(r"\{i(\d)\}", lambda x: caps[int(x.group(1)) - 1], out)
     it = iter(caps)
     out = re.sub(r"\{i\}", lambda x: next(it), out)
@@ -144,6 +151,32 @@ def named(d181):
     return out
 
 
+def fixed(kind, cap):
+    """the fixed instance numbers of a WAN connection's DNS server / default route"""
+    if not cap.isdigit():
+        return "{i}"
+    return str(3 * int(cap) - 2) if kind == "dns" else str(64 + int(cap))
+
+
+def wanif_of(d181, conn):
+    v = d181.get("Device.NAT.InterfaceSetting.%s.Interface" % conn, {}).get("value", "")
+    m = re.search(r"Interface\.(\d+)$", v)
+    return m.group(1) if m else "{wanif:%s}" % conn
+
+
+def ppp_of(d98, d181, conn):
+    name = ""
+    for k, p in d98.items():
+        if re.search(r"\.WANPPPConnection\.%s\.Name$" % conn, k):
+            name = p.get("value", "")
+    for cand in (name, "if%d" % (int(conn) - 1)):
+        for k, p in d181.items():
+            m = re.match(r"^Device\.PPP\.Interface\.(\d+)\.Name$", k)
+            if m and cand and p.get("value") == cand:
+                return m.group(1)
+    return "{ppp:%s}" % conn
+
+
 def radio_of(d181, ssid):
     """Device.WiFi.Radio instance of Device.WiFi.SSID.<ssid> (its LowerLayers)"""
     v = d181.get("Device.WiFi.SSID.%s.LowerLayers" % ssid, {}).get("value", "")
@@ -194,6 +227,10 @@ def main():
                 t = t.replace(k, v) if t else t
             if t and "{radio:" in t:
                 t = re.sub(r"\{radio:(\d+)\}", lambda x: radio_of(d181, x.group(1)), t)
+            if t and "{wanif:" in t:
+                t = re.sub(r"\{wanif:(\d+)\}", lambda x: wanif_of(d181, x.group(1)), t)
+            if t and "{ppp:" in t:
+                t = re.sub(r"\{ppp:(\d+)\}", lambda x: ppp_of(d98, d181, x.group(1)), t)
             kind = r[3] if r else "none"
             if not t:
                 cls[kind] = cls.get(kind, 0) + 1
@@ -202,7 +239,9 @@ def main():
                     bad += 1
                 continue
             reached.add(t)
-            if t not in d181:
+            if t not in d181 and d98[name]["value"] in ("", "0.0.0.0"):
+                cls["absent, TR-098 empty"] = cls.get("absent, TR-098 empty", 0) + 1
+            elif t not in d181:
                 print("  missing in TR-181: %s (from %s)" % (t, name))
                 bad += 1
             elif kind == "B":
@@ -217,7 +256,12 @@ def main():
                 print("  differs: %s=%r  %s=%r" % (name, d98[name]["value"][:60], t, d181[t]["value"][:60]))
                 bad += 1
         news = {pat(r[2]) for r in rules if r[0] == "new"}
-        extra = sorted(n for n in d181 if n not in reached and pat(n) not in news)
+        targets = set(expected(rules)[0])
+        empty = [n for n in d181 if n not in reached and pat(n) not in news and pat(n) in targets
+                 and d181[n].get("value", "") == ""]
+        if empty:
+            cls["empty, other instance"] = len(empty)
+        extra = sorted(n for n in d181 if n not in reached and pat(n) not in news and n not in set(empty))
         for n in extra:
             print("  TR-181 name no TR-098 pair reaches:", n)
         print("TR-098 %d, TR-181 %d: %s; TR-181 not reached %d"
