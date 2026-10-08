@@ -4049,3 +4049,36 @@ Ghi rồi trả về đều fault 0, đọc lại đúng:
 
 `CurrentLanguage=th` → 9007. Đúng: `clay.language.available` của board chỉ có `en`, và shell (`set_CurrentLanguage`)
 cũng từ chối. Giá trị sai `abc` và `a;b` → 9007, giá trị cũ giữ nguyên.
+
+### 63.5 Nạp `0fa9d31` (0101) qua SSH, parity lại, G9
+
+**Build** tại `0fa9d31`:
+- export 359 file, sha256 `5f7d3c99…`; apply vào `1_src`, backup `.icwmp-backups/20261008-101029-jhzg9h2p`;
+- gói và image rc 0, có `Enabling dev_access`, không cảnh báo ở file sửa;
+- `tclinux.bin` md5 `727f3862a785f5368358a2d04360fbac`, chép ra `1_src/2025q3/.icwmp-images/tclinux_parity_0fa9d31_devaccess.bin`;
+- `libtr098` md5 `ca8dffc5…`, có `ConnReqXMPPConnection`.
+
+**Nạp** (Claude, user cho phép trong phiên):
+- Các bước như §50.1: md5 hai đầu khớp, `Model validation successful: HP-2236B`, `"valid": true`, `sysupgrade -T` rc 0.
+- **Lần 1 (10:17) không chạy.** Board không có `setsid` (cũng không có `nohup`), và output bị đẩy vào `/dev/null` nên
+  không thấy lỗi `setsid: not found`. `/tmp/sysupgrade.meta` là do bước `-T` tạo. Không phải thiếu RAM: MemAvailable
+  77 MB khi image 58 MB đang nằm trong `/var/tmp` (Shmem 67 MB), bằng mức của lần nạp đạt ngày 05/10.
+- **Lần 2 (10:23:40):** `start-stop-daemon -S -b -m -p /tmp/sysupg.pid -x /bin/sh -- -c "sysupgrade … > log"`. Cần
+  pidfile riêng, nếu không nó báo `/bin/sh is already running`. procd đóng SSH sau ~4 s; board lên lại, kiểm lúc 10:26:52.
+
+**Sau khi nạp:**
+- uptime 2 phút; `libtr098` `ca8dffc5…`; 2 dòng start, không crash; 6 phiên ACS success, 0 failure; `if0` up;
+- cấu hình giữ qua `sysupgrade`.
+
+**Parity trên `0fa9d31`:**
+- 1724 tham số chung: 1579 bằng, 100 động, 15 đã biết, 29 nháy;
+- mục mới duy nhất là `UDPConnectionRequestAddress`: port 2314 → 2315 giữa hai lần đọc vì STUN client vendor ánh xạ
+  lại, đưa vào lớp động;
+- **PASS**: 24 mục của 63.1 đã hết.
+- `LANEthernet` Stats port 3: C `PacketsReceived` 389 = unicast 329 + multicast 50 + broadcast 10, khớp cách shell cộng;
+  port 1 `DiscardPacketsReceived` 303 bằng shell.
+
+**G9 (soak 24 h)** chạy lại trên image này từ 10:27:56:
+- `/tmp/g9.sh` lấy mẫu mỗi 600 s × 150 mẫu vào `/tmp/g9.csv` (chạy bằng `start-stop-daemon`);
+- mẫu đầu: pid 10704, VmRSS 5960 kB, fd 14, thread 11, 10 phiên success, 0 failure, MemAvailable 134296 kB;
+- mốc 24 h: 09/10 10:28.

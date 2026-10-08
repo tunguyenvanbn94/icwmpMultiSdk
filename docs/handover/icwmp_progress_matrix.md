@@ -52,13 +52,13 @@ flowchart LR
 | Hạng mục | Trạng thái | Mức bằng chứng cao nhất |
 |---|---|---|
 | Layout source multi-SDK, plugin `sdk/<tên>/`, apply có backup | Xong | MTK SDK build + board |
-| Data model TR-098 bằng C trên MTK | **783/783** param — toàn cây (P6 ở 0090 + 0092, P7 ở 0094 + 0095, P8 ở 0090 LTE + 0097–0099). Từ 0100 cả AddObject/DeleteObject cũng là C: compat shell không còn tham số hay RPC nào | MTK board: GPV toàn cây 1768 dòng / 15–16 s |
+| Data model TR-098 bằng C trên MTK | **783/783** param — toàn cây (P6 ở 0090 + 0092, P7 ở 0094 + 0095, P8 ở 0090 LTE + 0097–0099). Từ 0100 cả AddObject/DeleteObject cũng là C: compat shell không còn tham số hay RPC nào | **MTK board image `0fa9d31`**: parity với shell sản phẩm PASS (§63); GPV toàn cây C 3–4 s (shell 22–23 s) |
 | Sửa lỗi runtime 0062–0080 (treo, leak, crash từ ACS, procd restart) | Xong | Board MTK (0080, K17 hết); host `run.sh all` PASS lại 06/10 tại 0086 |
 | K13, K14 (kiểm input ManagementServer) | Xong (0081, 0082) | **Board** (image 0083, 06/10, analysis §53) |
 | `apply --sdk-only` | Xong (0083) | MTK SDK build trên cây chỉ còn MTK |
 | BDK | Prototype; **build image đạt 06/10 tại 0088** (bundle một SDK, analysis §56) | SDK build BDK; board BDK chưa (PH7) |
 | Test host | Chạy được trên máy build: container `ubuntu:24.04` (§55) | **`run.sh all` PASS 06/10** trên repo (code 0086) và từ chính bundle MTK `e273359` |
-| **PH0 (đóng băng baseline)** | **Đang làm** | Còn G9 24 h (07/10 08:15), rồi PH0.5 (user duyệt 07/10). K15 hoãn theo quyết định 07/10; xem WebUI (G6) chưa có tài khoản |
+| **PH0 (đóng băng baseline)** | **Đang làm** | Board chạy image `0fa9d31` (0101). G9 24 h chạy lại từ 08/10 10:27:56, mốc 09/10 10:28; rồi PH0.5 (user duyệt 07/10). K15 hoãn theo quyết định 07/10; xem WebUI (G6) chưa có tài khoản |
 
 ---
 
@@ -94,6 +94,7 @@ flowchart LR
 | TR-098 C — P7 | 0093–0095 | 79 param `X_AIS_*` của operator (UPnP, 3rdAgent, CPEagent với khóa lấy lúc build, AutoWiFiScan, Logging, UplinkSetup, WiFiStatus, MLO, …); test host `p7`, `p7c` | host `run.sh all`; MTK SDK build gói + image (§60) |
 | Công cụ test (K22) | 0096 | valgrind `--run-libc-freeres=no`; agent kẹt dưới valgrind được báo rồi dọn | host `run.sh all` |
 | TR-098 C — P8 | 0097–0099 | `Device.IP`/TraceRoute/DHCPv6/DOCSIS, `Device.PPP`/DynamicDNS/RouterAdvertisement, `Services`: 132 param, toàn cây 783/783; test host `p8`, `p8b`, `p8c` | host `run.sh all`; MTK SDK build gói + image dev-access (§61) |
+| Board parity (K25–K27) | 0101 | So toàn cây C với shell sản phẩm trên board (`tests/board/parity_dump.sh` + `parity.py`): boolean P1–P3, MAC LAN, `gsw_stats`, `ConnReqXMPPConnection`; `verify-dm-paths` xét `#ifdef` | **board** image `0fa9d31`: parity PASS (§63) |
 | K8 + engine (K23) | 0100 | AddObject/DeleteObject `WANIPConnection`/`WANPPPConnection` sang C (`wan_mtk.c` claim cả nhánh `WANDevice.`); registry merge không để module mở rộng hạ quyền ghi của object; test host `wan` | host `run.sh all` (§62) |
 | Dọn repo | 0088 | Gỡ `tests/__pycache__/*.pyc` bị commit từ 0042 (có trong mọi bundle export trước đó) | `git ls-files` |
 | Công cụ kiểm | — | `check-c-sanity`, `check-cc-syntax` (cross-gcc SDK), `verify-dm-paths` (`--phase`, `--claims`), `check-automake-conds`, `update-sums`, `progress.py`, `tests/host` | — |
@@ -125,7 +126,7 @@ Runbook: [../plan/ph0_gate_runbook.md](../plan/ph0_gate_runbook.md).
 | G6 | ACS ghi ManagementServer, còn sau phiên, WebUI thấy, còn sau reboot; K10 | **PASS** qua ACS: ghi, mirror, không restart, còn sau reboot; **K10 PASS**. WebUI **NOT RUN** (không có tài khoản) | §52, §54 |
 | G7 | STUN, UDP Connection Request | Phía router **PASS** (UDP CR ký đúng đánh thức phiên, ký sai bị bỏ). ACS dùng HTTP CR trực tiếp được nên không gửi UDP CR; `NATDetected` do vendor ghi 0 dù địa chỉ map khác IP WAN | §49, §54 |
 | G8 | Download/ScheduleDownload thiếu FileType hoặc 1 window | **NOT RUN** trên board (host 5/5 PASS) | — |
-| G9 | Soak 24 h | Image 0080: 8 h 41 phẳng (VmRSS 5344→5352 kB, fd 14–15, thread 11). **Đang chạy lại trên image 0083** từ 06/10 08:14 (sau reboot G6), xong lúc 07/10 08:15 | §52–§54 |
+| G9 | Soak 24 h | Image 0080: 8 h 41 phẳng (VmRSS 5344→5352 kB, fd 14–15, thread 11). Lần trên image 0083 (06/10) dừng vì board mất WAN 07/10. **Đang chạy trên image `0fa9d31`** từ 08/10 10:27:56 (`/tmp/g9.csv`, 600 s), mốc 09/10 10:28 | §52–§54, §63.5 |
 
 ### 2.2 Known issue
 
@@ -135,7 +136,7 @@ Runbook: [../plan/ph0_gate_runbook.md](../plan/ph0_gate_runbook.md).
 | K3 | HIGH | Accepted | 11 leaf ManagementServer có trong C, không có trong cây sản phẩm |
 | K6 | MEDIUM | Accepted | Trace khởi động + crash handler luôn bật |
 | K7 | ARCH | Open | Compat provider + prefetch nằm trong `dmplatform_mtk.c` → PH2 |
-| K8 | LIFECYCLE | **Fixed, host** (0100) | AddObject/DeleteObject WAN connection sang C; `wan_mtk.c` claim cả nhánh `WANDevice.` (§62) |
+| K8 | LIFECYCLE | **Fixed, board** (0100) | AddObject/DeleteObject WAN connection sang C; `wan_mtk.c` claim cả nhánh `WANDevice.`; board qua `hni.wan` thật (§62, §63.3) |
 | K9 | MULTI_SDK | **Fixed, SDK build** | BDK build image đạt với 0067–0088 (06/10, §56); board BDK thuộc PH7 |
 | K10 | HIGH | **Fixed, board** | PeriodicInformTime căn sai mốc |
 | K12 | LOW | Open | Download/Upload chờ mutex khi phiên nối tiếp liên tục |
@@ -146,8 +147,11 @@ Runbook: [../plan/ph0_gate_runbook.md](../plan/ph0_gate_runbook.md).
 | K20 | HIGH | **Fixed, host** (0091) | Setter từ chối ở VALUESET bị bỏ qua, SPV trả thành công mà không ghi |
 | K21 | MEDIUM | **Fixed, host** (0091) | SetParameterAttributes lên object do C trả lời bị 9009 |
 | K22 | LOW | **Đóng, lỗi công cụ test** | Agent dưới valgrind không thoát hẳn sau SIGTERM: `__libc_freeres` của valgrind kẹt lock FILE; test chạy `--run-libc-freeres=no` (0096, §59–§60) |
-| K23 | HIGH | **Fixed, host** (0100) | Registry merge lấy `&DMREAD` của module chỉ mở rộng đè `&DMWRITE` của module chủ: `WANIPConnection.`/`WANPPPConnection.` read-only trong cây C (§62) |
+| K23 | HIGH | **Fixed, board** (0100) | Registry merge lấy `&DMREAD` của module chỉ mở rộng đè `&DMWRITE` của module chủ: `WANIPConnection.`/`WANPPPConnection.` read-only trong cây C (§62) |
 | K24 | LOW | Accepted | `WLANConfiguration` read-only từ P3 (0039): AddObject/DeleteObject của shell hỏng trên sản phẩm này, C trả 9005, GPN writable 0 (§62) |
+| K25 | MEDIUM | **Fixed, board** (0101) | 21 boolean của P1–P3 trả `1`/`0` thay vì `true`/`false` như shell (§63) |
+| K26 | MEDIUM | **Fixed, board** (0101) | LANEthernet Stats: `gsw_sum()` bỏ sót bộ đếm thứ hai trên một dòng `gsw_stats` (§63) |
+| K27 | LOW | **Fixed, board** (0101) | `ManagementServer.ConnReqXMPPConnection` thiếu trong build MTK; `verify-dm-paths` không xét `#ifdef` (§63) |
 
 Bảng đầy đủ: `python3 docs/issue/progress.py` hoặc JSON.
 

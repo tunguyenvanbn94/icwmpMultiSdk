@@ -45,8 +45,8 @@ Các file trong `mtk/` và `bdk/`, cùng phần đầu của `issue/`, là bản
 Chúng giữ mốc commit và đường dẫn gốc để truy vết, nên vài liên kết tương đối và trạng thái trong file cũ
 không phản ánh repo này; link tới `../../src/2025q3/...` trong `analysis.md` là cây vendor của workspace.
 Trạng thái hiện hành luôn xem ở [handover/icwmp_progress_matrix.md](handover/icwmp_progress_matrix.md) và JSON:
-mốc code mới nhất `0100`, 783/783 parameter TR-098 bằng C (P1–P8, toàn cây) và từ 0100 cả AddObject/DeleteObject
-(K8), test host `run.sh all` đạt tại 0100; MTK SDK build và board: xem progress matrix (board đạt G1–G7 phía router trên image 0083; BDK build đạt tại 0088).
+mốc code mới nhất `0101`, 783/783 parameter TR-098 bằng C (P1–P8, toàn cây) và từ 0100 cả AddObject/DeleteObject
+(K8), test host `run.sh all` đạt tại 0101, board image `0fa9d31` khớp shell sản phẩm (`tests/board`, §63); chi tiết: xem progress matrix (board đạt G1–G7 phía router trên image 0083; BDK build đạt tại 0088).
 
 Các script kiểm tĩnh trong `issue/` (`check-c-sanity.py`, `verify-dm-paths.py`,
 `check-automake-conds.py`, `check-pkg-deps.py`) giờ kiểm cây `userspace/` của chính repo này.
