@@ -4914,3 +4914,20 @@ Sản phẩm:
 - `targets/MO77300EB/bcmMO77300EB_emmc_squashfs_update.pkgtb` 57.050.860 B, md5 `7d5e471f…`.
 
 **Chưa làm:** nạp image BDK, smoke trên board BDK (PH7), TR-181 của BDK theo `cwmp.cpe.datamodel` trên board.
+
+## 76. G9 trên image MTK `dev_181` (`084ef3a`, mặc định tr098) (08/10 23:32 → 09/10 04:42)
+
+`tests/board/soak_sample.sh 600 150` chạy lại sau phiên ACS `tr181` (§74), đọc lúc 04:47 (sampler để chạy tiếp).
+
+| Chỉ số | 32 mẫu, mỗi 10 phút, 5 giờ 10 phút |
+|---|---|
+| pid / số lần start | 11768 / 8, không đổi (không restart, không crash) |
+| VmRSS | 5764 kB ở mọi mẫu |
+| fd / thread | 12 / 11 |
+| Phiên | success 1, failure 0 |
+| MemAvailable (cả hệ thống) | 135.520–139.820 kB, dao động, không giảm dần |
+
+So với G9 trên image `9f393e4` (§66, 11 giờ): cùng fd 12 và 11 thread; VmRSS thấp hơn và phẳng hơn (5764 so với
+5724–6104 kB). **Giới hạn:** chu kỳ Inform của board là 43.200 s, nên trong 5 giờ agent chỉ có một phiên với ACS. Mẫu này
+cho thấy agent ổn định lúc rảnh, chưa cho thấy ổn định dưới nhiều phiên (phần đó có soak host 300 phiên ở §57). CSV ở
+workspace `issues/…/logs/20261009_g9_soak_image_dev181_084ef3a.csv`.
