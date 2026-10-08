@@ -299,3 +299,42 @@ static const struct dm_module lookupdiag_mtk_module = {
 	.paths = lookupdiag_mtk_paths,
 };
 DM_MODULE_REGISTER(lookupdiag_mtk_module);
+
+/* TR-181 (cwmp.cpe.datamodel=tr181): NSLookupDiagnostics is
+ * Device.DNS.Diagnostics.NSLookupDiagnostics, the same store, launcher and
+ * tables (Result.{i} included).  DNSDiagnostics is the product's own object
+ * without a vendor prefix, kept as Device.DNSDiagnostics like
+ * Device.Account.  Interface stays a network device name as on the product. */
+static DMOBJ tLookup181DiagObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"NSLookupDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
+ tNSLookupChildObj, tNSLookupParams, NULL},
+{0}
+};
+
+static DMOBJ tLookup181DnsObj[] = {
+{"Diagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLookup181DiagObj, NULL, NULL},
+{0}
+};
+
+static DMOBJ tLookup181Root[] = {
+{"DNS", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLookup181DnsObj, NULL, NULL},
+{"DNSDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
+ NULL, tDNSDiagParams, NULL},
+{0}
+};
+
+static const char *const lookupdiag181_mtk_paths[] = {
+	"Device.DNS.Diagnostics.",
+	"Device.DNSDiagnostics.",
+	NULL
+};
+
+static const struct dm_module lookupdiag181_mtk_module = {
+	.name  = "mtk-lookupdiag-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tLookup181Root,
+	.paths = lookupdiag181_mtk_paths,
+};
+DM_MODULE_REGISTER(lookupdiag181_mtk_module);

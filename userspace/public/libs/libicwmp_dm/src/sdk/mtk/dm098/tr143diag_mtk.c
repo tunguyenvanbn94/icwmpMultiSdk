@@ -239,3 +239,39 @@ static const struct dm_module tr143diag_mtk_module = {
 	.paths = tr143diag_mtk_paths,
 };
 DM_MODULE_REGISTER(tr143diag_mtk_module);
+
+/* TR-181 (cwmp.cpe.datamodel=tr181): Device.IP.Diagnostics.DownloadDiagnostics
+ * and UploadDiagnostics, the same stores, launchers and tables.  Interface
+ * stays a network device name as on the product (a TR-181 reference would
+ * be a T7 change, like TraceRoute's). */
+static DMOBJ tTr143181DiagObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"DownloadDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tDownloadDiagParams, NULL},
+{"UploadDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tUploadDiagParams, NULL},
+{0}
+};
+
+static DMOBJ tTr143181IpObj[] = {
+{"Diagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tTr143181DiagObj, NULL, NULL},
+{0}
+};
+
+static DMOBJ tTr143181Root[] = {
+{"IP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tTr143181IpObj, NULL, NULL},
+{0}
+};
+
+static const char *const tr143diag181_mtk_paths[] = {
+	"Device.IP.Diagnostics.DownloadDiagnostics.",
+	"Device.IP.Diagnostics.UploadDiagnostics.",
+	NULL
+};
+
+static const struct dm_module tr143diag181_mtk_module = {
+	.name  = "mtk-tr143diag-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tTr143181Root,
+	.paths = tr143diag181_mtk_paths,
+};
+DM_MODULE_REGISTER(tr143diag181_mtk_module);

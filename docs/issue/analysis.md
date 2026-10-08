@@ -4730,3 +4730,67 @@ Sau bước này, mọi tham số WAN của cây TR-098 đều có quy tắc án
   `IP.Interface` AddObject của sản phẩm chỉ tạo section `network.if<n>`, không tạo entry, nên chưa tương đương. PPP
   thì có: `PPP.Interface` AddObject tạo entry PPPoE (T1). Đây là thao tác, không phải tham số, nên không nằm trong so
   cặp; xét ở T7.
+
+## 73. TR-181 trên MTK: T5 chẩn đoán, firewall, LTE (`tr181-0009`) — hết phần "tương đương TR-098" trên host (08/10 18:00–)
+
+Sau T5, **mọi tham số TR-098 của sản phẩm có quy tắc ánh xạ**. Tính cả 783 tham số của ma trận và các tên chỉ có ở C,
+tổng 800 tên theo loại: A 458, B 34, C 218, D 90; không còn phase nào chờ. Cây C có 651 tên TR-181.
+
+**Chẩn đoán (cùng kho dữ liệu, cùng launcher shell, cùng getter/setter):**
+
+| TR-098 | TR-181 |
+|---|---|
+| `IPPingDiagnostics` | `IP.Diagnostics.IPPing` (`ipping_mtk.c`) |
+| `TraceRouteDiagnostics` | `IP.Diagnostics.TraceRoute`, đã có từ T1: sản phẩm có hai view của cùng một test (cùng kho `/var/state/traceroute`) |
+| `DownloadDiagnostics`, `UploadDiagnostics` | `IP.Diagnostics.DownloadDiagnostics`, `UploadDiagnostics` (`tr143diag_mtk.c`) |
+| `NSLookupDiagnostics` (+`Result`) | `DNS.Diagnostics.NSLookupDiagnostics` (`lookupdiag_mtk.c`) |
+| `DNSDiagnostics` (object của sản phẩm, không tiền tố vendor) | `Device.DNSDiagnostics`, giữ tên như `Device.Account` (C); `Result.*` là D, sản phẩm không tới được |
+
+- **`IPPing.Interface` (B):** TR-181 dùng tham chiếu `Device.IP.Interface`; path TR-098 sản phẩm lưu được hiện thành
+  IP.Interface của LAN hoặc kết nối. Khi ghi, tham chiếu được dịch ngược thành path đó rồi đưa cho setter TR-098,
+  nên bảng tra interface và các quirk của sản phẩm giữ nguyên.
+- **Các chẩn đoán khác vẫn nhận tên netdev**, như sản phẩm và như nhánh TraceRoute T1. Đổi sang tham chiếu TR-181
+  để T7.
+- **`TraceRouteDiagnostics.Interface` là B:** khi chưa đặt, object TR-098 đọc `default`, còn nhánh TR-181 của sản phẩm
+  đọc rỗng.
+- Claim của nhánh TraceRoute T1 thu hẹp từ `Device.IP.Diagnostics.` về `…TraceRoute.`, để mỗi chẩn đoán tự claim
+  object của mình.
+
+**Firewall:**
+- `Device.Firewall`: `Config`, `Enable` và các object `X_AIS_`, cùng bảng.
+- **Ba lá mang path interface TR-098** (`X_AIS_ServiceControl.IPV4/IPV6ServiceControl.{i}.Ingress`,
+  `X_AIS_IPFilter.{i}.Source/DestInterface`) hiện và nhận tham chiếu `Device.IP.Interface` (B). Giá trị `LAN`,
+  `WAN_ALL`, `NULL` giữ nguyên. `DisablePort.Interface` là token `LAN`/`WAN_n`, không đổi.
+- **Cơ chế:** `wan181_paths_to181/to098` (`wanip_mtk.c`) dịch từng phần tử trong danh sách phân tách bằng dấu phẩy:
+  LAN `IPInterface.1` ↔ IP.Interface của `lan`, `WANIP/WANPPPConnection.<id+1>` ↔ IP.Interface của kết nối. Phần tử
+  khác giữ nguyên, nên tham chiếu không thuộc kết nối nào bị setter TR-098 từ chối (9007, ví dụ bridge). Macro
+  `PATH181_GET/SET` bọc getter/setter TR-098.
+
+**LTE:** `Device.LTE`, object của sản phẩm không tiền tố vendor, giữ tên (C). `Device.Cellular.Interface` chuẩn có hình
+dạng khác; để T7.
+
+**Kiểm (host):**
+- `tr181-map.py check`: 651 = 651, thiếu 0.
+- `run.sh tr181` thêm kiểm:
+  - `Ingress` = IP.Interface của IPoE; IPFilter Source/Dest = LAN/PPP;
+  - ghi `Ingress` = IP.Interface của PPP → `pppoe-if1`; `LAN` → `br-lan`; bridge → 9007;
+  - `IPPing.Interface` từ path TR-098 trong kho → `Device.IP.Interface.<lan>`;
+  - `LTE`, `DNSDiagnostics`, `Firewall.Config` có mặt.
+- So cặp: **1224 bằng** + 2 theo tham chiếu, B 137, D 226, 5 thiếu vì TR-098 rỗng, 48 rỗng ở instance khác, 31 động,
+  0 tên TR-181 thiếu cặp, **không còn lớp T2–T5**.
+- Cổng tĩnh: check-c-sanity 69/0, verify-dm-paths tr098 thiếu 0, claims 0 cặp chồng, automake 0, cross-gcc SDK
+  69 file 0 lỗi.
+- Schema: unknown 77 = 58 đã chấp nhận + 19 lá của `DNSDiagnostics`/`LTE` (object của sản phẩm, như `Account`).
+- `run.sh all` 25/25 PASS tại `tr181-0009`.
+- Chưa build SDK, chưa chạy board.
+
+**Tiếp theo:**
+- **T6 board:** build SDK, nạp image, so cặp trên board (tests/board) và một phiên ACS ở chế độ `tr181`.
+  - Đổi model làm ACS nhận cây `Device.` cho thiết bị này. Đây là thay đổi phía ACS, cần user cho phép trước.
+- **T7 theo BDK, các mục đã ghi:**
+  - tham chiếu thay tên netdev (TraceRoute/Download/Upload/NSLookup `Interface`, `IP.Interface.LowerLayers`);
+  - `Ethernet.Link` (MAC);
+  - tạo kết nối IPoE qua TR-181;
+  - `MruEnable`;
+  - `Cellular`;
+  - lá `X_AIS_*` trên mọi IP.Interface.

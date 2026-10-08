@@ -42,6 +42,7 @@
 #include "dmcommon.h"
 #include "dm_registry.h"
 #include "dmmtk.h"
+#include "wanconn_mtk.h"
 #include "diag_mtk.h"
 
 #define IPP	(&diag_ipping)
@@ -190,3 +191,65 @@ static const struct dm_module ipping_mtk_module = {
 	.paths = ipping_mtk_paths,
 };
 DM_MODULE_REGISTER(ipping_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181)                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * IPPingDiagnostics is Device.IP.Diagnostics.IPPing, the same store,
+ * launcher, getters and setters.  Interface is a Device.IP.Interface
+ * reference there: the TR-098 path the product stores is shown as the
+ * IP.Interface of the LAN or of the connection, and a reference is turned
+ * back into that path for the TR-098 setter (wan181_paths_to181/to098), so
+ * the product's interface table and quirks stay as they are.
+ */
+PATH181_GET(ipp_interface, get_ipp_interface)
+PATH181_SET(ipp_interface, set_ipp_interface)
+
+static DMLEAF tIPPing181Params[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"DiagnosticsState", &DMWRITE, DMT_STRING, get_ipp_state, set_ipp_state, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_path181_ipp_interface, set_path181_ipp_interface, NULL, NULL},
+{"Host", &DMWRITE, DMT_STRING, get_ipp_host, set_ipp_host, NULL, NULL},
+{"NumberOfRepetitions", &DMWRITE, DMT_UNINT, get_ipp_repetitions, set_ipp_repetitions, NULL, NULL},
+{"Timeout", &DMWRITE, DMT_UNINT, get_ipp_timeout, set_ipp_timeout, NULL, NULL},
+{"DataBlockSize", &DMWRITE, DMT_UNINT, get_ipp_blocksize, set_ipp_blocksize, NULL, NULL},
+{"DSCP", &DMWRITE, DMT_STRING, get_ipp_dscp, set_ipp_dscp, NULL, NULL},
+{"SuccessCount", &DMREAD, DMT_UNINT, get_ipp_success, NULL, NULL, NULL},
+{"FailureCount", &DMREAD, DMT_UNINT, get_ipp_failure, NULL, NULL, NULL},
+{"AverageResponseTime", &DMREAD, DMT_UNINT, get_ipp_avg, NULL, NULL, NULL},
+{"MinimumResponseTime", &DMREAD, DMT_UNINT, get_ipp_min, NULL, NULL, NULL},
+{"MaximumResponseTime", &DMREAD, DMT_UNINT, get_ipp_max, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tIPPing181DiagObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"IPPing", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tIPPing181Params, NULL},
+{0}
+};
+
+static DMOBJ tIPPing181IpObj[] = {
+{"Diagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tIPPing181DiagObj, NULL, NULL},
+{0}
+};
+
+static DMOBJ tIPPing181Root[] = {
+{"IP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tIPPing181IpObj, NULL, NULL},
+{0}
+};
+
+static const char *const ipping181_mtk_paths[] = {
+	"Device.IP.Diagnostics.IPPing.",
+	NULL
+};
+
+static const struct dm_module ipping181_mtk_module = {
+	.name  = "mtk-ipping-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tIPPing181Root,
+	.paths = ipping181_mtk_paths,
+};
+DM_MODULE_REGISTER(ipping181_mtk_module);

@@ -1686,6 +1686,17 @@ config port_forwarding
 	option ext_start_port '2222'
 	option local_start_port '22'
 	option ip_address '192.168.1.120'
+
+config packetfilter
+	option ipversion 'ipv4'
+	option interface 'pon.10'
+	option name 'svc1'
+	option action 'accept'
+
+config ipfilter2
+	option name 'f1'
+	option ingress_ifname 'br-lan'
+	option egress_ifname 'pppoe-if1'
 EOF2
 	mkdir -p "$RUN/t181bin"
 	cat > "$RUN/t181bin/ubus" <<'UBUS'
@@ -1867,6 +1878,20 @@ for x in json.load(open(sys.argv[1]))["parameters"]:
 	expect "delete PortMapping 4" "$($UBUS call tr069 dm '{"cmd":"del","path":"Device.NAT.PortMapping.4."}' 2>/dev/null |
 		python3 -c 'import json, sys; print(json.load(sys.stdin).get("fault"))')" "0"
 	expect "  count after delete" "$(dm_value Device.NAT.PortMappingNumberOfEntries)" "3"
+	# T5: firewall interface paths as Device.IP.Interface references, the
+	# IPPing store's TR-098 path the same way, the product's own objects
+	FW=Device.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.1 FI=Device.Firewall.X_AIS_IPFilter.1
+	expect "ServiceControl Ingress" "$(dm_value $FW.Ingress)" "Device.IP.Interface.$w0"
+	expect "IPFilter Source/DestInterface" "$(dm_value $FI.SourceInterface) $(dm_value $FI.DestInterface)" "Device.IP.Interface.$lan Device.IP.Interface.$w1"
+	expect "set Ingress to the PPP interface" "$(dm_set_fault $FW.Ingress Device.IP.Interface.$w1 "$key")" "0"
+	expect "  packetfilter interface" "$(uci -q get firewall_clay.@packetfilter[0].interface)" "pppoe-if1"
+	expect "set Ingress LAN" "$(dm_set_fault $FW.Ingress LAN "$key")" "0"
+	expect "  packetfilter interface br-lan" "$(uci -q get firewall_clay.@packetfilter[0].interface)" "br-lan"
+	expect "set Ingress to a bridge (9007)" "$(dm_set_fault $FW.Ingress Device.IP.Interface.$w2 "$key")" "9007"
+	uci -q -P /var/state set easycwmp.@local[0].InterfacePath=InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1
+	expect "IPPing Interface from the stored TR-098 path" "$(dm_value Device.IP.Diagnostics.IPPing.Interface)" "Device.IP.Interface.$lan"
+	uci -q -P /var/state set easycwmp.@local[0].InterfacePath=
+	expect "LTE, DNSDiagnostics, Firewall.Config present" "$(dm_value Device.LTE.RSSI | grep -c none) $(dm_value Device.DNSDiagnostics.DiagnosticsState) $(dm_value Device.Firewall.Config)" "0 None High"
 	# T3 Wi-Fi: Radio from the radio sections, SSID/AccessPoint numbered like
 	# WLANConfiguration, Security.ModeEnabled from wireless.<iface>.encryption
 	R=Device.WiFi.Radio S=Device.WiFi.SSID A=Device.WiFi.AccessPoint
@@ -1915,7 +1940,7 @@ for x in json.load(open(sys.argv[1]))["parameters"]:
 	restore_cfg cwmp
 	tr181_fixtures_restore
 	if [ $bad_n = 0 ]; then
-		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, LAN (T2), Wi-Fi (T3), WAN port and routing (T4a), WAN connections and port mappings (T4b-T4d) values and writes, DataModel back to tr098; pairs: $(tail -2 "$RUN/tr181.equiv" | head -1)"
+		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, LAN (T2), Wi-Fi (T3), WAN port and routing (T4a), WAN connections and port mappings (T4b-T4d), diagnostics/firewall (T5) values and writes, DataModel back to tr098; pairs: $(tail -2 "$RUN/tr181.equiv" | head -1)"
 	else
 		bad "tr181: $bad_n mismatches above"
 	fi

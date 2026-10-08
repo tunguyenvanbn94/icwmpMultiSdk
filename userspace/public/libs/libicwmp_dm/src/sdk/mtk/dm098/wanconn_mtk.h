@@ -90,6 +90,37 @@ int wan181_tbl_get(DMLEAF *t, struct wan_entry *e, const char *leaf, char **valu
 int wan181_tbl_set(DMLEAF *t, struct wan_entry *e, const char *leaf, char *value, int action);
 
 /*
+ * A value holding TR-098 interface paths, comma separated, in TR-181 and
+ * back: the LAN IPInterface.1 <-> the IP.Interface of network.lan, and
+ * WANDevice.1.WANConnectionDevice.1.WAN{IP,PPP}Connection.<id+1> <-> the
+ * IP.Interface of that connection.  Any other token is kept as it is (so a
+ * TR-181 path no connection has stays a "Device." value the TR-098 setter
+ * refuses).
+ */
+char *wan181_paths_to181(const char *v);
+char *wan181_paths_to098(const char *v);
+
+/* a leaf whose value is such a list: the TR-098 getter/setter, translated */
+#define PATH181_GET(name, getter)							\
+static int get_path181_##name(char *refparam, struct dmctx *ctx, void *data,		\
+			      char *instance, char **value)				\
+{											\
+	char *v = NULL;									\
+	int r = getter(refparam, ctx, data, instance, &v);				\
+											\
+	*value = wan181_paths_to181(v ? v : "");					\
+	return r;									\
+}
+
+#define PATH181_SET(name, setter)							\
+static int set_path181_##name(char *refparam, struct dmctx *ctx, void *data,		\
+			      char *instance, char *value, int action)			\
+{											\
+	return setter(refparam, ctx, data, instance,					\
+		      wan181_paths_to098(value ? value : ""), action);			\
+}
+
+/*
  * A leaf of Device.IP.Interface.{i} answered by the connection on it: the
  * TR-098 leaf <leaf> of ip_t (IPoE/bridge) or ppp_t (PPP).  Empty, and not
  * writable, on an interface without a connection.

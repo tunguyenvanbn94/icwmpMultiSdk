@@ -2271,3 +2271,93 @@ static const struct dm_module wanip_ipif181_mtk_module = {
 	.objs  = tIpif181WanRoot,
 };
 DM_MODULE_REGISTER(wanip_ipif181_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181: TR-098 interface paths in values                             */
+/* ------------------------------------------------------------------ */
+
+#define PATH181_LAN	"InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1"
+#define PATH181_WANCD	"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1."
+
+/* one token TR-098 -> TR-181, NULL when it is not such a path */
+static char *path181_token_to181(const char *t)
+{
+	struct wan_entry *list;
+	const char *n = NULL;
+	char *ref, *inst;
+	int ppp = -1, i, cnt;
+	long id;
+
+	if (strcmp(t, PATH181_LAN) == 0) {
+		inst = dip_update_instance("lan");
+		if (!*inst)
+			return NULL;
+		dmasprintf(&ref, "%s%s", mtk_ipif_prefix(), inst);
+		return ref;
+	}
+	if (strncmp(t, PATH181_WANCD "WANIPConnection.", sizeof(PATH181_WANCD "WANIPConnection.") - 1) == 0) {
+		ppp = 0;
+		n = t + sizeof(PATH181_WANCD "WANIPConnection.") - 1;
+	} else if (strncmp(t, PATH181_WANCD "WANPPPConnection.", sizeof(PATH181_WANCD "WANPPPConnection.") - 1) == 0) {
+		ppp = 1;
+		n = t + sizeof(PATH181_WANCD "WANPPPConnection.") - 1;
+	}
+	if (!n || !wan_str_is_uint(n, &id) || id < 1)
+		return NULL;
+	list = dmcalloc(WAN_MAX_ENTRIES, sizeof(*list));
+	if (!list)
+		return NULL;
+	cnt = wan_entries_kind(&list, WAN_MAX_ENTRIES, ppp ? WAN_KIND_PPP : WAN_KIND_IP);
+	for (i = 0; i < cnt && i < WAN_MAX_ENTRIES; i++) {
+		if (list[i].id + 1 == id) {
+			ref = wan181_ipif(&list[i]);
+			return *ref ? ref : NULL;
+		}
+	}
+	return NULL;
+}
+
+/* one token TR-181 -> TR-098, NULL when it is not an IP.Interface of the
+ * LAN or of a connection */
+static char *path181_token_to098(const char *t)
+{
+	const char *prefix = mtk_ipif_prefix();
+	size_t l = strlen(prefix);
+	struct wan_entry e;
+	char *sec, *out;
+
+	if (strncmp(t, prefix, l) != 0)
+		return NULL;
+	sec = dip_section_of_instance(t + l);
+	if (!sec)
+		return NULL;
+	if (strcmp(sec, "lan") == 0)
+		return PATH181_LAN;
+	if (!wan_entry_of_sec(sec, &e))
+		return NULL;
+	dmasprintf(&out, PATH181_WANCD "%s.%d", e.ppp ? "WANPPPConnection" : "WANIPConnection", e.id + 1);
+	return out;
+}
+
+static char *path181_map(const char *v, char *(*one)(const char *))
+{
+	char *copy = dmstrdup(v ? v : ""), *tok, *save = NULL, *m, *out = "";
+
+	if (!strchr(copy, ','))
+		return (m = one(copy)) ? m : copy;
+	for (tok = strtok_r(copy, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+		m = one(tok);
+		dmasprintf(&out, "%s%s%s", out, *out ? "," : "", m ? m : tok);
+	}
+	return out;
+}
+
+char *wan181_paths_to181(const char *v)
+{
+	return path181_map(v, path181_token_to181);
+}
+
+char *wan181_paths_to098(const char *v)
+{
+	return path181_map(v, path181_token_to098);
+}

@@ -157,7 +157,7 @@ phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đ�
 | T2 LAN — **xong trên host** (`tr181-0003`, analysis §68) | DHCPv4.Server.Pool.1, IP.Interface LAN IPv4Address.1, Ethernet.Interface 1..4 (+Stats), Hosts.Host; Bridging: sản phẩm không có tham số (D) | `check` thiếu 0; `run.sh tr181`: 482 cặp bằng + 2 bằng theo tham chiếu, ghi qua tên TR-181 vào đúng option |
 | T3 Wi-Fi — **xong trên host** (`tr181-0005`, analysis §69) | WiFi.Radio 1..2, SSID/AccessPoint 1..12 (số của WLANConfiguration), Security.ModeEnabled, WPS, AssociatedDevice (+Stats), `WiFi.X_AIS_Mesh`, `WiFi.X-AIS_*` | `check` thiếu 0; `run.sh tr181`: 884 cặp bằng, ghi qua tên TR-181 vào đúng option |
 | T4 WAN | T4a **xong trên host** (`tr181-0006`, §70): cổng WAN `Ethernet.Interface.5`, `Optical.Interface.1`, `Routing.Router.1.IPv4Forwarding`. T4b **xong trên host** (`tr181-0007`, §71): kết nối → IP.Interface, IPv4Address, DHCPv4.Client, NAT.InterfaceSetting, DNS.Client.Server, route mặc định, PPP.Interface. T4c + T4d **xong trên host** (`tr181-0008`, §72): `X_AIS_*`/`X_AIS_IPv6`/ServiceList trên IP.Interface, `NAT.PortMapping` (+Add/Delete). Add/Delete kết nối: `PPP.Interface` AddObject (T1) tạo `wan.@entry` PPPoE; **IPoE chưa tương đương**: `IP.Interface` AddObject của sản phẩm chỉ tạo section `network`, không gọi `hni.wan add` như `WANIPConnection` AddObject (T7) | như trên + `hni.wan` thật trên board |
-| T5 Chẩn đoán, firewall | IP.Diagnostics.*, DNS.Diagnostics, SelfTest, `Firewall.X_AIS_*` | như trên |
+| T5 Chẩn đoán, firewall — **xong trên host** (`tr181-0009`, analysis §73) | IP.Diagnostics.IPPing/TraceRoute/Download/Upload, DNS.Diagnostics.NSLookupDiagnostics, `Device.DNSDiagnostics`, `Device.Firewall` (path interface → tham chiếu), `Device.LTE` | `check` thiếu 0; `run.sh tr181`: 1224 cặp bằng, không còn phase chờ |
 | T6 Board | so cặp TR-098 ↔ TR-181 trên board, phiên ACS thật ở chế độ `tr181` | 0 cặp lệch không giải thích được |
 | T7 Theo BDK | tham số TR-181 mà ACS dùng trên BDK nhưng chưa có ở đây (không làm tất cả) | danh sách chốt với user |
 
@@ -171,8 +171,8 @@ phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đ�
 | `docs/issue/tr181-schema.py <bcm963xx>/data-model --check <file>` | tên có trong TR-181 chuẩn (bảng tra BDK); tên BBF mà XML Broadcom không có thì xét tay |
 | `docs/issue/verify-dm-paths.py --model tr181 --dump` | cây TR-181 build khai báo |
 
-Số phủ sau T4: nguồn TR-098 (ma trận + tên chỉ có ở C) theo loại: A 399, B 28, C 152, D 85, chờ T5 136.
-Tên TR-181 trong cây C: 530.
+Số phủ sau T5 (hết phần tương đương TR-098): nguồn TR-098 (ma trận + tên chỉ có ở C, 800 tên) theo loại: A 458, B 34, C 218,
+D 90, không còn mục chờ. Tên TR-181 trong cây C: 651.
 
 ## T4b–T4d: đề xuất (08/10, user đồng ý ở chatlog 92; T4b đã làm, điều chỉnh ở analysis §71)
 
@@ -204,7 +204,8 @@ của section `network.if<id>` (bridge: `if_wanbr<id>`), đánh số bằng `ip_
 
 - Giá trị `RootDataModelVersion`: đang đặt `2.19` (`MTK_TR181_ROOT_VERSION`). Chưa đối chiếu từng lá với đúng phiên bản
   TR-181 đó; chốt cùng T6 khi có ACS thật ở chế độ `tr181`.
-- ACS lab (GenieACS) làm việc với thiết bị ở chế độ `tr181`: chưa thử.
+- ACS lab (GenieACS) làm việc với thiết bị ở chế độ `tr181`: chưa thử. Đổi model làm ACS nhận cây `Device.` cho thiết bị
+  này (thay đổi phía ACS), cần user cho phép trước khi làm ở T6.
 - Danh sách tham số TR-181 ACS thật sự dùng trên BDK: chưa trích (T7).
 - `ChannelsInUse`, `PossibleChannels`, `AssociatedDevice` đọc `ubus hni`: chỉ kiểm được trên board (T6).
 - Tạo kết nối IPoE từ ACS ở chế độ `tr181`: `IP.Interface` AddObject không tạo `wan.@entry` qua `hni.wan` (analysis §72). Cần

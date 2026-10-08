@@ -52,6 +52,7 @@
 #include "dmmem.h"
 #include "dm_registry.h"
 #include "dmmtk.h"
+#include "wanconn_mtk.h"
 
 #define FW_PKG		"firewall_clay"
 #define DP_TYPE		"disable_port"
@@ -1353,3 +1354,113 @@ static const struct dm_module firewall_mtk_module = {
 	.paths = firewall_mtk_paths,
 };
 DM_MODULE_REGISTER(firewall_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181)                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Device.Firewall: the same sections, rules, Add/Delete and reloads.  The
+ * three leaves that carry TR-098 interface paths -- ServiceControl Ingress
+ * and IPFilter Source/DestInterface -- show and take Device.IP.Interface
+ * references instead (wan181_paths_to181/to098 around the TR-098
+ * getter/setter); "LAN", "WAN_ALL", "NULL" ... stay.  DisablePort.Interface
+ * is a LAN / WAN_<n> token, unchanged.
+ */
+PATH181_GET(sc_ingress, get_sc_ingress)
+PATH181_SET(sc_ingress, set_sc_ingress)
+PATH181_GET(ipf_src_iface, get_ipf_src_iface)
+PATH181_SET(ipf_src_iface, set_ipf_src_iface)
+PATH181_GET(ipf_dst_iface, get_ipf_dst_iface)
+PATH181_SET(ipf_dst_iface, set_ipf_dst_iface)
+
+static DMLEAF tFwSc4181Params[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMWRITE, DMT_STRING, get_sc_enable, set_sc_enable, NULL, NULL},
+{"IPEnd", &DMWRITE, DMT_STRING, get_sc_ip_end, set_sc_ip_end, NULL, NULL},
+{"IPStart", &DMWRITE, DMT_STRING, get_sc_ip_start, set_sc_ip_start, NULL, NULL},
+{"Ingress", &DMWRITE, DMT_STRING, get_path181_sc_ingress, set_path181_sc_ingress, NULL, NULL},
+{"Mode", &DMWRITE, DMT_STRING, get_sc_mode, set_sc_mode, NULL, NULL},
+{"Name", &DMWRITE, DMT_STRING, get_sc_name, set_sc_name, NULL, NULL},
+{"ServiceType", &DMWRITE, DMT_STRING, get_sc_service_type, set_sc_service_type, NULL, NULL},
+{"OtherProtocol", &DMWRITE, DMT_STRING, get_sc_other_protocol, set_sc_other_protocol, NULL, NULL},
+{"OtherPort", &DMWRITE, DMT_STRING, get_sc_other_port, set_sc_other_port, NULL, NULL},
+{0}
+};
+
+static DMLEAF tFwSc6181Params[] = {
+{"Enable", &DMWRITE, DMT_STRING, get_sc_enable, set_sc_enable, NULL, NULL},
+{"Ingress", &DMWRITE, DMT_STRING, get_path181_sc_ingress, set_path181_sc_ingress, NULL, NULL},
+{"Mode", &DMWRITE, DMT_STRING, get_sc_mode, set_sc_mode, NULL, NULL},
+{"Name", &DMWRITE, DMT_STRING, get_sc_name, set_sc_name, NULL, NULL},
+{"Prefix", &DMWRITE, DMT_STRING, get_sc_prefix, set_sc_prefix, NULL, NULL},
+{"PrefixLen", &DMWRITE, DMT_STRING, get_sc_prefix_len, set_sc_prefix_len, NULL, NULL},
+{"ServiceType", &DMWRITE, DMT_STRING, get_sc_service_type, set_sc_service_type, NULL, NULL},
+{"OtherProtocol", &DMWRITE, DMT_STRING, get_sc_other_protocol, set_sc_other_protocol, NULL, NULL},
+{"OtherPort", &DMWRITE, DMT_STRING, get_sc_other_port, set_sc_other_port, NULL, NULL},
+{0}
+};
+
+static DMLEAF tFwIpFilter181Params[] = {
+{"Enable", &DMWRITE, DMT_STRING, get_ipf_enable, set_ipf_enable, NULL, NULL},
+{"Name", &DMWRITE, DMT_STRING, get_ipf_name, set_ipf_name, NULL, NULL},
+{"Target", &DMWRITE, DMT_STRING, get_ipf_target, set_ipf_target, NULL, NULL},
+{"Order", &DMWRITE, DMT_STRING, get_ipf_order, set_ipf_order, NULL, NULL},
+{"IPVersion", &DMWRITE, DMT_STRING, get_ipf_ipversion, set_ipf_ipversion, NULL, NULL},
+{"SourceIP", &DMWRITE, DMT_STRING, get_ipf_src_ip, set_ipf_src_ip, NULL, NULL},
+{"SourceMask", &DMWRITE, DMT_STRING, get_ipf_src_mask, set_ipf_src_mask, NULL, NULL},
+{"SourceIPExclude", &DMWRITE, DMT_STRING, get_ipf_src_ip_exclude, set_ipf_src_ip_exclude, NULL, NULL},
+{"DestIP", &DMWRITE, DMT_STRING, get_ipf_dst_ip, set_ipf_dst_ip, NULL, NULL},
+{"DestMask", &DMWRITE, DMT_STRING, get_ipf_dst_mask, set_ipf_dst_mask, NULL, NULL},
+{"DestIPExclude", &DMWRITE, DMT_STRING, get_ipf_dst_ip_exclude, set_ipf_dst_ip_exclude, NULL, NULL},
+{"Protocol", &DMWRITE, DMT_STRING, get_ipf_protocol, set_ipf_protocol, NULL, NULL},
+{"ProtocolExclude", &DMWRITE, DMT_STRING, get_ipf_protocol_exclude, set_ipf_protocol_exclude, NULL, NULL},
+{"SourcePort", &DMWRITE, DMT_STRING, get_ipf_src_port, set_ipf_src_port, NULL, NULL},
+{"SourcePortRangeMax", &DMWRITE, DMT_STRING, get_ipf_src_port_end, set_ipf_src_port_end, NULL, NULL},
+{"SourcePortExclude", &DMWRITE, DMT_STRING, get_ipf_src_port_exclude, set_ipf_src_port_exclude, NULL, NULL},
+{"DestPort", &DMWRITE, DMT_STRING, get_ipf_dst_port, set_ipf_dst_port, NULL, NULL},
+{"DestPortRangeMax", &DMWRITE, DMT_STRING, get_ipf_dst_port_end, set_ipf_dst_port_end, NULL, NULL},
+{"DestPortExclude", &DMWRITE, DMT_STRING, get_ipf_dst_port_exclude, set_ipf_dst_port_exclude, NULL, NULL},
+{"SourceAllInterface", &DMWRITE, DMT_STRING, get_ipf_src_all_iface, set_ipf_src_all_iface, NULL, NULL},
+{"SourceInterface", &DMWRITE, DMT_STRING, get_path181_ipf_src_iface, set_path181_ipf_src_iface, NULL, NULL},
+{"SourceInterfaceExclude", &DMWRITE, DMT_STRING, get_ipf_src_iface_exclude, set_ipf_src_iface_exclude, NULL, NULL},
+{"DestAllInterface", &DMWRITE, DMT_STRING, get_ipf_dst_all_iface, set_ipf_dst_all_iface, NULL, NULL},
+{"DestInterface", &DMWRITE, DMT_STRING, get_path181_ipf_dst_iface, set_path181_ipf_dst_iface, NULL, NULL},
+{"DestInterfaceExclude", &DMWRITE, DMT_STRING, get_ipf_dst_iface_exclude, set_ipf_dst_iface_exclude, NULL, NULL},
+{"DSCP", &DMWRITE, DMT_STRING, get_ipf_dscp, set_ipf_dscp, NULL, NULL},
+{"DSCPExclude", &DMWRITE, DMT_STRING, get_ipf_dscp_exclude, set_ipf_dscp_exclude, NULL, NULL},
+{0}
+};
+
+static DMOBJ tFwServiceControl181Obj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"IPV4ServiceControl", &DMWRITE, add_sc4, del_sc, NULL, browse_sc4, NULL, NULL, NULL, tFwSc4181Params, NULL},
+{"IPV6ServiceControl", &DMWRITE, add_sc6, del_sc, NULL, browse_sc6, NULL, NULL, NULL, tFwSc6181Params, NULL},
+{0}
+};
+
+static DMOBJ tFirewall181Obj[] = {
+{"X_AIS_DisablePort", &DMWRITE, add_dp, del_dp, NULL, browse_dp, NULL, NULL, NULL, tFwDisablePortParams, NULL},
+{"X_AIS_ServiceControl", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tFwServiceControl181Obj, NULL, NULL},
+{"X_AIS_IPFilter", &DMWRITE, add_ipf, del_ipf, NULL, browse_ipf, NULL, NULL, NULL, tFwIpFilter181Params, NULL},
+{0}
+};
+
+static DMOBJ tFirewall181Root[] = {
+{"Firewall", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tFirewall181Obj, tFirewallParams, NULL},
+{0}
+};
+
+static const char *const firewall181_mtk_paths[] = {
+	"Device.Firewall.",
+	NULL
+};
+
+static const struct dm_module firewall181_mtk_module = {
+	.name  = "mtk-firewall-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tFirewall181Root,
+	.paths = firewall181_mtk_paths,
+};
+DM_MODULE_REGISTER(firewall181_mtk_module);

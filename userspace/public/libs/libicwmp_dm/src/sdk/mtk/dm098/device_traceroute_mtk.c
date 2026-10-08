@@ -365,7 +365,7 @@ static DMOBJ tDtr181DeviceObj[] = {
 };
 
 static const char *const device_traceroute_mtk_paths181[] = {
-	"Device.IP.Diagnostics.",
+	"Device.IP.Diagnostics.TraceRoute.",
 	NULL
 };
 

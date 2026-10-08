@@ -141,15 +141,18 @@ static const struct dm_module xmpp_mtk_module = {
 DM_MODULE_REGISTER(xmpp_mtk_module);
 
 /* TR-181 (cwmp.cpe.datamodel=tr181): Device.XMPP., the same tables (type A
- * of docs/plan/tr181_mtk_design.md).  LTE. has no TR-181 object of the same
- * shape (Device.Cellular.Interface.{i}); mapped in a later phase. */
+ * of docs/plan/tr181_mtk_design.md).  LTE. is the product's own object
+ * without a vendor prefix, kept as Device.LTE like Device.Account; the
+ * standard Device.Cellular.Interface.{i} has another shape (T7). */
 static DMOBJ tXmpp181RootObj[] = {
 {"XMPP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tXmppObj, NULL, NULL},
+{"LTE", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tLteParams, NULL},
 {0}
 };
 
 static const char *const xmpp181_mtk_paths[] = {
 	"Device.XMPP.",
+	"Device.LTE.",
 	NULL
 };
 

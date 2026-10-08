@@ -285,14 +285,21 @@ new	-	Device.Routing.RouterNumberOfEntries	A	layer3forwarding_mtk.c, 1
 new	-	Device.Optical.InterfaceNumberOfEntries	A	wan_mtk.c, 1
 new	-	Device.Optical.Interface.{i}.Enable	A	wan_mtk.c
 new	-	Device.Optical.Interface.{i}.Name	A	wan_mtk.c, pon
-prefix	InternetGatewayDevice.IPPingDiagnostics.	?	T5	IP.Diagnostics.IPPing
-prefix	InternetGatewayDevice.TraceRouteDiagnostics.	?	T5	IP.Diagnostics.TraceRoute
-prefix	InternetGatewayDevice.DownloadDiagnostics.	?	T5	IP.Diagnostics.DownloadDiagnostics
-prefix	InternetGatewayDevice.UploadDiagnostics.	?	T5	IP.Diagnostics.UploadDiagnostics
-prefix	InternetGatewayDevice.NSLookupDiagnostics.	?	T5	DNS.Diagnostics.NSLookupDiagnostics
-prefix	InternetGatewayDevice.DNSDiagnostics.	?	T5	product diagnostics
-prefix	InternetGatewayDevice.Firewall.	?	T5	Firewall.X_AIS_*
-prefix	InternetGatewayDevice.LTE.	?	T5	Cellular
+prefix	InternetGatewayDevice.IPPingDiagnostics.	Device.IP.Diagnostics.IPPing.	A	ipping_mtk.c, same store and launcher
+leaf	InternetGatewayDevice.IPPingDiagnostics.Interface	Device.IP.Diagnostics.IPPing.Interface	B	Device.IP.Interface reference instead of the TR-098 path (translated both ways)
+prefix	InternetGatewayDevice.TraceRouteDiagnostics.	Device.IP.Diagnostics.TraceRoute.	A	the product's two views of one test (same store and launcher), Device.IP.Diagnostics.TraceRoute since T1
+leaf	InternetGatewayDevice.TraceRouteDiagnostics.Interface	Device.IP.Diagnostics.TraceRoute.Interface	B	both a device name; unset reads "default" (TR-098 object) vs "" (the product's TR-181 branch)
+prefix	InternetGatewayDevice.DownloadDiagnostics.	Device.IP.Diagnostics.DownloadDiagnostics.	A	tr143diag_mtk.c, same store and launcher
+prefix	InternetGatewayDevice.UploadDiagnostics.	Device.IP.Diagnostics.UploadDiagnostics.	A	tr143diag_mtk.c, same store and launcher
+prefix	InternetGatewayDevice.NSLookupDiagnostics.	Device.DNS.Diagnostics.NSLookupDiagnostics.	A	lookupdiag_mtk.c, same store and launcher
+prefix	InternetGatewayDevice.DNSDiagnostics.	Device.DNSDiagnostics.	C	product object without a vendor prefix, kept as Device.DNSDiagnostics (like Account)
+prefix	InternetGatewayDevice.DNSDiagnostics.Result.	-	D	the product never reaches these leaves (verify-dm-paths "unreachable")
+prefix	InternetGatewayDevice.Firewall.	Device.Firewall.	C	firewall_mtk.c: Config/Enable and the X_AIS_ objects, same tables
+leaf	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.Ingress	Device.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.Ingress	B	a WAN connection path is a Device.IP.Interface reference (LAN, WAN_ALL, NULL kept)
+leaf	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.Ingress	Device.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.Ingress	B	same
+leaf	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.SourceInterface	Device.Firewall.X_AIS_IPFilter.{i}.SourceInterface	B	the LAN/WAN paths are Device.IP.Interface references
+leaf	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.DestInterface	Device.Firewall.X_AIS_IPFilter.{i}.DestInterface	B	same
+prefix	InternetGatewayDevice.LTE.	Device.LTE.	C	product object without a vendor prefix, kept as Device.LTE (Cellular has another shape, T7)
 prefix	InternetGatewayDevice.DOCSIS.	-	D	no TR-181 counterpart, static values of the product
 new	-	Device.Ethernet.Interface.{i}.Alias	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
 new	-	Device.Ethernet.Interface.{i}.MACAddress	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
