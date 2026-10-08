@@ -4915,20 +4915,21 @@ Sản phẩm:
 
 **Chưa làm:** nạp image BDK, smoke trên board BDK (PH7), TR-181 của BDK theo `cwmp.cpe.datamodel` trên board.
 
-## 76. G9 trên image MTK `dev_181` (`084ef3a`, mặc định tr098) (08/10 23:32 → 09/10 04:42)
+## 76. G9 trên image MTK `dev_181` (`084ef3a`, mặc định tr098) (08/10 23:32 → 09/10 05:22)
 
-`tests/board/soak_sample.sh 600 150` chạy lại sau phiên ACS `tr181` (§74), đọc lúc 04:47 (sampler để chạy tiếp).
+`tests/board/soak_sample.sh 600 150` chạy lại sau phiên ACS `tr181` (§74). Đọc lúc 04:47, rồi đọc lần cuối 05:27 ngay trước
+khi nạp image `tr181-0012` (§78; nạp xoá `/tmp`).
 
-| Chỉ số | 32 mẫu, mỗi 10 phút, 5 giờ 10 phút |
+| Chỉ số | 36 mẫu, mỗi 10 phút, 5 giờ 50 phút |
 |---|---|
 | pid / số lần start | 11768 / 8, không đổi (không restart, không crash) |
 | VmRSS | 5764 kB ở mọi mẫu |
 | fd / thread | 12 / 11 |
 | Phiên | success 1, failure 0 |
-| MemAvailable (cả hệ thống) | 135.520–139.820 kB, dao động, không giảm dần |
+| MemAvailable (cả hệ thống) | 135.520–139.820 kB, dao động, không giảm dần (mẫu cuối 135.652 kB) |
 
 So với G9 trên image `9f393e4` (§66, 11 giờ): cùng fd 12 và 11 thread; VmRSS thấp hơn và phẳng hơn (5764 so với
-5724–6104 kB). **Giới hạn:** chu kỳ Inform của board là 43.200 s, nên trong 5 giờ agent chỉ có một phiên với ACS. Mẫu này
+5724–6104 kB). **Giới hạn:** chu kỳ Inform của board là 43.200 s, nên trong gần 6 giờ agent chỉ có một phiên với ACS. Mẫu này
 cho thấy agent ổn định lúc rảnh, chưa cho thấy ổn định dưới nhiều phiên (phần đó có soak host 300 phiên ở §57). CSV ở
 workspace `issues/…/logs/20261009_g9_soak_image_dev181_084ef3a.csv`.
 
@@ -4980,3 +4981,53 @@ ba (`LowerLayers`) là hợp đồng ghi của sản phẩm, cần quyết đị
   automake 0; cross-gcc SDK (`2_src`) lib 69 file 0 lỗi, không cảnh báo ở `lan_mtk.c`/`wlan_mtk.c`.
 - `run.sh all` 25/25 PASS tại `tr181-0011`.
 - Chưa build image, chưa chạy board cho thay đổi này.
+
+## 78. T7 (2): `Interface` của chẩn đoán TR-181 là tham chiếu `Device.IP.Interface` (`tr181-0012`) (09/10 05:10–)
+
+TraceRoute, DownloadDiagnostics, UploadDiagnostics, NSLookupDiagnostics của sản phẩm nhận và lưu **tên thiết bị lớp 3**
+(`ifconfig $val`; setter đòi thiết bị tồn tại, TraceRoute rơi về thiết bị của route mặc định). TR-181 đòi tham chiếu
+`Device.IP.Interface.{i}`. Ở chế độ `tr181`, một ACS theo chuẩn ghi `Device.IP.Interface.2` thì TraceRoute âm thầm chạy
+trên thiết bị mặc định, còn ba chẩn đoán kia trả 9007. IPPing đã đúng từ T5 (`PATH181`).
+
+**Cách làm (chỉ cây TR-181, bảng TR-098 không đổi):**
+- `device_ip_mtk.c`: `dip_netdev_of_ref()` (`Device.IP.Interface.<n>` → thiết bị lớp 3 của section đó: `l3_device` của
+  netifd, không có thì `network.<sec>.device` bỏ `@`) và `dip_ref_of_netdev()` (ngược lại, lấy Interface số nhỏ nhất,
+  để `if<id>` thắng alias `if<id>_6` cùng thiết bị).
+- `device_ip_mtk.h`: macro `IFREF181_GET/SET` bọc getter/setter của sản phẩm.
+  - Đọc: trả tham chiếu; giữ nguyên tên nếu không Interface nào mang thiết bị đó.
+  - Ghi tham chiếu: đổi ra thiết bị rồi đưa cho setter của sản phẩm. Trả 9007 khi không có Interface số đó hoặc
+    Interface không có thiết bị.
+  - Ghi giá trị khác: đi thẳng như cũ, nên tên thiết bị sản phẩm từng nhận vẫn dùng được (không phá hợp đồng).
+- Bảng lá TR-181 riêng (`tDtr181Params`, `tDownload181DiagParams`, `tUpload181DiagParams`, `tNSLookup181Params`) sao từ
+  bảng chung, chỉ lá `Interface` được bọc; chú thích "keep in step" ở cả hai nơi.
+- `Device.DNSDiagnostics` (object riêng của sản phẩm, giữ tên như `Account`) giữ tên thiết bị.
+- Ánh xạ: 4 cặp `Interface` → B (thêm dòng `leaf` cho nhánh graft TraceRoute và cho Download/Upload/NSLookup). Đây là lá
+  chuỗi, vốn không có trong bảng kiểu shell; `is_safe_input` ở tầng chung vẫn áp cho mọi SPV.
+
+**Kiểm (host):**
+- `run.sh tr181` thêm:
+  - kho của 4 chẩn đoán chứa `pppoe-if1` (thiết bị lớp 3 của `if1` trong ubus giả) → cả 4 đọc `Device.IP.Interface.<if1>`;
+  - ghi `eth0` (tên thiết bị) vẫn nhận, lưu `eth0`, đọc `eth0`;
+  - `Device.IP.Interface.99` và `.x` → 9007.
+  - Container không có thiết bị `pppoe-if1`, nên chiều tham chiếu → thiết bị thật được kiểm trên board.
+- So cặp: 1207 bằng + 2 tham chiếu, B 154 (+4), 0 tên thiếu cặp. `run.sh all` 25/25.
+- `tr181-map.py check` 651 = 651; check-c-sanity lib 69/0, app ×3 17/0; verify-dm-paths tr098 thiếu 0; claims 0 chồng;
+  automake 0; cross-gcc SDK `2_src` 69 file 0 lỗi, không cảnh báo ở các file đã sửa.
+
+**Board (`tr181-0011` + `0012`):** image `192ae45` build tăng dần ở `2_src` (`libtr098` `e3ab67b1…`, `icwmp_tr098d` không
+đổi `937c508d…`, `tclinux.bin` `3bd2cb36…`, có dev-access, 0 `usr/share/icwmp`), nạp 05:27:29, lên lại sau 143 s.
+- TR-098 parity với shell: **PASS**, 1735 chung, 1579 bằng, 109 động, 15 đã biết, 32 nháy, 0 `UNEXPECTED`, writable lệch
+  13 (K24), tức các bảng TR-098 không đổi.
+- `tests/board/tr181_window.sh` (ACS bị chặn, bản có kiểm T7), 05:31:
+  - Radio 1 `Channel`/`ChannelsInUse`/`AutoChannelEnable` = `6/6/true`, Radio 2 = `124/124/true` (TR-098 đọc 0 cho cả hai);
+  - `IP.Interface.2` (PPPoE `if0`) `IPv4Address.1.AddressingType` = `IPCP`;
+  - ghi `Device.IP.Diagnostics.TraceRoute.Interface` = `Device.IP.Interface.2` → fault 0, kho lưu `pppoe-if0`, đọc lại
+    `Device.IP.Interface.2`; kho được trả về như trước (rỗng);
+  - NTPServer3 set/trả lại, K29 9007, ParameterKey không đổi, như §74.
+- So cặp: **PASS**, TR-098 1753, TR-181 1573: 1255 bằng + 2 tham chiếu, B 185, D 206, động 105, rỗng ở instance khác 79,
+  0 tên TR-181 thiếu cặp. `/etc/config` trước/sau: 0 dòng khác.
+- ACS (GET chỉ đọc): Inform TR-098 lúc 05:32:24 sau cửa sổ, fault rỗng.
+- G9 cho image này chạy lại từ 05:33:28.
+
+**Thấy thêm:** `Device.PPP.` không có lá nào ở gốc (`InterfaceNumberOfEntries`, `SupportedNCPs` của TR-181), vì nhánh
+graft `InternetGatewayDevice.Device.PPP` của sản phẩm không có. Thêm vào danh sách T7.
