@@ -263,6 +263,8 @@ có yêu cầu hoặc phát sinh lỗi; trước mắt dùng app STUN đang có 
 ### 6.2 Commit
 
 - Thay đổi code giữ tiêu đề `[icwmp NNNN] <phạm vi>: <việc>`, đánh số tiếp từ 0078.
+  Trên branch `dev_181` (TR-181, [tr181_mtk_design.md](tr181_mtk_design.md)) dùng chuỗi số riêng
+  `[icwmp tr181-NNNN]`, để không trùng số của `dev` khi gộp nhánh.
   Docs/tests không đánh số.
 - Thân commit ghi ba điều: lỗi hoặc yêu cầu là gì, vì sao sửa như vậy, bằng chứng (lệnh test
   host, kết quả trước/sau, hoặc log board).

@@ -1,0 +1,174 @@
+# TR-181 trên MTK: thiết kế và kế hoạch (branch `dev_181`)
+
+Phạm vi: thêm data model TR-181 (`Device.`) cho icwmp trên MTK/Airoha 2025Q3 (HP2236B), bên cạnh TR-098 đã giao ở
+`release/mtk-20261008`. Branch `dev_181` tách từ `dev` tại `dc3d7f7` (08/10/2026).
+
+## START HERE — một màn hình
+
+Chú thích màu: xanh lá = có sẵn, dùng chung, vàng = mới cho TR-181, xanh dương = backend dùng chung (không viết lại),
+tím = kho dữ liệu của sản phẩm.
+
+```mermaid
+flowchart LR
+    ACS["ACS"] --> D["icwmpd<br/>session, Inform, RPC"]
+    D --> E["libtr098 engine<br/>dmentry, registry"]
+    E --> SEL{"cwmp.cpe.datamodel"}
+    SEL -->|"tr098, mặc định"| T98["cây InternetGatewayDevice.<br/>sdk/mtk/dm098, 783 tham số"]
+    SEL -->|"tr181"| T181["cây Device.<br/>sdk/mtk/dm181"]
+    T98 --> SVC["getter/setter MTK<br/>dùng chung cho hai cây"]
+    T181 --> SVC
+    SVC --> ST["UCI, ubus hni.*, /proc, /sys,<br/>mwctl, ponmgr"]
+    style D fill:#d8f0d8,stroke:#2e7d32
+    style E fill:#d8f0d8,stroke:#2e7d32
+    style T98 fill:#d8f0d8,stroke:#2e7d32
+    style SEL fill:#fff3c4,stroke:#b58900
+    style T181 fill:#fff3c4,stroke:#b58900
+    style SVC fill:#dbe8fb,stroke:#1565c0
+    style ST fill:#eadcf5,stroke:#6a1b9a
+```
+
+## Quyết định đã chốt
+
+| Ngày | Ai | Quyết định |
+|---|---|---|
+| 08/10 | user (chatlog 89) | TR-098 bản giao là đủ khi phần tham số/xử lý là C. Chẩn đoán và script hành động giữ shell. Làm TR-181 trên branch mới `dev_181` |
+| 08/10 | user (chatlog 90) | Phạm vi: **trước hết TR-181 tương đương TR-098** (783 tham số). Sau đó tham khảo TR-181 của BDK (`projects/brcm_ap_wifi7_mvn/src/bcm963xx`, issue 20260914, 20260916) và **chỉ thêm tham số cần và được dùng**, không làm tất cả |
+
+## Nguyên tắc
+
+1. **Một backend.** `dm181` không viết lại logic đọc/ghi sản phẩm. Getter/setter của `dm098` được dùng chung: công
+   khai qua header, hoặc tách thành helper chung khi ngữ nghĩa giống. Module TR-181 chỉ có bảng DMOBJ/DMLEAF, cách đánh
+   instance của TR-181 và phần dịch ngữ nghĩa (ví dụ `LocalTimeZone` của TR-181 là chuỗi POSIX).
+2. **Chọn model lúc chạy** bằng `cwmp.cpe.datamodel` (`tr098` mặc định, `tr181`), giống BDK. Mỗi lúc chỉ một model.
+   Build không có module TR-181 thì giữ TR-098 và ghi lỗi vào log, không im lặng.
+3. **Tên và kiểu theo chuẩn.** Kiểm bằng `docs/issue/tr181-schema.py` (tên BBF trong XML của BDK, đọc lúc chạy, không
+   chép vào repo). Tên chuẩn mà bảng tra thiếu (`Users.User`, `FaultMgmt`, `SelfTestDiagnostics`,
+   `Services.StorageService`) kiểm tay theo BBF và ghi lại.
+4. **Bằng chứng tương đương.** Mỗi cặp TR-098 ↔ TR-181 trong bảng ánh xạ phải đọc ra cùng giá trị trên cùng board,
+   vì chúng đi qua cùng một getter. Test board mới: dump cả hai model, so từng cặp.
+5. **Extension của nhà mạng.** `X_AIS_*` giữ nguyên tên lá, đặt dưới `Device.` ở vị trí tương ứng.
+
+## Nguồn tham chiếu
+
+| Nguồn | Dùng để |
+|---|---|
+| `docs/issue/tr098_coverage_matrix.tsv` (783 tham số, 184 object) | danh sách đích "tương đương TR-098" |
+| BDK `projects/brcm_ap_wifi7_mvn/docs/icwmp_tr098_bdk_mapping_matrix.md` | ánh xạ ngữ nghĩa TR-098 ↔ TR-181 đã làm cho BDK (LAN, DHCP, WAN, WiFi, hệ thống) |
+| BDK `src/bcm963xx/data-model/cms-dm-tr181-*.xml` qua `tr181-schema.py` | tên, kiểu, RW chuẩn (512 object, 4206 tham số) |
+| easycwmp `functions/tr181` của sản phẩm (upstream PIVA, 297 tham số, không build, không theo schema HNI) | chỉ để tham khảo tên |
+| BDK issue 20260914, 20260916 | sau phase tương đương: tham số TR-181 nào ACS thật sự dùng |
+
+## Ánh xạ object (đề xuất; chốt từng domain khi làm)
+
+Loại: **A** = cùng ngữ nghĩa, chỉ đổi root (dùng lại bảng/getter); **B** = dựng lại theo cấu trúc TR-181 (dùng lại
+getter); **C** = extension `X_AIS_*`/sản phẩm; **D** = không áp dụng cho TR-181.
+
+### Hệ thống
+
+| TR-098 (`InternetGatewayDevice.`) | TR-181 (`Device.`) | Loại | Ghi chú |
+|---|---|---|---|
+| (root) `DeviceSummary`, `LANDeviceNumberOfEntries`, `WANDeviceNumberOfEntries` | `RootDataModelVersion`, `InterfaceStackNumberOfEntries` | B/D | Inform TR-181 dùng `RootDataModelVersion` |
+| `DeviceInfo.` + `MemoryStatus`, `ProcessStatus.Process`, `TemperatureStatus.TemperatureSensor`, `X_AIS*` | `DeviceInfo.` cùng object con | A | bỏ lá chỉ có ở TR-098 (`SpecVersion`, `ModemFirmwareVersion`, `EnabledOptions`, `DeviceLog`) |
+| `ManagementServer.` | `ManagementServer.` | A | gần như trùng tên lá |
+| `Time.` | `Time.` | A/B | `LocalTimeZone` TR-181 = chuỗi POSIX (TR-098 `LocalTimeZoneName`); `LocalTimeZone` kiểu offset của TR-098 không có |
+| `UserInterface.` (+`CarrierLocking`, `X_AIS_WebUserInfo`) | `UserInterface.` | A/C | |
+| `User.` | `Users.User.{i}` | B | |
+| `Account.`, `Account.Web.` (sản phẩm, không prefix) | chốt khi làm: `Device.X_AIS_Account.` hoặc giữ tên | C | |
+| `XMPP.Connection.{i}.Server.{i}` | `XMPP.Connection.{i}.Server.{i}` | A | |
+| `BulkData.Profile` | `BulkData.Profile` | A | |
+| `FaultMgmt.CurrentAlarm` | `FaultMgmt.CurrentAlarm` | A | |
+| `SoftwareModules.DeploymentUnit` | `SoftwareModules.DeploymentUnit` | A | |
+| `Services.STBService`, `Services.StorageService` | như cũ | A | |
+| `CaptivePortal.`, `FAP.GPS` | như cũ | A | |
+| `USBHosts.Host` | `USB.USBHosts.Host` | A | khác vị trí cha |
+| `LTE.` | `Cellular.` | B | chốt khi làm |
+| `DOCSIS.*` | không có trong TR-181 | D | sản phẩm chỉ có giá trị tĩnh |
+| `X_AIS_*` ở root (3rdAgent, AutoWifiScan, Conf, CPEagent, DDNS, DHCPClient, DnsLandingPage, Isolation, Logging, MeshAPI, MLO, SSH, Telnet, UplinkSetup, UPnP, WiFiStatus) | `Device.X_AIS_*` cùng tên | C | |
+
+### LAN
+
+| TR-098 | TR-181 | Loại |
+|---|---|---|
+| `LANDevice.{i}.LANHostConfigManagement.` (DHCP server) | `DHCPv4.Server.Pool.{i}` | B |
+| `LANHostConfigManagement.DHCPStaticAddress.{i}`, `DHCPOption.{i}` | `DHCPv4.Server.Pool.{i}.StaticAddress.{i}`, `Option.{i}` | B |
+| `LANHostConfigManagement.IPInterface.1` | `IP.Interface.{lan}.IPv4Address.{i}` | B |
+| `LANEthernetInterfaceConfig.{i}` (+`Stats`) | `Ethernet.Interface.{i}` (`Upstream=false`) (+`Stats`) | B |
+| `Hosts.Host.{i}` | `Hosts.Host.{i}` | B |
+| `Layer2Bridging.Bridge`, `AvailableInterface` | `Bridging.Bridge.{i}.Port.{i}` | B |
+
+### Wi-Fi
+
+| TR-098 | TR-181 | Loại |
+|---|---|---|
+| `LANDevice.{i}.WLANConfiguration.{i}` | `WiFi.Radio.{r}`, `WiFi.SSID.{i}`, `WiFi.AccessPoint.{i}` | B |
+| `WLANConfiguration.{i}.WEPKey`, `PreSharedKey`, `WPS` | `AccessPoint.{i}.Security`, `AccessPoint.{i}.WPS` | B |
+| `WLANConfiguration.{i}.AssociatedDevice.{i}` (+`Stats`) | `AccessPoint.{i}.AssociatedDevice.{i}` (+`Stats`) | B |
+| `WLANConfiguration.{i}.Stats` | `SSID.{i}.Stats` | B |
+| `LANDevice.{i}.X-AIS_2-4GHzTransmitPower`, `X-AIS_5GHzTransmitPower` | `WiFi.Radio.{r}.TransmitPower` | B |
+| `LANDevice.{i}.X_AIS_Mesh` | `Device.WiFi.X_AIS_Mesh` | C |
+| `WiFi.NeighboringWiFiDiagnostic` | `WiFi.NeighboringWiFiDiagnostic` | A |
+
+### WAN
+
+| TR-098 | TR-181 | Loại |
+|---|---|---|
+| `WANDevice.{i}.WANCommonInterfaceConfig`, `WANEthernetInterfaceConfig` (+`Stats`) | `Ethernet.Interface.{u}` (`Upstream=true`) / `Optical.Interface` (GPON), `IP.Interface.{w}.Stats` | B |
+| `WANConnectionDevice.{i}.WANIPConnection.{i}` (+`Stats`) | `IP.Interface.{w}` + `IPv4Address` + `DHCPv4.Client` + `NAT.InterfaceSetting` + `Routing.Router.1.IPv4Forwarding` + `DNS.Client.Server` + `Ethernet.VLANTermination` | B |
+| `WANPPPConnection.{i}` (+`Stats`) | `PPP.Interface.{p}` (+`IPCP`, `PPPoE`, `Stats`) + `IP.Interface` trên nó | B |
+| `WANIPConnection`/`WANPPPConnection.{i}.X_AIS_IPv6` (+`Pd`) | `IP.Interface.{w}.IPv6Address`/`IPv6Prefix`, `DHCPv6.Client` | B |
+| `…PortMapping.{i}` | `NAT.PortMapping.{i}` (`Interface`) | B |
+| `Layer3Forwarding.Forwarding.{i}` | `Routing.Router.1.IPv4Forwarding.{i}` | B |
+| `WANDSLLinkConfig` | không áp dụng (GPON) | D |
+| `InternetGatewayDevice.Device.{IP,PPP,DHCPv6,DynamicDNS,RouterAdvertisement}.*` (102 tham số đã viết theo TR-181) | `Device.` cùng tên | A, gộp với IP/PPP dựng ở trên |
+
+### Chẩn đoán và firewall
+
+| TR-098 | TR-181 | Loại |
+|---|---|---|
+| `IPPingDiagnostics` | `IP.Diagnostics.IPPing` | B |
+| `TraceRouteDiagnostics` (+`RouteHops`) | `IP.Diagnostics.TraceRoute` (+`RouteHops`) | B |
+| `DownloadDiagnostics`, `UploadDiagnostics` | `IP.Diagnostics.DownloadDiagnostics`, `UploadDiagnostics` | B |
+| `NSLookupDiagnostics` (+`Result`) | `DNS.Diagnostics.NSLookupDiagnostics` (+`Result`) | B |
+| `DNSDiagnostics` (sản phẩm) | chốt khi làm | C |
+| `SelfTestDiagnostics` | `SelfTestDiagnostics` | A |
+| `Firewall.X_AIS_*` | `Firewall.X_AIS_*` | C |
+
+## Instance và tham chiếu
+
+- Instance TR-181 của `IP.Interface`, `Ethernet.Interface`, `WiFi.Radio/SSID/AccessPoint`, `PPP.Interface`,
+  `NAT.PortMapping` lưu bằng option UCI riêng của TR-181, không dùng lại số của TR-098, để hai model không ghi đè
+  nhau.
+- Tham chiếu (`Interface`, `LowerLayers`, `Layer1Interface`…) luôn là path TR-181 (`Device.IP.Interface.2`).
+- `Alias`: chỉ làm khi ACS dùng (`AliasBasedAddressing` = false như hiện tại).
+
+## Inform ở TR-181
+
+Forced-inform: `Device.RootDataModelVersion`, `Device.DeviceInfo.HardwareVersion`, `SoftwareVersion`,
+`ProvisioningCode`, `Device.ManagementServer.ParameterKey`, `ConnectionRequestURL`, cộng địa chỉ IP WAN chính (chốt ở
+phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đổi giữa hai model.
+
+## Các phase
+
+| Phase | Nội dung | Xong khi |
+|---|---|---|
+| T0 Nền | chọn model trên MTK (`cwmp.cpe.datamodel`), root `Device.` + `RootDataModelVersion`, thư mục `sdk/mtk/dm181`, công cụ `tr181-schema.py`, test host `run.sh tr181` | đổi model bằng UCI + reload, GPN `Device.` chạy, Inform có `Device.*`, TR-098 không đổi (`run.sh all` PASS) |
+| T1 Hệ thống (loại A) | DeviceInfo, ManagementServer, Time, UserInterface, Users, XMPP, BulkData, FaultMgmt, SoftwareModules, Services, CaptivePortal, FAP, USB, `X_AIS_*` ở root | mỗi cặp ánh xạ cùng giá trị trên host; tên/kiểu qua `tr181-schema.py` |
+| T2 LAN | IP.Interface LAN, Ethernet.Interface, DHCPv4.Server, Hosts, Bridging | như trên + ghi/Add/Delete |
+| T3 Wi-Fi | WiFi.Radio/SSID/AccessPoint (+Security/WPS/AssociatedDevice/Stats), `X_AIS` Wi-Fi | như trên |
+| T4 WAN | IP.Interface WAN, PPP, DHCPv4/v6 Client, NAT, Routing, DNS, Ethernet/Optical WAN, RouterAdvertisement, DynamicDNS, Add/Delete kết nối | như trên + `hni.wan` thật trên board |
+| T5 Chẩn đoán, firewall | IP.Diagnostics.*, DNS.Diagnostics, SelfTest, `Firewall.X_AIS_*` | như trên |
+| T6 Board | so cặp TR-098 ↔ TR-181 trên board, phiên ACS thật ở chế độ `tr181` | 0 cặp lệch không giải thích được |
+| T7 Theo BDK | tham số TR-181 mà ACS dùng trên BDK nhưng chưa có ở đây (không làm tất cả) | danh sách chốt với user |
+
+## Quy ước trên `dev_181`
+
+- Commit code: `[icwmp tr181-NNNN] <phạm vi>: <việc>`, chuỗi số riêng từ `0001`, để không trùng `[icwmp NNNN]` của
+  `dev` khi gộp nhánh. Docs không đánh số.
+- Cổng trước mỗi commit: như `sync-main-dev.md` §6.3, cộng `run.sh tr181`.
+- Bằng chứng ghi vào `docs/issue/analysis.md` (mục mới), trạng thái vào `implementation-status.json`.
+
+## Chưa chứng minh được
+
+- Giá trị `RootDataModelVersion` công bố (phụ thuộc phiên bản TR-181 mà các bảng theo; chốt khi T1 xong).
+- ACS lab (GenieACS) làm việc với thiết bị ở chế độ `tr181`: chưa thử.
+- Danh sách tham số TR-181 ACS thật sự dùng trên BDK: chưa trích (T7).
