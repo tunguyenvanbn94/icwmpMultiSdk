@@ -5030,4 +5030,12 @@ trên thiết bị mặc định, còn ba chẩn đoán kia trả 9007. IPPing �
 - G9 cho image này chạy lại từ 05:33:28.
 
 **Thấy thêm:** `Device.PPP.` không có lá nào ở gốc (`InterfaceNumberOfEntries`, `SupportedNCPs` của TR-181), vì nhánh
-graft `InternetGatewayDevice.Device.PPP` của sản phẩm không có. Thêm vào danh sách T7.
+graft `InternetGatewayDevice.Device.PPP` của sản phẩm không có. Rà cả cây (`verify-dm-paths.py --model tr181 --dump`): 33
+bảng nhiều instance, 13 bảng không có lá `<Tên>NumberOfEntries` ở object cha. 4 bảng là `X_AIS_*` của sản phẩm (bên TR-098
+cũng không có, giữ nguyên). 9 bảng chuẩn:
+- `DHCPv6.Server.Pool`, `DeviceInfo.TemperatureStatus.TemperatureSensor`, `PPP.Interface`, `RouterAdvertisement.InterfaceSetting`;
+- `Services.STBService`, `STBService.{i}.ServiceMonitoring.MainStream`, `Services.StorageService`;
+- `XMPP.Connection`, `XMPP.Connection.{i}.Server`.
+
+Engine không có hàm đếm chung, nên mỗi lá phải đếm đúng như browse của bảng đó. ACS lab không dùng các lá này. Đưa vào
+danh sách T7 để chốt, chưa làm.
