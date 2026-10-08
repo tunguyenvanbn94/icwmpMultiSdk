@@ -5,7 +5,7 @@ Tài liệu tiến độ để chuyển giao. Kiến trúc và cách chia code �
 
 | | |
 |---|---|
-| Cập nhật | 2026-10-08 23:05. `dev` = `main` = `dc3d7f7` (tag `release/mtk-20261008`, đã push). TR-181 trên branch `dev_181` tới `[icwmp tr181-0010]` (local, chưa push). Board chạy image `dev_181` `084ef3a` build ở cây mới `2_src/2025q3` (mặc định `tr098`) |
+| Cập nhật | 2026-10-08 23:35. `dev` = `main` = `dc3d7f7` (tag `release/mtk-20261008`, đã push). TR-181 trên branch `dev_181` tới `[icwmp tr181-0010]` (local, chưa push). Board chạy image `dev_181` `084ef3a` build ở cây mới `2_src/2025q3` (mặc định `tr098`) |
 | Nguồn trạng thái có cấu trúc | [../issue/implementation-status.json](../issue/implementation-status.json), xem nhanh: `python3 docs/issue/progress.py` |
 | Bằng chứng chi tiết | [../issue/analysis.md](../issue/analysis.md) (§ theo thời gian, mới nhất ở cuối) |
 | Quy ước | Trạng thái không cao hơn bằng chứng thấp nhất trên HEAD. "Đạt" ở đây luôn ghi rõ mức: STATIC, SDK build, BOARD, HOST |
@@ -59,7 +59,7 @@ flowchart LR
 | BDK | Prototype; **build image đạt 06/10 tại 0088** (bundle một SDK, analysis §56) | SDK build BDK; board BDK chưa (PH7) |
 | Test host | Chạy được trên máy build: container `ubuntu:24.04` (§55) | **`run.sh all` 24/24 PASS 08/10** tại 0104 và từ chính bundle `release/mtk-20261008` (§66); trên `dev_181` 25/25 (thêm `tr181`, §67) |
 | **PH0 (đóng băng baseline)** | **Xong 08/10** (PH0.5, tag `baseline/ph0-mtk-tr098-20261008`) | Board image `0fa9d31` (0101), parity PASS. Mang sang sau: G9 24 h (không chặn, quyết định 08/10), WebUI (G6), K15 hoãn (§64) |
-| **PH6 TR-181 MTK** (branch `dev_181`) | **Đang làm**: phần tương đương TR-098 (T0–T5: hệ thống, LAN, Wi-Fi, WAN, chẩn đoán, firewall) **xong trên host và board** (T6); K29 (kiểm kiểu cho tên TR-181) sửa, đạt trên board | 651 tên TR-181, mọi tham số TR-098 có quy tắc (A 458, B 34, C 218, D 90), `run.sh tr181` so cặp 1224 bằng + 2 theo tham chiếu, 0 tên thiếu cặp (§67–§73); board (§74): so cặp 1272 bằng + 2 tham chiếu, 0 tên thiếu cặp, TR-098 parity PASS, ACS không thấy `Device.`; còn phiên ACS chế độ `tr181` (chờ user), T7 theo BDK: [../plan/tr181_mtk_design.md](../plan/tr181_mtk_design.md) |
+| **PH6 TR-181 MTK** (branch `dev_181`) | **Đang làm**: phần tương đương TR-098 (T0–T5: hệ thống, LAN, Wi-Fi, WAN, chẩn đoán, firewall) **xong trên host và board** (T6); K29 (kiểm kiểu cho tên TR-181) sửa, đạt trên board | 651 tên TR-181, mọi tham số TR-098 có quy tắc (A 458, B 34, C 218, D 90), `run.sh tr181` so cặp 1224 bằng + 2 theo tham chiếu, 0 tên thiếu cặp (§67–§73); board (§74): so cặp 1272 bằng + 2 tham chiếu, 0 tên thiếu cặp, TR-098 parity PASS, phiên GenieACS chế độ `tr181` success, 0 fault; còn T7 theo BDK: [../plan/tr181_mtk_design.md](../plan/tr181_mtk_design.md) |
 | **Bản giao MTK** | **`release/mtk-20261008`** (08/10): full C, không còn shell data model | bundle `--sdk mtk` kiểm sha256, apply = code image `9f393e4` (board PASS), `run.sh all` từ bundle 24/24 PASS; làm lại từng bước: [icwmp_mtk_build_verify_guide.md](icwmp_mtk_build_verify_guide.md) (§66) |
 | **PH5 (tắt compat)** | **Đạt board 08/10** (0103, 0104; kéo lên trước PH1–PH3) | Build MTK `--disable-dm-script-compat`, không cài `icwmp_dm.sh`. Image `9f393e4`: parity compat-off PASS, không tên nào chỉ ở shell → **cây C đủ trên board**; GPV toàn cây 1 s. Tìm và sửa K28 (§65) |
 

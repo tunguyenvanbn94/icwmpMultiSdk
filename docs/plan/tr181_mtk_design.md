@@ -158,7 +158,7 @@ phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đ�
 | T3 Wi-Fi — **xong trên host** (`tr181-0005`, analysis §69) | WiFi.Radio 1..2, SSID/AccessPoint 1..12 (số của WLANConfiguration), Security.ModeEnabled, WPS, AssociatedDevice (+Stats), `WiFi.X_AIS_Mesh`, `WiFi.X-AIS_*` | `check` thiếu 0; `run.sh tr181`: 884 cặp bằng, ghi qua tên TR-181 vào đúng option |
 | T4 WAN | T4a **xong trên host** (`tr181-0006`, §70): cổng WAN `Ethernet.Interface.5`, `Optical.Interface.1`, `Routing.Router.1.IPv4Forwarding`. T4b **xong trên host** (`tr181-0007`, §71): kết nối → IP.Interface, IPv4Address, DHCPv4.Client, NAT.InterfaceSetting, DNS.Client.Server, route mặc định, PPP.Interface. T4c + T4d **xong trên host** (`tr181-0008`, §72): `X_AIS_*`/`X_AIS_IPv6`/ServiceList trên IP.Interface, `NAT.PortMapping` (+Add/Delete). Add/Delete kết nối: `PPP.Interface` AddObject (T1) tạo `wan.@entry` PPPoE; **IPoE chưa tương đương**: `IP.Interface` AddObject của sản phẩm chỉ tạo section `network`, không gọi `hni.wan add` như `WANIPConnection` AddObject (T7) | như trên + `hni.wan` thật trên board |
 | T5 Chẩn đoán, firewall — **xong trên host** (`tr181-0009`, analysis §73) | IP.Diagnostics.IPPing/TraceRoute/Download/Upload, DNS.Diagnostics.NSLookupDiagnostics, `Device.DNSDiagnostics`, `Device.Firewall` (path interface → tham chiếu), `Device.LTE` | `check` thiếu 0; `run.sh tr181`: 1224 cặp bằng, không còn phase chờ |
-| T6 Board — **so cặp trên board xong** (`tr181-0010`, analysis §74); phiên ACS `tr181` chờ user cho phép | so cặp TR-098 ↔ TR-181 trên board (`tests/board/tr181_window.sh`, ACS bị chặn suốt cửa sổ), phiên ACS thật ở chế độ `tr181` | 0 cặp lệch không giải thích được: đạt trên board (1272 bằng, 0 tên thiếu cặp, TR-098 parity với shell PASS); còn phiên ACS |
+| T6 Board — **xong** (`tr181-0010`, analysis §74) | so cặp TR-098 ↔ TR-181 trên board (`tests/board/tr181_window.sh`, ACS bị chặn suốt cửa sổ), phiên ACS thật ở chế độ `tr181` | 0 cặp lệch không giải thích được: đạt trên board (1272 bằng, 0 tên thiếu cặp, TR-098 parity với shell PASS); phiên GenieACS chế độ `tr181` success, 0 fault |
 | T7 Theo BDK | tham số TR-181 mà ACS dùng trên BDK nhưng chưa có ở đây (không làm tất cả) | danh sách chốt với user |
 
 ## Công cụ
@@ -203,10 +203,10 @@ của section `network.if<id>` (bridge: `if_wanbr<id>`), đánh số bằng `ip_
 
 ## Chưa chứng minh được
 
-- Giá trị `RootDataModelVersion`: đang đặt `2.19` (`MTK_TR181_ROOT_VERSION`). Chưa đối chiếu từng lá với đúng phiên bản
-  TR-181 đó; chốt cùng T6 khi có ACS thật ở chế độ `tr181`.
-- ACS lab (GenieACS) làm việc với thiết bị ở chế độ `tr181`: chưa thử. Đổi model làm ACS nhận cây `Device.` cho thiết bị
-  này (thay đổi phía ACS), cần user cho phép. Phần so cặp T6 đã làm trên board mà ACS không thấy (analysis §74).
+- Giá trị `RootDataModelVersion`: đang đặt `2.19` (`MTK_TR181_ROOT_VERSION`), GenieACS nhận không lỗi. Chưa đối chiếu
+  từng lá với đúng phiên bản TR-181 đó (T7).
+- ACS lab (GenieACS) ở chế độ `tr181`: Inform/InformResponse/GetRPCMethods đạt, 0 fault (analysis §74). ACS chủ động
+  GPN/GPV/SPV qua `Device.*` chưa thử (preset lab không đòi, tạo task là ghi phía ACS).
 - Danh sách tham số TR-181 ACS thật sự dùng trên BDK: chưa trích (T7).
 - `AssociatedDevice` (`ubus hni`): lúc T6 không có client Wi-Fi, instance chưa được thử trên board. `ChannelsInUse`,
   `PossibleChannels` đúng trên board (§74).

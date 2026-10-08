@@ -4801,8 +4801,8 @@ User (chatlog 93) đổi cây build MTK sang bản clone mới `/home/nvtu/works
 build sẵn), BDK ở `/home/vtanh/workspaceBRCM/tunv/2_src/bcm963xx`; yêu cầu build và test MTK, image giữ dev-access.
 
 **Kết luận:** code `dev_181` (`084ef3a`) build được trên cây mới; trên board thật, TR-098 không lùi (parity với shell PASS)
-và TR-181 tương đương TR-098 (so cặp PASS, 0 tên TR-181 thiếu cặp). Không phiên ACS nào ở chế độ `tr181`: ACS bị chặn
-suốt cửa sổ TR-181 nên GenieACS không có nhánh `Device.` của thiết bị.
+và TR-181 tương đương TR-098 (so cặp PASS, 0 tên TR-181 thiếu cặp). So cặp làm với ACS bị chặn; sau đó (user cho phép)
+một phiên ACS thật ở chế độ `tr181` thành công, không fault, rồi trả `tr098`.
 
 **Build (cây `2_src`):**
 - dev-access v1 đã có sẵn trong cây (`git apply --check -R 1000-…` đạt).
@@ -4869,5 +4869,22 @@ rỗng ở instance khác 79, 0 tên TR-181 thiếu cặp. Host `run.sh tr181` v
 - `WiFi.Radio.{i}.Channel` = 0 khi chọn kênh tự động (cấu hình), kênh thật nằm ở `ChannelsInUse`. TR-181 coi `Channel`
   là kênh đang dùng.
 
-**Chưa làm ở T6:** phiên ACS thật ở chế độ `tr181` (GenieACS sẽ nhận cây `Device.` của thiết bị, cần user cho phép);
-soak trên image này; BDK.
+**Phiên ACS thật ở chế độ `tr181`** (user cho phép, chatlog 94; 23:22–23:25):
+- Trước: GenieACS chưa có nhánh `Device.` của thiết bị, không task, không fault. Preset của lab: `default` (mọi phiên),
+  `inform`/`getrpcmethods` (`1 BOOT`), `bootstrap` (`0 BOOTSTRAP`).
+- `cwmp.cpe.datamodel=tr181` + `/etc/init.d/icwmpd restart` → log `data model: TR-181 Device.`, phiên 23:22:59
+  **success** (1/0): Inform `2 PERIODIC` → InformResponse → GetRPCMethods (CPE gửi) → phiên trống → End session.
+  ACS không gửi RPC nào khác (preset `default` của lab không đòi tham số nào).
+- **Inform:** 23 tham số, giống Inform TR-098 của sản phẩm (phiên 23:02:47) từng tên sau khi bỏ gốc, trừ
+  `DeviceSummary` → `RootDataModelVersion` (`2.19`). Có `DeviceInfo.HardwareVersion`/`SoftwareVersion`/`ProvisioningCode`,
+  `ManagementServer.ConnectionRequestURL`/`ParameterKey`/`AliasBasedAddressing`. DeviceId (OUI, ProductClass, Serial)
+  như TR-098, nên GenieACS giữ cùng `_id`.
+- GenieACS sau phiên: `_lastInform` 16:22:59Z, nhánh `Device.` có đúng 23 tham số của Inform; task 0, fault 0.
+- Trả `tr098` + restart: phiên 23:25:01 success (1/0), `.dm_enabled_notify` dựng lại trùng từng byte bản trước phiên
+  (ở chế độ `tr181` file này mang tên `Device.*`), GenieACS `_lastInform` 16:25:01Z, task 0, fault 0. `/etc/config` trước/sau
+  phiên: 0 dòng khác. Nhánh `Device.` (23 tham số) vẫn nằm trong bản ghi của thiết bị trên GenieACS, như mọi tham số
+  ACS đã từng thấy.
+- Chưa thử: ACS chủ động GPN/GPV/SPV qua `Device.*` (cần tạo task trên NBI, tức ghi phía ACS). Đường xử lý RPC của agent
+  là cùng đường `ubus tr069 dm` đã so cặp ở trên.
+
+**Chưa làm ở T6:** soak trên image này (đang chạy từ 23:32, `/tmp/g9.csv` trên board).
