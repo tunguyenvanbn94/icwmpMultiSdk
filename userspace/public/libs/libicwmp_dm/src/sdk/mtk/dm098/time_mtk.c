@@ -48,7 +48,11 @@
 /* ------------------------------------------------------------------ */
 
 /* system.ntp.server is a UCI list; the shell read it as one space
- * separated string and indexed words, this indexes the list itself */
+ * separated string and indexed words, this indexes the list itself.
+ * A copy: the engine keeps the getter's pointer until the reply is
+ * written (add_list_paramameter), and e->name lives in the UCI package,
+ * which a reload during the walk frees (garbage NTPServer3 on the board,
+ * analysis 65). */
 static char *ntp_server_get(int index)
 {
 	struct uci_list *list = NULL;
@@ -60,7 +64,7 @@ static char *ntp_server_get(int index)
 		return "";
 	uci_foreach_element(list, e) {
 		if (i++ == index)
-			return e->name ? e->name : "";
+			return e->name ? dmstrdup(e->name) : "";
 	}
 	return "";
 }

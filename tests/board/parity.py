@@ -17,7 +17,7 @@ import collections, json, os, re, sys
 
 DYNAMIC = [r"\.Stats\.", r"\.(Bytes|Packets)(Sent|Received)$", r"\.Total(Bytes|Packets)(Sent|Received)$",
            r"\.UpTime$", r"\.Uptime$", r"\.LastChange$", r"\.CurrentLocalTime$", r"MemoryStatus\.Free$",
-           r"ProcessStatus\.CPUUsage$", r"\.LeaseTimeRemaining$",
+           r"ProcessStatus\.CPUUsage$", r"\.LeaseTimeRemaining$", r"TemperatureSensor\.\d+\.Value$",
            r"ManagementServer\.UDPConnectionRequestAddress$"]   # the vendor STUN client re-maps the port
 
 # (path regex, test on (c, s), where it is written down)
@@ -65,9 +65,13 @@ def pattern(p):
 
 def main():
     d = sys.argv[1] if len(sys.argv) > 1 else "."
-    c = {p["parameter"]: p for p in json.load(open(os.path.join(d, "c_get.json")))["parameters"]}
+    # errors="replace": a C value with bytes that are not UTF-8 (K28: memory
+    # read after free) becomes an UNEXPECTED difference, not a traceback
+    c = {p["parameter"]: p for p in json.load(open(os.path.join(d, "c_get.json"), encoding="utf-8",
+                                                  errors="replace"))["parameters"]}
     s = shell_lines(os.path.join(d, "sh_get.txt"), "value")
-    cn = {p["parameter"]: p["writable"] for p in json.load(open(os.path.join(d, "c_names.json")))["parameters"]}
+    cn = {p["parameter"]: p["writable"] for p in json.load(open(os.path.join(d, "c_names.json"), encoding="utf-8",
+                                                               errors="replace"))["parameters"]}
     sn = {k: v["writable"] for k, v in shell_lines(os.path.join(d, "sh_names.txt"), "writable").items()}
     bad = 0
     cls = collections.Counter()

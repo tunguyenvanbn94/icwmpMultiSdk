@@ -59,6 +59,11 @@ load() {
 		$UBUS call tr069 dm '{"cmd":"get","path":"InternetGatewayDevice.WANDevice."}' >/dev/null 2>&1
 		$UBUS call tr069 dm '{"cmd":"names","path":"InternetGatewayDevice.","next_level":true}' >/dev/null 2>&1
 		$UBUS call tr069 dm '{"cmd":"inform","path":""}' >/dev/null 2>&1
+		# K28: a change another process left uncommitted in system: the
+		# commit at the end of the GET reloads the package; a getter value
+		# pointing into it (NTPServer, up to 0103) was read after the free
+		uci -q set system.ntp.enable_server=0
+		$UBUS call tr069 dm '{"cmd":"get","path":"InternetGatewayDevice.Time."}' >/dev/null 2>&1
 		sleep "$1"
 	done ) &
 	echo $! > "$RUN/load.pid"
@@ -173,6 +178,9 @@ do_rpc() {
 do_valgrind() {
 	command -v valgrind >/dev/null || { bad "valgrind not installed"; return; }
 	rm -f "$RUN"/vg.log
+	# NTP servers for the K28 load (load() leaves a change uncommitted)
+	if [ -f /etc/config/system ]; then cp /etc/config/system "$RUN/system.vgsaved"; else rm -f "${RUN:?}/system.vgsaved"; fi
+	printf "config system\n\toption timezone 'UTC'\n\nconfig timeserver 'ntp'\n\toption enabled '1'\n\tlist server 'time.nist.gov'\n\tlist server '2.th.pool.ntp.org'\n\tlist server '3.asia.pool.ntp.org'\n" > /etc/config/system
 	# --run-libc-freeres=no: K22.  valgrind runs glibc's __libc_freeres in
 	# the thread that called _exit after killing the others; its _IO_cleanup
 	# locks every FILE and hung on /etc/tr098/.dm_enabled_notify, whose lock
@@ -194,6 +202,8 @@ do_valgrind() {
 		echo "  K22: agent under valgrind still there after SIGTERM: $(ps -o pid=,stat=,nlwp= -p "$stuck" | tr -s ' ')"
 		[ -n "$ICWMP_KEEP_STUCK" ] || { kill -9 $stuck 2>/dev/null; sleep 1; }
 	fi
+	rm -f /tmp/.uci/system
+	if [ -f "$RUN/system.vgsaved" ]; then cp "$RUN/system.vgsaved" /etc/config/system; else rm -f /etc/config/system; fi
 	def=$(sed -n 's/.*definitely lost: \([0-9,]*\) bytes.*/\1/p' "$RUN/vg.log")
 	ind=$(sed -n 's/.*indirectly lost: \([0-9,]*\) bytes.*/\1/p' "$RUN/vg.log")
 	err=$(sed -n 's/.*ERROR SUMMARY: \([0-9]*\) errors.*/\1/p' "$RUN/vg.log")

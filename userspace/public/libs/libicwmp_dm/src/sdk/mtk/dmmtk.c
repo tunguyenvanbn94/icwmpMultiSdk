@@ -45,8 +45,10 @@ char *mtk_varstate(const char *package, const char *section, const char *option)
 {
 	char *v = NULL;
 
+	/* a copy: dmuci_get_varstate_string() points into uci_varstate_ctx,
+	 * which a varstate set frees before the reply is written (K28) */
 	dmuci_get_varstate_string((char *)package, (char *)section, (char *)option, &v);
-	return v ? v : "";
+	return v && v[0] ? dmstrdup(v) : "";
 }
 
 int mtk_uci_ensure_section(const char *package, const char *section, const char *type)
