@@ -41,7 +41,8 @@ MATRIX = os.path.join(HERE, "tr098_coverage_matrix.tsv")
 GRAFT = "InternetGatewayDevice.Device."  # the TR-181 branch inside the product's TR-098 tree
 DYNAMIC = [r"\.Stats\.", r"\.(Bytes|Packets)(Sent|Received)$", r"\.UpTime$", r"\.Uptime$", r"\.LastChange$",
            r"\.CurrentLocalTime$", r"MemoryStatus\.Free$", r"ProcessStatus\.CPUUsage$", r"TemperatureSensor\.\d+\.Value$",
-           r"\.LeaseTimeRemaining$", r"ManagementServer\.UDPConnectionRequestAddress$", r"\.UsedSpace$"]
+           r"\.LeaseTimeRemaining$", r"ManagementServer\.UDPConnectionRequestAddress$", r"\.UsedSpace$",
+           r"X_AIS_GPON\.(Rx|Tx)Power$"]
 
 
 def pat(p):
@@ -265,7 +266,8 @@ def main():
                 cls["equal"] = cls.get("equal", 0) + 1
             elif d98[name]["value"].startswith(GRAFT) and d181[t]["value"] == "Device." + d98[name]["value"][len(GRAFT):]:
                 cls["equal ref"] = cls.get("equal ref", 0) + 1
-            elif any(re.search(x, name) for x in DYNAMIC):
+            elif any(re.search(x, name) or re.search(x, t) for x in DYNAMIC):
+                # TR-098 TotalBytesSent is TR-181 Stats.BytesSent: either spelling marks a counter
                 cls["dynamic"] = cls.get("dynamic", 0) + 1
             else:
                 print("  differs: %s=%r  %s=%r" % (name, d98[name]["value"][:60], t, d181[t]["value"][:60]))

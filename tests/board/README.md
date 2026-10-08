@@ -17,6 +17,12 @@ python3 tests/board/parity.py <dir>      # exit 1 on any unexplained difference
 
 `soak_sample.sh` (gate G9) samples icwmpd every 10 min into `/tmp/g9.csv`: pid, RSS, fd, threads, session
 counters, MemAvailable, agent starts; start it with `start-stop-daemon` (header of the script).
+
+`tr181_window.sh` (dev_181, gate T6) reads the same board as TR-098 and as TR-181 without the ACS ever
+seeing the `Device.` tree: traffic to the ACS host of `cwmp.acs.url` is rejected, icwmpd runs with
+`cwmp.cpe.datamodel=tr181` for about 30 s, and the model, the agent's queued events, its notify list are
+put back before the ACS is opened again.  It stops the agent, so start it detached (header of the script);
+then `python3 docs/issue/tr181-map.py equiv <dir>/tr098.gpv <dir>/tr181.gpv` on the host.
 Step by step, with the expected output of each command:
 [docs/handover/icwmp_mtk_build_verify_guide.md](../../docs/handover/icwmp_mtk_build_verify_guide.md).
 
