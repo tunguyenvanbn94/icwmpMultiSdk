@@ -13,7 +13,7 @@ Tài liệu đào tạo và chuyển giao. Đọc file này trước. Sau đó �
 ## START HERE — flow một màn hình
 
 Chú thích màu: xanh lá = code dùng chung cho mọi SDK, xanh dương = code riêng từng SDK,
-vàng = lớp chuyển tiếp sẽ bỏ (shell compat của MTK), tím = nơi lưu dữ liệu thật của sản phẩm,
+vàng = lớp chuyển tiếp, không build từ PH5 (shell compat của MTK), tím = nơi lưu dữ liệu thật của sản phẩm,
 xám = bên ngoài.
 
 ```mermaid
@@ -29,7 +29,7 @@ flowchart LR
         PORT["Module TR-098 dùng chung<br/>tr098/"]
         NAT["Module riêng SDK<br/>sdk/X/dm098/"]
         LHOOK["dm_platform_*<br/>sdk/X/dmplatform_X.c"]
-        COMPAT["MTK compat<br/>sdk/mtk/compat + icwmp_dm.sh"]
+        COMPAT["MTK compat<br/>sdk/mtk/compat + icwmp_dm.sh<br/>không build từ PH5"]
     end
     STORE["Config of record<br/>MTK: UCI easycwmp, stun, network<br/>BDK: Distributed MDM"]
     ACS -- "HTTP SOAP" --> CORE
@@ -85,8 +85,8 @@ Ba câu cần nhớ:
 | Mục tiêu | Đo bằng gì | Hiện trạng (2026-10-06) |
 |---|---|---|
 | Một CWMP core bằng C cho mọi SDK | Cùng `apps/icwmp/icwmp` build cho MTK, BDK, OpenWrt chuẩn | Đạt về source. MTK build và chạy board; BDK build image đạt 06/10 tại 0088, chưa chạy board |
-| Giữ nguyên cây tham số ACS đã provision | 783 param / 184 object của sản phẩm (ma trận `docs/issue/tr098_coverage_matrix.tsv`) | 567/783 bằng C, phần còn lại qua compat shell, không mất path nào (`verify-dm-paths.py`: thiếu 0) |
-| Chuyển dần shell sang C, không phải chuyển một lần | Path nào có module C thì C trả lời, còn lại thì shell trả lời | Đạt (router native/compat của MTK) |
+| Giữ nguyên cây tham số ACS đã provision | 783 param / 184 object của sản phẩm (ma trận `docs/issue/tr098_coverage_matrix.tsv`) | 783/783 bằng C (0099), AddObject/DeleteObject WAN bằng C (0100); từ PH5 (0103) build sản phẩm không còn compat shell (`verify-dm-paths.py`: thiếu 0) |
+| Chuyển dần shell sang C, không phải chuyển một lần | Path nào có module C thì C trả lời, còn lại thì shell trả lời | Đạt và xong: router native/compat của MTK đưa từng object sang C, tới 0100 không còn path nào cho shell; PH5 tắt compat |
 | Test được không cần board | `tests/host/run.sh all`: agent thật + ACS giả trên Linux host | Đạt: PASS 06/10 trong container `ubuntu:24.04` trên máy build |
 | Thêm SDK mới không đụng code chung | Thêm `sdk/<tên>/` ở lib và app, chạy `tools/sdk-scan.sh` | Đạt về cấu trúc: `--sdk-only` xoá SDK khác mà vẫn build (0083) |
 | Sau này hỗ trợ TR-181 | Model là chiều riêng, không gắn vào SDK | Mới có prototype trên BDK, kiến trúc đích ở PH1/PH6 |
@@ -162,7 +162,7 @@ backend SDK chung. Hiện code chưa đạt hết điều này, xem phần 8.
 | Init/procd, value monitoring | — | MTK `sdk/mtk/files/` (`icwmpd.init`, `value_monitoring`, `easycwmpd` shim) |
 | Engine data model, transaction, registry | `dmentry.c`, `dmtr098.c`, `dm_registry.c` | Hook `dm_platform_commit/revert/restart_services` |
 | Getter/setter tham số | `tr098/` (khi semantic giống nhau) | `sdk/mtk/dm098/` (51 file C, 783 param của sản phẩm), `sdk/bdk/dm098/` (TR-098 chiếu lên TR-181 MDM) |
-| Path chưa port | — | MTK: `sdk/mtk/compat/` gọi thư viện shell của sản phẩm qua `icwmp_dm.sh` |
+| Path chưa port | — | MTK: không còn. `sdk/mtk/compat/` (thư viện shell của sản phẩm qua `icwmp_dm.sh`) không build từ PH5, giữ trong source để rollback và làm driver cho `tests/board` |
 | Hợp đồng input trước setter | — | MTK `input_contract_mtk.c`: `is_safe_input` + kiểm theo kiểu shell |
 
 ---
@@ -342,7 +342,7 @@ flowchart LR
 
 Nguồn: [dmplatform_mtk.c](../../userspace/public/libs/libicwmp_dm/src/sdk/mtk/dmplatform_mtk.c)
 (`mtk_is_native` dòng 103). Path phủ cả hai phía (ví dụ GPV `InternetGatewayDevice.`) được hỏi cả hai rồi
-gộp danh sách. Bản build `--disable-dm-script-compat` bỏ toàn bộ nhánh vàng: đó là đích PH5.
+gộp danh sách. Bản build `--disable-dm-script-compat` bỏ toàn bộ nhánh vàng: feed `libtr098` build như vậy từ PH5 (0103).
 
 **Transaction của SPV**, theo [sdk.h](../../userspace/public/libs/libicwmp_dm/src/sdk/sdk.h):
 
@@ -429,7 +429,7 @@ profile, init và mọi nơi sản phẩm gọi tới. Việc đó để cho PH8
 | Init | `sdk/mtk/files/icwmpd.init` | `/etc/init.d/icwmpd` | procd, `respawn 3 10 0` |
 | Shim cho sản phẩm | `sdk/mtk/files/easycwmpd` | `/etc/init.d/easycwmpd` → gọi `icwmpd` | WebUI, `hal_gateway`, `stuncd` vẫn gọi tên cũ |
 | Script hành động | `sdk/mtk/scripts/icwmp.sh` | `/usr/sbin/icwmp` | `external.c` gọi tên này (SDK `uci`, `mtk`); BDK làm hành động bằng C |
-| Compat shell | `sdk/mtk/compat/icwmp_dm.sh` | `/usr/share/icwmp/icwmp_dm.sh` | Mất đi khi build `--disable-dm-script-compat` (PH5) |
+| Compat shell | `sdk/mtk/compat/icwmp_dm.sh` | không cài từ PH5 (0103) | Build `--disable-dm-script-compat`; file còn trong source cho rollback và `tests/board/parity_dump.sh` (`DM_SH=`) |
 | Config | `sdk/mtk/files/cwmp` | `/etc/config/cwmp` (của icwmpd) + `/etc/config/easycwmp` (config of record của sản phẩm) | Xem mirror ở phần 3.4 |
 | Object ubus | `ubus.c` | `tr069` | Giữ tên của cwmpclient cũ; `stun-client` (`tr069 inform`) và `value_monitoring` (`tr069 notify`) gọi tên này |
 
@@ -472,7 +472,7 @@ Việc nên làm (đã đưa vào [progress](icwmp_progress_matrix.md), PH2):
 |---|---|---|
 | File chung nhắc tên SDK | [tr098/managementserver.c:238](../../userspace/public/libs/libicwmp_dm/src/tr098/managementserver.c#L238) `#ifdef DM_PLATFORM_BDK` | PH3 (service ManagementServer) |
 | Model do SDK quyết | `dm_platform_select_root()`: BDK đổi root sang `Device.` | PH1 resolver trung tâm |
-| Compat provider + prefetch nằm trong `dmplatform_mtk.c` (K7) | `sdk/mtk/dmplatform_mtk.c` | PH2 tách `sdk/mtk/compat/` sau interface provider |
+| Compat provider + prefetch nằm trong `dmplatform_mtk.c` (K7) | `sdk/mtk/dmplatform_mtk.c` | Từ PH5 compat không build; K7 đóng khi xoá hẳn `sdk/mtk/compat/` (sau một bản giao không cần rollback) |
 | Policy operator trong backend MTK | `x_ais_mesh_mtk.c`, prefix `X_HNI_` | PH4 lớp product |
 | ~~`.icwmp-release.json` ghi commit của baseline cũ~~ | — | **Đã sửa ở 0085** (K19): apply ghi `git HEAD` khi chạy từ repo, ghi commit của export khi chạy từ bundle |
 | `dmcommon.c` trộn helper | phần 7 | 27 hàm không ai tham chiếu đã gỡ ở 0086; phần tách helper còn lại để PH2 |
