@@ -1018,6 +1018,39 @@ static int get_radio181_supported(char *refparam, struct dmctx *ctx, void *data,
 	return 0;
 }
 
+/* TR-181 Channel is the channel in use: with automatic selection on
+ * (wireless.<radio>.channel 0) that is ChannelsInUse, not the 0 the
+ * product's WLANConfiguration.Channel reads */
+static int get_radio181_channel(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	get_channel(refparam, ctx, data, instance, value);
+	if (strcmp(*value, "0") == 0)
+		get_channels_in_use(refparam, ctx, data, instance, value);
+	return 0;
+}
+
+/* TR-181 AutoChannelEnable false keeps the channel in use, when it is a
+ * valid one for the band; the product's setter (TR-098) falls back to the
+ * first channel of the band.  Written like set_auto_channel: no reload. */
+static int set_radio181_auto_channel(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	char *device = wlan_opt(data, "device");
+	char *ch, *cur = NULL;
+
+	if (action != VALUECHECK && mtk_parse_bool(value) == 0 && device && *device) {
+		ch = mtk_uci("wireless", device, "channel");
+		if (!*ch || strcmp(ch, "0") == 0) {
+			get_channels_in_use(refparam, ctx, data, instance, &cur);
+			if (cur && *cur && strcmp(cur, "0") != 0 &&
+			    set_channel(refparam, ctx, data, instance, cur, VALUECHECK) == 0) {
+				dmuci_set_value("wireless", device, "channel", cur);
+				return 0;
+			}
+		}
+	}
+	return set_auto_channel(refparam, ctx, data, instance, value, action);
+}
+
 static int get_ssid181_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
 	char *v = NULL;
@@ -1095,8 +1128,8 @@ static DMLEAF tRadio181Param[] = {
 {"OperatingStandards", &DMWRITE, DMT_STRING, get_wlan_standard, set_wlan_standard, NULL, NULL},
 {"PossibleChannels", &DMREAD, DMT_STRING, get_possible_channels, NULL, NULL, NULL},
 {"ChannelsInUse", &DMREAD, DMT_STRING, get_channels_in_use, NULL, NULL, NULL},
-{"Channel", &DMWRITE, DMT_UNINT, get_channel, set_channel, NULL, NULL},
-{"AutoChannelEnable", &DMWRITE, DMT_BOOL, get_auto_channel, set_auto_channel, NULL, NULL},
+{"Channel", &DMWRITE, DMT_UNINT, get_radio181_channel, set_channel, NULL, NULL},
+{"AutoChannelEnable", &DMWRITE, DMT_BOOL, get_auto_channel, set_radio181_auto_channel, NULL, NULL},
 {"TransmitPowerSupported", &DMREAD, DMT_STRING, get_power_supported, NULL, NULL, NULL},
 {"TransmitPower", &DMWRITE, DMT_UNINT, get_transmit_power, set_transmit_power, NULL, NULL},
 {"RegulatoryDomain", &DMWRITE, DMT_STRING, get_regulatory_domain, set_regulatory_domain, NULL, NULL},

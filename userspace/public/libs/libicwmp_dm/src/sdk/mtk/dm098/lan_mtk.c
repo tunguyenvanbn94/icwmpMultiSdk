@@ -821,6 +821,12 @@ static int set_ipv4_mask181(char *refparam, struct dmctx *ctx, void *data, char 
 
 static int get_ipv4_addressing181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
+	/* TR-181: PPP negotiates its address, IPCP (as the default route's
+	 * Origin); the product's WANPPPConnection leaf reads v4_mode as DHCP */
+	if (data && ((struct wan_entry *)data)->ppp) {
+		*value = "IPCP";
+		return 0;
+	}
 	if (data)
 		return wan181_get((struct wan_entry *)data, "AddressingType", value);
 	return get_ipif_addressing(refparam, ctx, data, instance, value);

@@ -1710,6 +1710,10 @@ case "$a" in
 *"call network.interface.if1 status"*)
 	echo '{"up":true,"uptime":60,"l3_device":"pppoe-if1","ipv4-address":[{"address":"10.20.30.40","mask":32,"ptpaddress":"10.20.30.1"}],"route":[{"target":"0.0.0.0","mask":0,"nexthop":"10.20.30.1"}],"dns-server":["1.0.0.1"]}'
 	exit 0 ;;
+*"call hni getCurrentChannel "*)
+	# the channel the radio runs on: 5 GHz (radio 1) is on automatic selection in the fixture
+	case "$a" in *'"radio": 1'*) echo '{"channel":"116"}' ;; *) echo '{"channel":"6"}' ;; esac
+	exit 0 ;;
 *"call hni.wan set "*)
 	j=${a#*call hni.wan set }
 	act=$(echo "$j" | sed -n 's/.*"action": *"\([^"]*\)".*/\1/p')
@@ -1832,6 +1836,10 @@ print(sum(1 for p in json.load(open(sys.argv[1]))["parameters"] if re.match(r"De
 	expect "NAT 1/2/3 Enable" "$(dm_value $N.1.Enable) $(dm_value $N.2.Enable) $(dm_value $N.3.Enable)" "true true false"
 	expect "NAT 1/3 Interface" "$(dm_value $N.1.Interface) $(dm_value $N.3.Interface)" "Device.IP.Interface.$w0 Device.IP.Interface.$w2"
 	expect "IPoE IPv4Address" "$(dm_value $I.$w0.IPv4Address.1.IPAddress) $(dm_value $I.$w0.IPv4Address.1.SubnetMask) $(dm_value $I.$w0.IPv4Address.1.AddressingType)" "100.64.1.10 255.255.255.0 DHCP"
+	# T7: a PPP address is IPCP in TR-181 (the product's TR-098 PPP leaf reads
+	# DHCP; the pair is B, tr181.equiv below checks it is present on both sides)
+	w1=$(uci -q get network.if1.ip_int_instance)
+	expect "PPP IPv4Address AddressingType" "$(dm_value $I.$w1.IPv4Address.1.IPAddress) $(dm_value $I.$w1.IPv4Address.1.AddressingType)" "10.20.30.40 IPCP"
 	expect "IPoE Alias, LAN Alias empty" "$(dm_value $I.$w0.Alias)|$(dm_value $I.$lan.Alias)" "cpe-internet-tr069|"
 	expect "bridge has no IPv4Address" "$(dm_value $I.$w2.IPv4Address.1.IPAddress)" "<none>"
 	expect "DNS servers" "$(dm_value $D.1.DNSServer) $(dm_value $D.2.DNSServer) $(dm_value $D.4.DNSServer) $(dm_value Device.DNS.Client.ServerNumberOfEntries)" "8.8.4.4 9.9.9.9 1.0.0.1 3"
@@ -1908,6 +1916,15 @@ for x in json.load(open(sys.argv[1]))["parameters"]:
 	expect "set Radio 1 Channel 11" "$(dm_set_fault $R.1.Channel 11 "$key")" "0"
 	expect "  wireless.MT7993_1_1.channel" "$(uci -q get wireless.MT7993_1_1.channel)" "11"
 	expect "set Radio 2 Channel 7 (not 5 GHz)" "$(dm_set_fault $R.2.Channel 7 "$key")" "9007"
+	# T7: Channel is the channel in use under automatic selection (TR-098
+	# reads the configured 0); leaving automatic selection keeps that channel;
+	# Channel left the shell type table (B pair), its setter still checks
+	expect "Radio 2 Channel/ChannelsInUse on auto" "$(dm_value $R.2.Channel) $(dm_value $R.2.ChannelsInUse)" "116 116"
+	expect "set Radio 1 Channel abc" "$(dm_set_fault $R.1.Channel abc "$key")" "9007"
+	expect "set Radio 2 AutoChannelEnable false" "$(dm_set_fault $R.2.AutoChannelEnable false "$key")" "0"
+	expect "  wireless.MT7993_1_2.channel kept" "$(uci -q get wireless.MT7993_1_2.channel) $(dm_value $R.2.AutoChannelEnable)" "116 false"
+	expect "set Radio 2 AutoChannelEnable true" "$(dm_set_fault $R.2.AutoChannelEnable true "$key")" "0"
+	expect "  wireless.MT7993_1_2.channel auto" "$(uci -q get wireless.MT7993_1_2.channel)" "0"
 	expect "set Radio 1 OperatingStandards b,g,n,ax" "$(dm_set_fault $R.1.OperatingStandards b,g,n,ax "$key")" "0"
 	expect "  wireless.MT7993_1_1.htmode" "$(uci -q get wireless.MT7993_1_1.htmode)" "HE40"
 	expect "set SSID 1 SSID" "$(dm_set_fault $S.1.SSID home-new "$key")" "0"

@@ -1,4 +1,4 @@
-3c5e2027ff1f17a4bfd28f35b6a7792cbc1e40b6e34733faaa4642957b72b47a  MANIFEST.json
+8bd81699b4ca99e75f1a9d2bc971a9d3bf88c4402ea179408338715a66f89174  MANIFEST.json
 47d84edddce3889e07d02abcc5d8b50b7570cc162fb959c9b26ffd39da8a5c21  README.md
 29e38a9cd7a83b691cd0641f84e918eb1eeb7ec58c3498b6105b98c986eb0eaa  apply
 f0172bf38ef600bef19193e810c2879c4b60c617a3dd5861a5e701cada2916dd  apply.py
@@ -236,7 +236,7 @@ eb5b3ff21e958f56531b95ca1447cb3f2ecd31990ac4943f6bf61005ca03d9d9  userspace/publ
 17825b223629961a7e48f5954c9c5f6543672016ba31b4b6eac2316697a37a0b  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/docsis_mtk.c
 444450e50ed16f4d43b90eb97584fa7977aefc6821226ae274278c4fb19293eb  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/firewall_mtk.c
 fed98d4b0e02c172ab192cdcf779f5a7590a6ab4c1bc5bf54cb0e884597bc59a  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/ipping_mtk.c
-acd811575fbcd50359fbf34dae9fd881a6db584f2098a9d70754568ccb2a3c84  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/lan_mtk.c
+4d22235620a396d73e252818db25e1954185c4c5f496bc924bb594a96dbee4cd  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/lan_mtk.c
 fe0d42314309dd6906f4e2710178d85ac5045015708df8e528be46a9c4e1affb  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/laneth_mtk.c
 28f8e199123878984bda0d32e30bdef745acbbd58d990ed33e6b2346607bdfcc  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/lanhosts_mtk.c
 316e558d13fc49462b07508bca6a8b1629a9d70266559814d57f81b9b066ec0b  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/layer3forwarding_mtk.c
@@ -258,7 +258,7 @@ f999bff98f28b57acc255a044da3348a6d5f2825153beaa045215656f0b60347  userspace/publ
 d509530435d5037d4571e29b6f6c4dc64ec9cb75807217e35667424c1141cf53  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/wanconn_mtk.h
 27f6f93b2c490f5777ccffbf8d10b2b306ef80e612b8c4d0b024c62756c53231  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/wanip_mtk.c
 bd5641638928b48f506c8fad538805190deb595beccb4eaacbd366b4e16c0ee0  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/wanipv6_mtk.c
-c15db5cd7c77bed126f0dfae0b80818a6105ea3b73efe05e0451c0dedade455a  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/wlan_mtk.c
+73a15d2a8146a9631134c6faf1a3a56dc806f5654217c244e024ec0165b8d60e  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/wlan_mtk.c
 8c9fe19c554b5b95a2dad24d17eaa61ff21a05da5fd9442ab03d8675bf1b18ad  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/wlan_mtk.h
 5d6900d46d9f41a9c3e0ceb8404df4eb3244d38e019ae8a701ccc5562eba0106  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/wlanassoc_mtk.c
 6d22808cead4362d25f4f6625a768b30a6c42002574e55fbb1ca9ff15f275f5c  userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/wlansec_mtk.c
@@ -287,7 +287,7 @@ d021c581ac12b4e39821db55ef49275c6baa10ba884e80efe6b0398603e14d14  userspace/publ
 002a129f42fee8f16fddaa783b538066928d88f7e482f14cc2b040cb9d3f2858  userspace/public/libs/libicwmp_dm/src/sdk/mtk/input_contract_mtk.c
 701d917cb1df2a82fdbf78f3a423b4859dcf6e79218f620053a1eb77766c3f5b  userspace/public/libs/libicwmp_dm/src/sdk/mtk/sdk.m4
 c87fbd15d8dc98689ec8ae57ff75976f2f282b6e610a513fae4e92969314287f  userspace/public/libs/libicwmp_dm/src/sdk/mtk/sdk.mk
-6f2871196ae23009bc2f239cfdc5915edcfab1100e037c7848aa6719f9e3ecca  userspace/public/libs/libicwmp_dm/src/sdk/mtk/shelltypes_mtk.h
+dcd612d261558c2f91a2a3327bfb471c6a49ca9403a158f2387081672b44c3f7  userspace/public/libs/libicwmp_dm/src/sdk/mtk/shelltypes_mtk.h
 7cdcf7de0fa9f94b46ccfd9c788d6474ea0d0af307fca280b721b9477fb8d9d0  userspace/public/libs/libicwmp_dm/src/sdk/sdk.h
 21cd5b9b3f638dd6a5fa179b59735642c1c6a130936db4e0c7cbc1afc5baefe5  userspace/public/libs/libicwmp_dm/src/sdk/uci/README.md
 102a770d0633989eacb009f991ebdc49a6bd6134080de25ace3773b92d4e22f8  userspace/public/libs/libicwmp_dm/src/sdk/uci/dmplatform_uci.c
