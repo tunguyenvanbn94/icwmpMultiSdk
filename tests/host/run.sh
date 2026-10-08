@@ -1531,13 +1531,102 @@ PY
 # TR-181 pair of tr181_mapping.tsv reads the same value (tr181-map.py equiv).  verify-dm-paths
 # --model tr181 lists the tree the build declares; every name of the walk
 # must be one of them.
+# T2 (LAN) fixtures: a LAN, a WAN, four switch ports, a DHCP pool and two
+# hosts, one on Wi-Fi and one on a LAN port.  Saved and put back like p8's.
+TR181_CONFIGS="network dhcp lanhost"
+tr181_fixtures() {
+	for c in $TR181_CONFIGS; do
+		if [ -f "/etc/config/$c" ]; then cp "/etc/config/$c" "$RUN/$c.t181saved"; else rm -f "${RUN:?}/${c:?}.t181saved"; fi
+	done
+	if [ -f /tmp/dhcp.leases ]; then cp /tmp/dhcp.leases "$RUN/dhcp.leases.t181saved"; else rm -f "${RUN:?}/dhcp.leases.t181saved"; fi
+	cat > /etc/config/network <<'EOF2'
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+
+config interface 'lan'
+	option device 'br-lan'
+	option proto 'static'
+	option ipaddr '192.168.1.1'
+	option netmask '255.255.255.0'
+
+config interface 'if0'
+	option device 'pon.10'
+	option proto 'dhcp'
+
+config SwitchPara
+	option enable 'Yes'
+	option maxBitRate 'auto'
+
+config SwitchPara
+	option enable 'No'
+	option maxBitRate '100'
+
+config SwitchPara
+	option enable 'Yes'
+	option maxBitRate '1000'
+
+config SwitchPara
+	option enable 'Yes'
+	option maxBitRate 'auto'
+EOF2
+	cat > /etc/config/dhcp <<'EOF2'
+config dnsmasq
+	option domain 'lan'
+
+config dhcp 'lan'
+	option interface 'lan'
+	option start '100'
+	option limit '150'
+	option leasetime '12h'
+	option dynamicdhcp '1'
+	option domain 'home.lan'
+	option dhcp_option '6,8.8.8.8,1.1.1.1'
+EOF2
+	cat > /etc/config/lanhost <<'EOF2'
+config common 'common'
+	option total_hosts '2'
+
+config host
+	option ip '192.168.1.101'
+	option mac 'aa:bb:cc:11:22:33'
+	option hostname 'phone-a'
+	option addressSrc 'DHCP'
+	option interface '802.11'
+	option layer2interface 'SSID2'
+
+config host
+	option ip '192.168.1.120'
+	option mac 'aa:bb:cc:11:22:44'
+	option hostname "'pc-b'"
+	option addressSrc 'Static'
+	option interface 'Ethernet'
+	option layer2interface 'LAN3'
+EOF2
+	echo "$(( $(date +%s) + 3600 )) aa:bb:cc:11:22:33 192.168.1.101 phone-a *" > /tmp/dhcp.leases
+}
+
+tr181_fixtures_restore() {
+	for c in $TR181_CONFIGS; do
+		if [ -f "$RUN/$c.t181saved" ]; then cp "$RUN/$c.t181saved" "/etc/config/$c"; else rm -f "/etc/config/${c:?}"; fi
+	done
+	if [ -f "$RUN/dhcp.leases.t181saved" ]; then mv "$RUN/dhcp.leases.t181saved" /tmp/dhcp.leases; else rm -f /tmp/dhcp.leases; fi
+}
+
+# fault of one "dm set" over ubus, 0 when it was taken
+dm_set_fault() {
+	$UBUS call tr069 dm "{\"cmd\":\"set\",\"path\":\"$1\",\"value\":\"$2\",\"key\":\"$3\"}" 2>/dev/null |
+		python3 -c 'import json, sys; print(json.load(sys.stdin).get("fault"))' 2>/dev/null
+}
+
 do_tr181() {
 	bad_n=0
 	save_cfg cwmp
+	tr181_fixtures
 	uci set cwmp.cpe.datamodel=tr181
 	uci commit cwmp
 	start 1 "--walk Device."
-	if ! wait_done 60 || ! alive; then bad "tr181: session"; stop; restore_cfg cwmp; return; fi
+	if ! wait_done 60 || ! alive; then bad "tr181: session"; stop; restore_cfg cwmp; tr181_fixtures_restore; return; fi
 	sleep 1
 	expect "Inform root" "$(sed -n 's/^session 1 .* root=\([^ ]*\) .*/\1/p' "$RUN/acs.log")" "Device"
 	expect "faults in the Device. walk" "$(grep -c '^fault' "$RUN/acs.log")" "0"
@@ -1554,11 +1643,44 @@ names = [p["parameter"] for p in json.load(open(sys.argv[1]))["parameters"] if n
 print(sum(1 for n in names if re.sub(r"\.\d+\.", ".{i}.", n) not in decl))
 PY
 )" "0"
+	# T2 LAN: TR-181 spellings and references, writes through TR-181 names
+	# landing in the product's options (the same setters as TR-098)
+	key=$(dm_value Device.ManagementServer.ParameterKey)
+	lan=$(uci -q get network.lan.ip_int_instance)
+	E=Device.Ethernet.Interface P=Device.DHCPv4.Server.Pool.1 H=Device.Hosts.Host
+	expect "LAN numbered by device_ip" "$(echo "$lan" | grep -c '^[0-9][0-9]*$')" "1"
+	expect "Ethernet.InterfaceNumberOfEntries" "$(dm_value Device.Ethernet.InterfaceNumberOfEntries)" "4"
+	expect "Ethernet 1 MaxBitRate auto" "$(dm_value $E.1.MaxBitRate)" "-1"
+	expect "Ethernet 2 MaxBitRate" "$(dm_value $E.2.MaxBitRate)" "100"
+	expect "Ethernet 2 Status (disabled)" "$(dm_value $E.2.Status)" "Down"
+	expect "Ethernet 1 Upstream" "$(dm_value $E.1.Upstream)" "false"
+	expect "Pool Interface" "$(dm_value $P.Interface)" "Device.IP.Interface.$lan"
+	expect "Pool DNSServers" "$(dm_value $P.DNSServers)" "8.8.8.8,1.1.1.1"
+	expect "Pool LeaseTime" "$(dm_value $P.LeaseTime)" "43200"
+	expect "Host 1 Layer1Interface" "$(dm_value $H.1.Layer1Interface)" "Device.WiFi.SSID.2"
+	expect "Host 2 Layer1Interface" "$(dm_value $H.2.Layer1Interface)" "Device.Ethernet.Interface.3"
+	expect "Host 2 Layer3Interface" "$(dm_value $H.2.Layer3Interface)" "Device.IP.Interface.$lan"
+	expect "Host 2 PhysAddress" "$(dm_value $H.2.PhysAddress)" "aa:bb:cc:11:22:44"
+	expect "LAN IPv4Address" "$(dm_value Device.IP.Interface.$lan.IPv4Address.1.IPAddress)" "192.168.1.1"
+	expect "IPv4Address only on the LAN" "$(python3 -c 'import json, re, sys
+print(sum(1 for p in json.load(open(sys.argv[1]))["parameters"] if re.match(r"Device\.IP\.Interface\.\d+\.IPv4Address\.\d+\.IPAddress$", p["parameter"])))' "$RUN/tr181.gpn")" "1"
+	expect "set Pool MinAddress" "$(dm_set_fault $P.MinAddress 192.168.1.50 "$key")" "0"
+	expect "  dhcp.lan.start" "$(uci -q get dhcp.lan.start)" "50"
+	expect "set Pool LeaseTime" "$(dm_set_fault $P.LeaseTime 7200 "$key")" "0"
+	expect "  dhcp.lan.leasetime" "$(uci -q get dhcp.lan.leasetime)" "7200"
+	expect "set IPv4Address SubnetMask" "$(dm_set_fault Device.IP.Interface.$lan.IPv4Address.1.SubnetMask 255.255.0.0 "$key")" "0"
+	expect "  network.lan.netmask" "$(uci -q get network.lan.netmask)" "255.255.0.0"
+	expect "set Ethernet 3 MaxBitRate 1000" "$(dm_set_fault $E.3.MaxBitRate 1000 "$key")" "0"
+	expect "  SwitchPara[2]" "$(uci -q get network.@SwitchPara[2].maxBitRate)" "1000"
+	expect "set Ethernet 3 MaxBitRate -1" "$(dm_set_fault $E.3.MaxBitRate -1 "$key")" "0"
+	expect "  SwitchPara[2] auto" "$(uci -q get network.@SwitchPara[2].maxBitRate)" "auto"
+	expect "set Ethernet 2 MaxBitRate abc" "$(dm_set_fault $E.2.MaxBitRate abc "$key")" "9007"
+	expect "set Ethernet 1 MaxBitRate 10 (2.5G PHY)" "$(dm_set_fault $E.1.MaxBitRate 10 "$key")" "9007"
+	expect "  SwitchPara[0] unchanged" "$(uci -q get network.@SwitchPara[0].maxBitRate)" "auto"
 	$UBUS -t 120 call tr069 dm '{"cmd":"get","path":"Device."}' > "$RUN/tr181.gpv" 2>/dev/null
 	# back to TR-098 the way an ACS does it, over ubus: reload right away.
 	# Same ParameterKey as before, so that the pair comparison below does not
 	# see the key this very set would write
-	key=$(dm_value Device.ManagementServer.ParameterKey)
 	$UBUS call tr069 dm "{\"cmd\":\"set\",\"path\":\"Device.X_HNI_Icwmp.DataModel\",\"value\":\"tr098\",\"key\":\"$key\"}" >/dev/null 2>&1
 	sleep 1
 	expect "datamodel after the set" "$(uci -q get cwmp.cpe.datamodel)" "tr098"
@@ -1571,8 +1693,9 @@ PY
 	expect "TR-098/TR-181 pairs" "$(tail -1 "$RUN/tr181.equiv")" "RESULT: PASS"
 	stop
 	restore_cfg cwmp
+	tr181_fixtures_restore
 	if [ $bad_n = 0 ]; then
-		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, DataModel back to tr098; pairs: $(tail -2 "$RUN/tr181.equiv" | head -1)"
+		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, LAN (T2) values and writes, DataModel back to tr098; pairs: $(tail -2 "$RUN/tr181.equiv" | head -1)"
 	else
 		bad "tr181: $bad_n mismatches above"
 	fi

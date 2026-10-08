@@ -29,6 +29,7 @@
 #include "dmmem.h"
 #include "dm_registry.h"
 #include "dmmtk.h"
+#include "device_ip_mtk.h"
 
 #define LEASE_FILE	"/tmp/dhcp.leases"
 
@@ -278,3 +279,106 @@ static const struct dm_module lanhosts_mtk_module = {
 	.paths = lanhosts_mtk_paths,
 };
 DM_MODULE_REGISTER(lanhosts_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181)                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * LANDevice.1.Hosts is Device.Hosts, the same "lanhost" sections in the same
+ * order.  MACAddress is PhysAddress; Layer2Interface becomes Layer1Interface,
+ * a TR-181 path ("LAN3" -> Device.Ethernet.Interface.3, laneth_mtk.c keeps the
+ * port numbers; "SSID2" -> Device.WiFi.SSID.2, assuming the Wi-Fi phase (T3)
+ * keeps the WLANConfiguration numbers for the SSIDs).  Layer3Interface is the
+ * LAN's IP.Interface.  InterfaceType has no TR-181 counterpart.
+ */
+
+static int get_host_layer1_181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *l2 = host_opt(data, "layer2interface");
+	const char *suffix = NULL, *obj = NULL;
+	const char *p;
+
+	if (strncmp(l2, "LAN", 3) == 0) {
+		suffix = l2 + 3;
+		obj = "Ethernet.Interface";
+	} else if (strncmp(l2, "SSID", 4) == 0) {
+		suffix = l2 + 4;
+		obj = "WiFi.SSID";
+	}
+	*value = "";
+	if (!obj || !*suffix)
+		return 0;
+	for (p = suffix; *p; p++) {
+		if (!isdigit((unsigned char)*p))
+			return 0;
+	}
+	dmasprintf(value, "Device.%s.%s", obj, suffix);
+	return 0;
+}
+
+static int get_host_layer3_181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *inst = dip_update_instance("lan");
+
+	if (*inst)
+		dmasprintf(value, "%s%s", mtk_ipif_prefix(), inst);
+	else
+		*value = "";
+	return 0;
+}
+
+static int browseHost181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	struct uci_section *s;
+	char *idx, *idx_last = NULL;
+	int id = 0;
+
+	uci_foreach_sections("lanhost", "host", s) {
+		idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section, 1, ++id);
+		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)s, idx) == DM_STOP)
+			break;
+	}
+	return 0;
+}
+
+static DMLEAF tHost181Param[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"PhysAddress", &DMREAD, DMT_STRING, get_host_mac, NULL, NULL, NULL},
+{"IPAddress", &DMREAD, DMT_STRING, get_host_ip, NULL, NULL, NULL},
+{"AddressSource", &DMREAD, DMT_STRING, get_host_addresssource, NULL, NULL, NULL},
+{"LeaseTimeRemaining", &DMREAD, DMT_INT, get_host_leasetime, NULL, NULL, NULL},
+{"Layer1Interface", &DMREAD, DMT_STRING, get_host_layer1_181, NULL, NULL, NULL},
+{"Layer3Interface", &DMREAD, DMT_STRING, get_host_layer3_181, NULL, NULL, NULL},
+{"VendorClassID", &DMREAD, DMT_STRING, get_host_empty, NULL, NULL, NULL},
+{"ClientID", &DMREAD, DMT_STRING, get_host_empty, NULL, NULL, NULL},
+{"UserClassID", &DMREAD, DMT_STRING, get_host_empty, NULL, NULL, NULL},
+{"HostName", &DMREAD, DMT_STRING, get_host_name, NULL, NULL, NULL},
+{"Active", &DMREAD, DMT_BOOL, get_host_active, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tHosts181Obj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Host", &DMREAD, NULL, NULL, NULL, browseHost181Inst, NULL, NULL, NULL, tHost181Param, NULL},
+{0}
+};
+
+static DMOBJ tHosts181Root[] = {
+{"Hosts", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tHosts181Obj, tHostsParam, NULL},
+{0}
+};
+
+static const char *const lanhosts181_mtk_paths[] = {
+	"Device.Hosts.",
+	NULL
+};
+
+static const struct dm_module lanhosts181_mtk_module = {
+	.name  = "mtk-lanhosts-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tHosts181Root,
+	.paths = lanhosts181_mtk_paths,
+};
+DM_MODULE_REGISTER(lanhosts181_mtk_module);

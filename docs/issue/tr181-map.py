@@ -7,7 +7,10 @@ rules in tr181_mapping.tsv:
     tr181-map.py equiv <tr098.json> <tr181.json>  value of every mapped pair, two "tr069 dm get" dumps
                                                   of the same device, one per model
 
-A rule maps a TR-098 path (instances spelled {i}) to a TR-181 one:
+A rule maps a TR-098 path (instances spelled {i}) to a TR-181 one.  On the
+TR-181 side {iN} is the Nth instance of the TR-098 path, {i} the next one, and
+{lan} the Device.IP.Interface instance whose Name is "lan" (read from the
+TR-181 dump; "{i}" for check):
   prefix  the longest matching prefix wins, the rest of the path is kept
   leaf    exactly that TR-098 parameter (wins over every prefix)
   new     a TR-181 name with no TR-098 source
@@ -18,19 +21,23 @@ not compared); D no TR-181 counterpart; T2..T7 phase not done yet (tr181 "?").
 check: every A/B/C name must be in the tree (verify-dm-paths.py --model tr181
 --dump), every name of the tree must come from a rule; exit 1 otherwise.
 equiv: an A/C pair must be present in both dumps with the same value
-(counters and clocks excepted); exit 1 on a missing name or a different
+(counters and clocks excepted; a TR-098 value that is a path reference into
+the product's InternetGatewayDevice.Device. branch equals the same reference
+under Device., "equal ref"); exit 1 on a missing name or a different
 value.  Pending (T2..) and D rows are counted, not checked."""
 import json, os, re, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RULES = os.path.join(HERE, "tr181_mapping.tsv")
 MATRIX = os.path.join(HERE, "tr098_coverage_matrix.tsv")
+GRAFT = "InternetGatewayDevice.Device."  # the TR-181 branch inside the product's TR-098 tree
 DYNAMIC = [r"\.Stats\.", r"\.(Bytes|Packets)(Sent|Received)$", r"\.UpTime$", r"\.Uptime$", r"\.LastChange$",
            r"\.CurrentLocalTime$", r"MemoryStatus\.Free$", r"ProcessStatus\.CPUUsage$", r"TemperatureSensor\.\d+\.Value$",
            r"\.LeaseTimeRemaining$", r"ManagementServer\.UDPConnectionRequestAddress$", r"\.UsedSpace$"]
 
 
 def pat(p):
+    p = p.replace("{lan}", "{i}")
     p = re.sub(r"\$\d", "{i}", p)
     p = re.sub(r"\.\d+\.", ".{i}.", p)
     p = re.sub(r"\.\d+\.", ".{i}.", p)
@@ -124,6 +131,16 @@ def declared(src, model="tr181"):
                if l.strip())
 
 
+def named(d181):
+    """{lan} -> the Device.IP.Interface instance of network.lan in a TR-181 dump"""
+    out = {}
+    for name, p in d181.items():
+        m = re.match(r"^Device\.IP\.Interface\.(\d+)\.Name$", name)
+        if m and p.get("value") == "lan":
+            out["{lan}"] = m.group(1)
+    return out
+
+
 def dump(path):
     return {p["parameter"]: p for p in json.load(open(path, encoding="utf-8", errors="replace")).get("parameters", [])}
 
@@ -158,10 +175,13 @@ def main():
         return 1 if missing or extra or unmapped else 0
     if a[0] == "equiv" and len(a) == 3:
         d98, d181 = dump(a[1]), dump(a[2])
+        names = named(d181)
         cls, bad, reached = {}, 0, set()
         for name in sorted(d98):
             r, m = find(rules, name)
             t = target(r, m, name)
+            for k, v in names.items():
+                t = t.replace(k, v) if t else t
             kind = r[3] if r else "none"
             if not t:
                 cls[kind] = cls.get(kind, 0) + 1
@@ -177,6 +197,8 @@ def main():
                 cls["B present"] = cls.get("B present", 0) + 1
             elif d181[t]["value"] == d98[name]["value"]:
                 cls["equal"] = cls.get("equal", 0) + 1
+            elif d98[name]["value"].startswith(GRAFT) and d181[t]["value"] == "Device." + d98[name]["value"][len(GRAFT):]:
+                cls["equal ref"] = cls.get("equal ref", 0) + 1
             elif any(re.search(x, name) for x in DYNAMIC):
                 cls["dynamic"] = cls.get("dynamic", 0) + 1
             else:

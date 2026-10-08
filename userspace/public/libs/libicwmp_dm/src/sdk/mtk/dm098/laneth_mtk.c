@@ -500,3 +500,114 @@ static const struct dm_module laneth_mtk_module = {
 	.paths = laneth_mtk_paths,
 };
 DM_MODULE_REGISTER(laneth_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181)                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * LANEthernetInterfaceConfig.{i} is Device.Ethernet.Interface.{i}, the same
+ * four ports in the same order, Upstream false.  The WAN port joins with the
+ * WAN phase (T4) after them, so these numbers do not move.  Two values are
+ * spelled the TR-181 way: Status (the product's "NoLink"/"Disable" are Down)
+ * and MaxBitRate (-1 is Auto).  MACAddressControlEnabled has no TR-181
+ * counterpart.
+ */
+
+static int get_eth_status181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *v = NULL;
+
+	get_eth_status(refparam, ctx, data, instance, &v);
+	if (v && strcmp(v, "Up") == 0)
+		*value = "Up";
+	else if (v && strcmp(v, "Error") == 0)
+		*value = "Error";
+	else
+		*value = "Down";
+	return 0;
+}
+
+static int get_eth_maxbitrate181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *v = NULL;
+
+	get_eth_maxbitrate(refparam, ctx, data, instance, &v);
+	*value = (!v || !*v || strcmp(v, "Auto") == 0) ? "-1" : v;
+	return 0;
+}
+
+static int set_eth_maxbitrate181(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	return set_eth_maxbitrate(refparam, ctx, data, instance,
+				  strcmp(value, "-1") == 0 ? "Auto" : value, action);
+}
+
+static int get_eth_false(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "false";
+	return 0;
+}
+
+/* the instances published, not the br-lan member count TR-098 reports */
+static int get_eth_count181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	dmasprintf(value, "%d", LAN_ETH_PORTS);
+	return 0;
+}
+
+static int browseEth181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	char *idx, *idx_last = NULL;
+	int i;
+
+	for (i = 0; i < LAN_ETH_PORTS; i++) {
+		idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section, 1, i + 1);
+		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)&eth_instances[i], idx) == DM_STOP)
+			break;
+	}
+	return 0;
+}
+
+static DMLEAF tEth181InstParam[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Alias", &DMREAD, DMT_STRING, get_eth_alias, NULL, NULL, NULL},
+{"Enable", &DMWRITE, DMT_BOOL, get_eth_enable, set_eth_enable, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_eth_status181, NULL, NULL, NULL},
+{"Name", &DMREAD, DMT_STRING, get_eth_name, NULL, NULL, NULL},
+{"Upstream", &DMREAD, DMT_BOOL, get_eth_false, NULL, NULL, NULL},
+{"MACAddress", &DMREAD, DMT_STRING, get_eth_mac, NULL, NULL, NULL},
+{"MaxBitRate", &DMWRITE, DMT_INT, get_eth_maxbitrate181, set_eth_maxbitrate181, NULL, NULL},
+{"DuplexMode", &DMWRITE, DMT_STRING, get_eth_duplex, set_eth_duplex, NULL, NULL},
+{0}
+};
+
+static DMLEAF tEth181Param[] = {
+{"InterfaceNumberOfEntries", &DMREAD, DMT_UNINT, get_eth_count181, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tEth181Obj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Interface", &DMREAD, NULL, NULL, NULL, browseEth181Inst, NULL, NULL, tLanEthInstObj, tEth181InstParam, NULL},
+{0}
+};
+
+static DMOBJ tEth181Root[] = {
+{"Ethernet", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tEth181Obj, tEth181Param, NULL},
+{0}
+};
+
+static const char *const laneth181_mtk_paths[] = {
+	"Device.Ethernet.",
+	NULL
+};
+
+static const struct dm_module laneth181_mtk_module = {
+	.name  = "mtk-laneth-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tEth181Root,
+	.paths = laneth181_mtk_paths,
+};
+DM_MODULE_REGISTER(laneth181_mtk_module);

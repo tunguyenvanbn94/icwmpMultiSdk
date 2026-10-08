@@ -31,12 +31,46 @@ leaf	InternetGatewayDevice.X_HNI_Icwmp.DataModel	Device.X_HNI_Icwmp.DataModel	B	
 prefix	InternetGatewayDevice.X_HNI_Icwmp.	Device.X_HNI_Icwmp.	A	icwmpd's own settings, root181_mtk.c
 leaf	InternetGatewayDevice.DeviceSummary	-	D	TR-181 reports Device.RootDataModelVersion
 new	-	Device.RootDataModelVersion	A	TR-181 only, root181_mtk.c
-prefix	InternetGatewayDevice.LANDevice.	?	T2	LAN (IP.Interface LAN, Ethernet.Interface, DHCPv4.Server, Hosts); Wi-Fi rows are T3
+prefix	InternetGatewayDevice.LANDevice.{i}.	?	T3	LANDevice rows not mapped below are Wi-Fi (WLANConfiguration, X_AIS_Mesh, X-AIS_ TransmitPower, LANWLANConfigurationNumberOfEntries)
+prefix	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.	Device.DHCPv4.Server.Pool.{i}.	A	lan_mtk.c, one pool like the one LANDevice; same getters/setters
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPServerEnable	Device.DHCPv4.Server.Pool.{i}.Enable	A	dhcp.lan.dynamicdhcp
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPLeaseTime	Device.DHCPv4.Server.Pool.{i}.LeaseTime	A	TR-181 leaf name
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPStaticAddressNumberOfEntries	Device.DHCPv4.Server.Pool.{i}.StaticAddressNumberOfEntries	A	0, no instance (as TR-098)
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPOptionNumberOfEntries	Device.DHCPv4.Server.Pool.{i}.OptionNumberOfEntries	A	0, no instance (as TR-098)
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.MACAddress	-	D	TR-181 has it on Ethernet.Link.{i}.MACAddress; Ethernet.Link is not built (T7 with the LowerLayers references)
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPServerConfigurable	-	D	product lock of the LAN pool, no TR-181 counterpart
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPRelay	-	D	constant false; TR-181 DHCPv4.Relay is its own object
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.UseAllocatedWAN	-	D	TR-098 only
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.AssociatedConnection	-	D	TR-098 only
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.PassthroughLease	-	D	TR-098 only
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.PassthroughMACAddress	-	D	TR-098 only
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.AllowedMACAddresses	-	D	TR-098 only
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterfaceNumberOfEntries	-	D	TR-181 counts addresses per IP.Interface (IPv4AddressNumberOfEntries, from netifd)
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPConditionalPoolNumberOfEntries	-	D	TR-181 pools are DHCPv4.Server.Pool.{i}
+prefix	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.	Device.IP.Interface.{lan}.IPv4Address.	A	the LAN address: IPv4Address.1 of the IP.Interface of network.lan ({lan} = its ip_int_instance)
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.{i}.IPInterfaceIPAddress	Device.IP.Interface.{lan}.IPv4Address.{i2}.IPAddress	A	TR-181 leaf name
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.{i}.IPInterfaceSubnetMask	Device.IP.Interface.{lan}.IPv4Address.{i2}.SubnetMask	A	TR-181 leaf name
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.{i}.IPInterfaceAddressingType	Device.IP.Interface.{lan}.IPv4Address.{i2}.AddressingType	A	TR-181 leaf name
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.{i}.Enable	Device.IP.Interface.{lan}.IPv4Address.{i2}.Enable	B	TR-098 answers a "false" placeholder, TR-181 true (the LAN address is always on)
+prefix	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.	Device.Ethernet.Interface.	A	laneth_mtk.c, the same four ports in the same order
+leaf	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.Status	Device.Ethernet.Interface.{i2}.Status	B	TR-181 enumeration: NoLink/Disable -> Down
+leaf	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.MaxBitRate	Device.Ethernet.Interface.{i2}.MaxBitRate	B	TR-181 int, -1 = Auto
+leaf	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.MACAddressControlEnabled	-	D	TR-098 only
+leaf	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceNumberOfEntries	Device.Ethernet.InterfaceNumberOfEntries	B	TR-181 counts the instances (4), TR-098 the eth members of br-lan
+leaf	InternetGatewayDevice.LANDevice.{i}.LANUSBInterfaceNumberOfEntries	-	D	constant 0; Device.USB is the hidden placeholder of the product
+prefix	InternetGatewayDevice.LANDevice.{i}.Hosts.	Device.Hosts.	A	lanhosts_mtk.c, the same lanhost sections in the same order
+leaf	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.{i}.MACAddress	Device.Hosts.Host.{i2}.PhysAddress	A	TR-181 leaf name
+leaf	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.{i}.Layer2Interface	Device.Hosts.Host.{i2}.Layer1Interface	B	TR-181 path reference (Device.Ethernet.Interface.n, Device.WiFi.SSID.n) instead of the TR-098 object path
+leaf	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.{i}.InterfaceType	-	D	dropped in TR-181 (Layer1Interface tells the medium)
+new	-	Device.DHCPv4.Server.PoolNumberOfEntries	A	lan_mtk.c
+new	-	Device.DHCPv4.Server.Pool.{i}.Interface	A	lan_mtk.c, Device.IP.Interface of network.lan
+new	-	Device.Ethernet.Interface.{i}.Upstream	A	laneth_mtk.c, false
+new	-	Device.Hosts.Host.{i}.Layer3Interface	A	lanhosts_mtk.c, Device.IP.Interface of network.lan
 prefix	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.	?	T3	WiFi.Radio/SSID/AccessPoint
 prefix	InternetGatewayDevice.LANDevice.{i}.X_AIS_Mesh.	?	T3	Device.WiFi.X_AIS_Mesh
 prefix	InternetGatewayDevice.LANDevice.{i}.X-AIS_	?	T3	WiFi.Radio.{r}.TransmitPower
 prefix	InternetGatewayDevice.LANDevice.{i}.LANWLANConfigurationNumberOfEntries	?	T3	WiFi.SSIDNumberOfEntries
-prefix	InternetGatewayDevice.Layer2Bridging.	?	T2	Bridging.Bridge
+prefix	InternetGatewayDevice.Layer2Bridging.	-	D	objects only, no parameter in the product; TR-181 Bridging.Bridge built when an ACS needs it (T7)
 prefix	InternetGatewayDevice.WiFi.	?	T3	WiFi.NeighboringWiFiDiagnostic
 prefix	InternetGatewayDevice.WANDevice.	?	T4	IP.Interface WAN, PPP, DHCPv4/v6 Client, NAT, Routing, DNS, Ethernet/Optical
 prefix	InternetGatewayDevice.Layer3Forwarding.	?	T4	Routing.Router.1.IPv4Forwarding

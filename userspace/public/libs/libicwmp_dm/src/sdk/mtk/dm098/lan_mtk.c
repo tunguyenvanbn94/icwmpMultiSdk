@@ -30,6 +30,7 @@
 #include "dmmem.h"
 #include "dm_registry.h"
 #include "dmmtk.h"
+#include "device_ip_mtk.h"
 
 /* wireless.<radio> of this board, functions/tr098/lan_device:14 */
 #define RADIO_DEVICE_2G		"MT7993_1_1"
@@ -721,3 +722,132 @@ static const struct dm_module lan_mtk_module = {
 	.paths = lan_mtk_paths,
 };
 DM_MODULE_REGISTER(lan_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181)                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * LANHostConfigManagement is Device.DHCPv4.Server.Pool.1 and its IPInterface.1
+ * is IPv4Address.1 of the LAN's Device.IP.Interface (device_ip_mtk.c numbers
+ * it, network.lan.ip_int_instance).  Same getters and setters as above, so the
+ * same UCI options, reloads and faults.  Left out, no TR-181 counterpart:
+ * MACAddress (Ethernet.Link, not built), DHCPServerConfigurable, DHCPRelay,
+ * UseAllocatedWAN, AssociatedConnection, Passthrough*, AllowedMACAddresses,
+ * IPInterfaceNumberOfEntries, DHCPConditionalPoolNumberOfEntries
+ * (docs/issue/tr181_mapping.tsv).
+ */
+
+/* the TR-098 IPInterface.1.Enable is a "false" placeholder; the LAN address
+ * of this product is always on */
+static int get_ipv4_enable181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "true";
+	return 0;
+}
+
+/* Device.IP.Interface.<n> of network.lan, numbered the way device_ip_mtk.c
+ * numbers it (given and committed the first time, as the DHCPv6 pool does) */
+static int get_pool_interface181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *inst = dip_update_instance("lan");
+
+	if (*inst)
+		dmasprintf(value, "%s%s", mtk_ipif_prefix(), inst);
+	else
+		*value = "";
+	return 0;
+}
+
+/* IPv4Address.1 hangs under the IP.Interface instance of network.lan only;
+ * the WAN interfaces get theirs with the WAN phase (T4) */
+static int browseLanIpv4Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	char *sec = dip_section_of_instance(prev_instance);
+
+	if (!sec || strcmp(sec, "lan") != 0)
+		return 0;
+	return browseIPInterfaceInst(dmctx, parent_node, prev_data, prev_instance);
+}
+
+static DMLEAF tLanIpv4181Param[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMWRITE, DMT_BOOL, get_ipv4_enable181, set_accept_and_drop, NULL, NULL},
+{"Alias", &DMWRITE, DMT_STRING, get_ipif_alias, set_accept_and_drop, NULL, NULL},
+{"IPAddress", &DMWRITE, DMT_STRING, get_ip_routers, set_ip_routers, NULL, NULL},
+{"SubnetMask", &DMWRITE, DMT_STRING, get_subnet_mask, set_subnet_mask, NULL, NULL},
+{"AddressingType", &DMREAD, DMT_STRING, get_ipif_addressing, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tLanIpInterface181Obj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"IPv4Address", &DMREAD, NULL, NULL, NULL, browseLanIpv4Inst, NULL, NULL, NULL, tLanIpv4181Param, NULL},
+{0}
+};
+
+/* browseinstobj left NULL: device_ip_mtk.c makes the Interface instances */
+static DMOBJ tLanIp181Obj[] = {
+{"Interface", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLanIpInterface181Obj, NULL, NULL},
+{0}
+};
+
+static DMLEAF tDhcp4Pool181Param[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_dhcp_enable, set_dhcp_enable, NULL, NULL},
+{"Interface", &DMREAD, DMT_STRING, get_pool_interface181, NULL, NULL, NULL},
+{"MinAddress", &DMWRITE, DMT_STRING, get_min_address, set_min_address, NULL, NULL},
+{"MaxAddress", &DMWRITE, DMT_STRING, get_max_address, set_max_address, NULL, NULL},
+{"ReservedAddresses", &DMWRITE, DMT_STRING, get_empty_string, set_accept_and_drop, NULL, NULL},
+{"SubnetMask", &DMWRITE, DMT_STRING, get_subnet_mask, set_subnet_mask, NULL, NULL},
+{"DNSServers", &DMWRITE, DMT_STRING, get_dns_servers, set_dns_servers, NULL, NULL},
+{"DomainName", &DMWRITE, DMT_STRING, get_domain_name, set_domain_name, NULL, NULL},
+{"IPRouters", &DMWRITE, DMT_STRING, get_ip_routers, set_ip_routers, NULL, NULL},
+{"LeaseTime", &DMWRITE, DMT_INT, get_lease_time, set_lease_time, NULL, NULL},
+{"StaticAddressNumberOfEntries", &DMREAD, DMT_UNINT, get_zero, NULL, NULL, NULL},
+{"OptionNumberOfEntries", &DMREAD, DMT_UNINT, get_zero, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tDhcp4Pool181Obj[] = {
+{"StaticAddress", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
+{"Option", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
+{0}
+};
+
+static DMLEAF tDhcp4Server181Param[] = {
+{"PoolNumberOfEntries", &DMREAD, DMT_UNINT, get_one, NULL, NULL, NULL},
+{0}
+};
+
+/* one pool, instance 1 like the single LANDevice it comes from */
+static DMOBJ tDhcp4Server181Obj[] = {
+{"Pool", &DMREAD, NULL, NULL, NULL, browseLanDeviceInst, NULL, NULL, tDhcp4Pool181Obj, tDhcp4Pool181Param, NULL},
+{0}
+};
+
+static DMOBJ tDhcp4181Obj[] = {
+{"Server", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDhcp4Server181Obj, tDhcp4Server181Param, NULL},
+{0}
+};
+
+static DMOBJ tLan181Root[] = {
+{"DHCPv4", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDhcp4181Obj, NULL, NULL},
+{"IP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLanIp181Obj, NULL, NULL},
+{0}
+};
+
+/* Device.IP. is device_ip_mtk.c's claim; IPv4Address joins it by the merge,
+ * unclaimed, the way managementserver_core_mtk.c extends ManagementServer */
+static const char *const lan181_mtk_paths[] = {
+	"Device.DHCPv4.",
+	NULL
+};
+
+static const struct dm_module lan181_mtk_module = {
+	.name  = "mtk-landevice-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tLan181Root,
+	.paths = lan181_mtk_paths,
+};
+DM_MODULE_REGISTER(lan181_mtk_module);
