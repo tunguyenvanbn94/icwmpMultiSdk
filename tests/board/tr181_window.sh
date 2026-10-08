@@ -76,6 +76,18 @@ log "restore NTPServer3: fault $(fault_set Device.Time.NTPServer3 "$ntp" "$key")
 log "  uci after restore: '$(uci -q get system.ntp.server)'"
 log "set Device.X_AIS_Conf.auto_upload_delay=abc: fault $(fault_set Device.X_AIS_Conf.auto_upload_delay abc "$key")"
 log "ParameterKey after: '$(val Device.ManagementServer.ParameterKey)' (was '$key')"
+# T7 (analysis section 77, 78): Channel in use under automatic selection, a
+# PPP address is IPCP, a diagnostic's Interface as a Device.IP.Interface
+# reference (written, stored as the device name, read back, then put back)
+for r in 1 2; do
+	log "Radio $r Channel/ChannelsInUse/AutoChannelEnable: $(val Device.WiFi.Radio.$r.Channel)/$(val Device.WiFi.Radio.$r.ChannelsInUse)/$(val Device.WiFi.Radio.$r.AutoChannelEnable)"
+done
+wan=$(val Device.NAT.InterfaceSetting.1.Interface)
+log "first WAN $wan: IPv4 AddressingType $(val $wan.IPv4Address.1.AddressingType), PPP $(val Device.PPP.InterfaceNumberOfEntries)"
+trc=$(uci -q -P /var/state/traceroute get easycwmp.@local[0].Interface)
+log "set TraceRoute.Interface=$wan: fault $(fault_set Device.IP.Diagnostics.TraceRoute.Interface "$wan" "$key"), stored '$(uci -q -P /var/state/traceroute get easycwmp.@local[0].Interface)', reads '$(val Device.IP.Diagnostics.TraceRoute.Interface)'"
+uci -q -P /var/state/traceroute set easycwmp.@local[0].Interface="$trc"
+log "  TraceRoute store put back: '$(uci -q -P /var/state/traceroute get easycwmp.@local[0].Interface)'"
 logread | grep -E 'icwmp|tr069' | tail -n 40 > "$D/logread181.txt"
 
 # 4. back to TR-098, state as before the window, then open the ACS again

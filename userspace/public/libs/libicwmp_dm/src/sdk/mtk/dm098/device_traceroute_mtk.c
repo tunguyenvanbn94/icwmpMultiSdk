@@ -46,6 +46,7 @@
 #include "dmmem.h"
 #include "dm_registry.h"
 #include "dmmtk.h"
+#include "device_ip_mtk.h"
 #include "diag_mtk.h"
 
 #define TRC		(&diag_traceroute)
@@ -349,8 +350,27 @@ static DMOBJ tDtr181ChildObj[] = {
 {0}
 };
 
+/* tDtrParams with a TR-181 Interface: a Device.IP.Interface reference for
+ * the device name the product stores (device_ip_mtk.h); keep in step */
+IFREF181_GET(dtr_interface, get_dtr_interface)
+IFREF181_SET(dtr_interface, set_dtr_interface)
+
+static DMLEAF tDtr181Params[] = {
+{"DiagnosticsState", &DMWRITE, DMT_STRING, get_dtr_state, set_dtr_state, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_ifref181_dtr_interface, set_ifref181_dtr_interface, NULL, NULL},
+{"Host", &DMWRITE, DMT_STRING, get_dtr_host, set_dtr_host, NULL, NULL},
+{"NumberOfTries", &DMWRITE, DMT_UNINT, get_dtr_tries, set_dtr_tries, NULL, NULL},
+{"Timeout", &DMWRITE, DMT_UNINT, get_dtr_timeout, set_dtr_timeout, NULL, NULL},
+{"DataBlockSize", &DMWRITE, DMT_UNINT, get_dtr_blocksize, set_dtr_blocksize, NULL, NULL},
+{"DSCP", &DMWRITE, DMT_UNINT, get_dtr_dscp, set_dtr_dscp, NULL, NULL},
+{"MaxHopCount", &DMWRITE, DMT_UNINT, get_dtr_maxhops, set_dtr_maxhops, NULL, NULL},
+{"ResponseTime", &DMREAD, DMT_UNINT, get_dtr_resptime, NULL, NULL, NULL},
+{"RouteHopsNumberOfEntries", &DMREAD, DMT_UNINT, get_dtr_hops, NULL, NULL, NULL},
+{0}
+};
+
 static DMOBJ tDtr181DiagObj[] = {
-{"TraceRoute", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDtr181ChildObj, tDtrParams, NULL},
+{"TraceRoute", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDtr181ChildObj, tDtr181Params, NULL},
 {0}
 };
 

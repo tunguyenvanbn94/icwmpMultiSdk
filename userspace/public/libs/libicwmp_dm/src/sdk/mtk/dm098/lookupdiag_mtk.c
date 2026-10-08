@@ -52,6 +52,7 @@
 #include "dmcommon.h"
 #include "dm_registry.h"
 #include "dmmtk.h"
+#include "device_ip_mtk.h"
 #include "diag_mtk.h"
 
 #define NSL	(&diag_nslookup)
@@ -302,13 +303,31 @@ DM_MODULE_REGISTER(lookupdiag_mtk_module);
 
 /* TR-181 (cwmp.cpe.datamodel=tr181): NSLookupDiagnostics is
  * Device.DNS.Diagnostics.NSLookupDiagnostics, the same store, launcher and
- * tables (Result.{i} included).  DNSDiagnostics is the product's own object
- * without a vendor prefix, kept as Device.DNSDiagnostics like
- * Device.Account.  Interface stays a network device name as on the product. */
+ * tables (Result.{i} included), except its Interface: a Device.IP.Interface
+ * reference for the device name the product stores (device_ip_mtk.h
+ * IFREF181_*), a device name still taken; tNSLookup181Params is a copy of
+ * tNSLookupParams, keep in step.  DNSDiagnostics is the product's own
+ * object without a vendor prefix, kept as Device.DNSDiagnostics like
+ * Device.Account, Interface a device name as on the product. */
+IFREF181_GET(nsl_interface, get_nsl_interface)
+IFREF181_SET(nsl_interface, set_nsl_interface)
+
+static DMLEAF tNSLookup181Params[] = {
+{"DiagnosticsState", &DMWRITE, DMT_STRING, get_nsl_state, set_nsl_state, NULL, NULL},
+{"HostName", &DMWRITE, DMT_STRING, get_nsl_hostname, set_nsl_hostname, NULL, NULL},
+{"DNSServer", &DMWRITE, DMT_STRING, get_nsl_dnsserver, set_nsl_dnsserver, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_ifref181_nsl_interface, set_ifref181_nsl_interface, NULL, NULL},
+{"Timeout", &DMWRITE, DMT_UNINT, get_nsl_timeout, set_nsl_timeout, NULL, NULL},
+{"ResultNumberOfEntries", &DMREAD, DMT_UNINT, get_nsl_resultcount, NULL, NULL, NULL},
+{"NumberOfRepetitions", &DMWRITE, DMT_UNINT, get_nsl_repetitions, set_nsl_repetitions, NULL, NULL},
+{"SuccessCount", &DMREAD, DMT_UNINT, get_nsl_success, NULL, NULL, NULL},
+{0}
+};
+
 static DMOBJ tLookup181DiagObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
 {"NSLookupDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
- tNSLookupChildObj, tNSLookupParams, NULL},
+ tNSLookupChildObj, tNSLookup181Params, NULL},
 {0}
 };
 

@@ -54,6 +54,7 @@
 #include "dmcommon.h"
 #include "dm_registry.h"
 #include "dmmtk.h"
+#include "device_ip_mtk.h"
 #include "diag_mtk.h"
 
 #define DLD	(&diag_download)
@@ -241,13 +242,55 @@ static const struct dm_module tr143diag_mtk_module = {
 DM_MODULE_REGISTER(tr143diag_mtk_module);
 
 /* TR-181 (cwmp.cpe.datamodel=tr181): Device.IP.Diagnostics.DownloadDiagnostics
- * and UploadDiagnostics, the same stores, launchers and tables.  Interface
- * stays a network device name as on the product (a TR-181 reference would
- * be a T7 change, like TraceRoute's). */
+ * and UploadDiagnostics, the same stores, launchers and leaves, except
+ * Interface: a Device.IP.Interface reference for the device name the
+ * product stores (device_ip_mtk.h IFREF181_*), a device name still taken.
+ * Copies of tDownloadDiagParams / tUploadDiagParams: keep in step. */
+IFREF181_GET(dld_interface, get_dld_interface)
+IFREF181_SET(dld_interface, set_dld_interface)
+
+static DMLEAF tDownload181DiagParams[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"DiagnosticsState", &DMWRITE, DMT_STRING, get_dld_state, set_dld_state, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_ifref181_dld_interface, set_ifref181_dld_interface, NULL, NULL},
+{"DownloadTransports", &DMREAD, DMT_STRING, get_dld_transports, NULL, NULL, NULL},
+{"DSCP", &DMWRITE, DMT_UNINT, get_dld_dscp, set_dld_dscp, NULL, NULL},
+{"DownloadURL", &DMWRITE, DMT_STRING, get_dld_url, set_dld_url, NULL, NULL},
+{"EthernetPriority", &DMWRITE, DMT_UNINT, get_dld_ethprio, set_dld_ethprio, NULL, NULL},
+{"ROMTime", &DMREAD, DMT_STRING, get_dld_rom, NULL, NULL, NULL},
+{"BOMTime", &DMREAD, DMT_STRING, get_dld_bom, NULL, NULL, NULL},
+{"EOMTime", &DMREAD, DMT_STRING, get_dld_eom, NULL, NULL, NULL},
+{"TCPOpenRequestTime", &DMREAD, DMT_STRING, get_dld_tcpreq, NULL, NULL, NULL},
+{"TCPOpenResponseTime", &DMREAD, DMT_STRING, get_dld_tcpresp, NULL, NULL, NULL},
+{"TestBytesReceived", &DMREAD, DMT_UNINT, get_dld_testbytes, NULL, NULL, NULL},
+{"TotalBytesReceived", &DMREAD, DMT_UNINT, get_dld_totalbytes, NULL, NULL, NULL},
+{0}
+};
+
+IFREF181_GET(uld_interface, get_uld_interface)
+IFREF181_SET(uld_interface, set_uld_interface)
+
+static DMLEAF tUpload181DiagParams[] = {
+{"DiagnosticsState", &DMWRITE, DMT_STRING, get_uld_state, set_uld_state, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_ifref181_uld_interface, set_ifref181_uld_interface, NULL, NULL},
+{"UploadTransports", &DMREAD, DMT_STRING, get_uld_transports, NULL, NULL, NULL},
+{"DSCP", &DMWRITE, DMT_UNINT, get_uld_dscp, set_uld_dscp, NULL, NULL},
+{"UploadURL", &DMWRITE, DMT_STRING, get_uld_url, set_uld_url, NULL, NULL},
+{"EthernetPriority", &DMWRITE, DMT_UNINT, get_uld_ethprio, set_uld_ethprio, NULL, NULL},
+{"ROMTime", &DMREAD, DMT_STRING, get_uld_rom, NULL, NULL, NULL},
+{"BOMTime", &DMREAD, DMT_STRING, get_uld_bom, NULL, NULL, NULL},
+{"EOMTime", &DMREAD, DMT_STRING, get_uld_eom, NULL, NULL, NULL},
+{"TCPOpenRequestTime", &DMREAD, DMT_STRING, get_uld_tcpreq, NULL, NULL, NULL},
+{"TCPOpenResponseTime", &DMREAD, DMT_STRING, get_uld_tcpresp, NULL, NULL, NULL},
+{"TestFileLength", &DMWRITE, DMT_UNINT, get_uld_filelen, set_uld_filelen, NULL, NULL},
+{"TotalBytesSent", &DMREAD, DMT_UNINT, get_uld_totalsent, NULL, NULL, NULL},
+{0}
+};
+
 static DMOBJ tTr143181DiagObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"DownloadDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tDownloadDiagParams, NULL},
-{"UploadDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tUploadDiagParams, NULL},
+{"DownloadDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tDownload181DiagParams, NULL},
+{"UploadDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tUpload181DiagParams, NULL},
 {0}
 };
 

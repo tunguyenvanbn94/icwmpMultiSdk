@@ -1899,6 +1899,22 @@ for x in json.load(open(sys.argv[1]))["parameters"]:
 	uci -q -P /var/state set easycwmp.@local[0].InterfacePath=InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1
 	expect "IPPing Interface from the stored TR-098 path" "$(dm_value Device.IP.Diagnostics.IPPing.Interface)" "Device.IP.Interface.$lan"
 	uci -q -P /var/state set easycwmp.@local[0].InterfacePath=
+	# T7: TraceRoute/Download/Upload/NSLookup Interface in TR-181 is the
+	# Device.IP.Interface reference of the device name the product stores
+	# (pppoe-if1 is the l3_device of if1 here); a device name is still taken;
+	# a reference to no interface is refused.  The container has no
+	# pppoe-if1, so a reference that resolves is checked on the board.
+	for d in traceroute downloadDiag uploadDiag nslookup; do
+		uci -q -P /var/state/$d set easycwmp.@local[0].Interface=pppoe-if1
+	done
+	expect "diag Interface: device name read as a reference" "$(dm_value Device.IP.Diagnostics.TraceRoute.Interface) $(dm_value Device.IP.Diagnostics.DownloadDiagnostics.Interface) $(dm_value Device.IP.Diagnostics.UploadDiagnostics.Interface) $(dm_value Device.DNS.Diagnostics.NSLookupDiagnostics.Interface)" \
+		"Device.IP.Interface.$w1 Device.IP.Interface.$w1 Device.IP.Interface.$w1 Device.IP.Interface.$w1"
+	expect "set NSLookup Interface eth0 (a device name)" "$(dm_set_fault Device.DNS.Diagnostics.NSLookupDiagnostics.Interface eth0 "$key") $(uci -q -P /var/state/nslookup get easycwmp.@local[0].Interface) $(dm_value Device.DNS.Diagnostics.NSLookupDiagnostics.Interface)" "0 eth0 eth0"
+	expect "set Download Interface Device.IP.Interface.99" "$(dm_set_fault Device.IP.Diagnostics.DownloadDiagnostics.Interface Device.IP.Interface.99 "$key")" "9007"
+	expect "set Upload Interface Device.IP.Interface.x" "$(dm_set_fault Device.IP.Diagnostics.UploadDiagnostics.Interface Device.IP.Interface.x "$key")" "9007"
+	for d in traceroute downloadDiag uploadDiag nslookup; do
+		uci -q -P /var/state/$d set easycwmp.@local[0].Interface=
+	done
 	expect "LTE, DNSDiagnostics, Firewall.Config present" "$(dm_value Device.LTE.RSSI | grep -c none) $(dm_value Device.DNSDiagnostics.DiagnosticsState) $(dm_value Device.Firewall.Config)" "0 None High"
 	# T3 Wi-Fi: Radio from the radio sections, SSID/AccessPoint numbered like
 	# WLANConfiguration, Security.ModeEnabled from wireless.<iface>.encryption

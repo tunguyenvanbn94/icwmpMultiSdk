@@ -795,6 +795,66 @@ const char *dip_section(void *data)
 	return data ? DIP_SEC(data) : "";
 }
 
+/*
+ * The Interface of a TR-181 diagnostic (TraceRoute, Download, Upload,
+ * NSLookup): the product stores a layer 3 device name ("ifconfig $val"),
+ * TR-181 a Device.IP.Interface reference.  The device of an interface is
+ * netifd's l3_device, else network.<sec>.device without a leading "@" (what
+ * LowerLayers reads).
+ */
+static char *dip_netdev(const char *sec)
+{
+	json_object *res = dip_status(sec);
+	char *v = res ? dmjson_get_value(res, 1, "l3_device") : "";
+	char *dev;
+
+	if (v && *v)
+		return v;
+	dev = mtk_uci(IP_PKG, sec, "device");
+	return *dev == '@' ? dev + 1 : dev;
+}
+
+char *dip_netdev_of_ref(const char *ref)
+{
+	static const char pfx[] = "Device.IP.Interface.";
+	char inst[16];
+	const char *p;
+	size_t n = 0;
+	char *sec;
+
+	if (!ref || strncmp(ref, pfx, sizeof(pfx) - 1) != 0)
+		return NULL;
+	for (p = ref + sizeof(pfx) - 1; *p >= '0' && *p <= '9' && n < sizeof(inst) - 1; p++)
+		inst[n++] = *p;
+	inst[n] = '\0';
+	/* "<n>" or "<n>." only */
+	if (!n || (*p && strcmp(p, ".") != 0))
+		return "";
+	sec = dip_section_of_instance(inst);
+	return sec ? dip_netdev(sec) : "";
+}
+
+char *dip_ref_of_netdev(const char *dev)
+{
+	struct dip_iface list[DIP_MAX];
+	int i, n;
+	char *r;
+
+	if (!dev || !*dev)
+		return NULL;
+	n = dip_list(list, DIP_MAX, 0);
+	/* the lowest Interface.{i} first: if<id> before its if<id>_6 alias,
+	 * both on the same layer 3 device */
+	qsort(list, n, sizeof(list[0]), dip_cmp);
+	for (i = 0; i < n; i++) {
+		if (!*list[i].inst || strcmp(dip_netdev(list[i].sec), dev) != 0)
+			continue;
+		dmasprintf(&r, "Device.IP.Interface.%s", list[i].inst);
+		return r;
+	}
+	return NULL;
+}
+
 static struct wan_entry *dip_wan(void *data)
 {
 	return wan181_of_ipif(data);
