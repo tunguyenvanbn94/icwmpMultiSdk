@@ -584,3 +584,132 @@ static const struct dm_module wlansec_mtk_module = {
 	.objs  = tLanDeviceWlanSecRoot,
 };
 DM_MODULE_REGISTER(wlansec_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181)                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Device.WiFi.AccessPoint.{i}.Security: one enumerated ModeEnabled instead of
+ * BeaconType and the three authentication/encryption pairs, all read from and
+ * written to wireless.<iface>.encryption.  Writing it does what BeaconType
+ * did: the option, mapd's copy (mapd_security), a wifi reload -- no MLO pair
+ * sync, BeaconType never had one.  KeyPassphrase and PreSharedKey keep the
+ * TR-098 setters of WLANConfiguration.KeyPassphrase and PreSharedKey.1;
+ * WEPKey writes the slot of the key index (wireless.<iface>.key, 1..4).
+ * WEPEncryptionLevel, WEPKeyIndex and the six mode leaves have no TR-181
+ * counterpart: ModeEnabled carries WEP-64/WEP-128 and the WPA variants.
+ */
+
+static const struct {
+	const char *mode;	/* TR-181 enumeration */
+	const char *enc;	/* wireless.<iface>.encryption written for it */
+} sec181_modes[] = {
+	{ "None",			"none" },
+	{ "WEP-64",			"wep+shared+64" },
+	{ "WEP-128",			"wep+shared+128" },
+	{ "WPA-Personal",		"psk" },
+	{ "WPA2-Personal",		"psk2+ccmp" },
+	{ "WPA-WPA2-Personal",		"psk-mixed+ccmp" },
+	{ "WPA3-Personal",		"sae" },
+	{ "WPA3-Personal-Transition",	"sae-mixed" },
+};
+#define SEC181_MODES	((int)(sizeof(sec181_modes) / sizeof(sec181_modes[0])))
+
+/* every spelling get_beacon_type() and get_encryption_modes() know */
+static int get_mode_enabled181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *enc = encryption_of(data);
+
+	if (!*enc || strcmp(enc, "none") == 0 || strcmp(enc, "OPEN/NONE") == 0)
+		*value = "None";
+	else if (strcmp(enc, "wep+shared+128") == 0)
+		*value = "WEP-128";
+	else if (is_wep(enc))
+		*value = "WEP-64";
+	else if (strcmp(enc, "sae-mixed") == 0 || strncmp(enc, "sae-mixed+", 10) == 0 ||
+		 strncmp(enc, "psk2+sae", 8) == 0)
+		*value = "WPA3-Personal-Transition";
+	else if (strncmp(enc, "sae", 3) == 0)
+		*value = "WPA3-Personal";
+	else if (strncmp(enc, "psk-mixed", 9) == 0 || strcmp(enc, "WPA1WPA2") == 0)
+		*value = "WPA-WPA2-Personal";
+	else if (strncmp(enc, "psk2", 4) == 0 || strcmp(enc, "WPA2") == 0)
+		*value = "WPA2-Personal";
+	else if (strncmp(enc, "psk", 3) == 0 || strcmp(enc, "WPA") == 0)
+		*value = "WPA-Personal";
+	else
+		*value = "None";
+	return 0;
+}
+
+static int set_mode_enabled181(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	char *iface = iface_of(data);
+	int i;
+
+	for (i = 0; i < SEC181_MODES; i++) {
+		if (value && strcmp(value, sec181_modes[i].mode) == 0)
+			break;
+	}
+	if (i == SEC181_MODES)
+		return FAULT_9007;
+	if (action == VALUECHECK)
+		return 0;
+	dmuci_set_value("wireless", iface, "encryption", (char *)sec181_modes[i].enc);
+	mapd_security(iface, sec181_modes[i].enc);
+	wlan_reload();
+	return 0;
+}
+
+static int get_modes_supported181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "None,WEP-64,WEP-128,WPA-Personal,WPA2-Personal,WPA-WPA2-Personal,WPA3-Personal,WPA3-Personal-Transition";
+	return 0;
+}
+
+static int set_wepkey181(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	char *key = wlan_opt(data, "key");
+	struct wep_key_ctx k = { wlan_iface_of(data), 1 };
+
+	if (key && strlen(key) == 1 && key[0] >= '1' && key[0] <= '4')
+		k.index = key[0] - '0';
+	return set_wep_key(refparam, ctx, &k, instance, value, action);
+}
+
+static DMLEAF tSec181Param[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"ModesSupported", &DMREAD, DMT_STRING, get_modes_supported181, NULL, NULL, NULL},
+{"ModeEnabled", &DMWRITE, DMT_STRING, get_mode_enabled181, set_mode_enabled181, NULL, NULL},
+{"WEPKey", &DMWRITE, DMT_STRING, get_empty, set_wepkey181, NULL, NULL},
+{"PreSharedKey", &DMWRITE, DMT_STRING, get_empty, set_presharedkey, NULL, NULL},
+{"KeyPassphrase", &DMWRITE, DMT_STRING, get_key_passphrase, set_key_passphrase, NULL, NULL},
+{0}
+};
+
+static DMOBJ tAp181SecObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Security", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tSec181Param, NULL},
+{0}
+};
+
+/* browseinstobj left NULL: wlan_mtk.c makes the AccessPoint instances */
+static DMOBJ tWifi181SecObj[] = {
+{"AccessPoint", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tAp181SecObj, NULL, NULL},
+{0}
+};
+
+static DMOBJ tWifi181SecRoot[] = {
+{"WiFi", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWifi181SecObj, NULL, NULL},
+{0}
+};
+
+/* No .paths: wlan_mtk.c claims Device.WiFi.AccessPoint. for all three */
+static const struct dm_module wlansec181_mtk_module = {
+	.name  = "mtk-wlan-security-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tWifi181SecRoot,
+};
+DM_MODULE_REGISTER(wlansec181_mtk_module);

@@ -4449,3 +4449,83 @@ dùng cùng getter/setter, nên cùng option UCI, cùng lệnh reload và cùng 
   Chốt ở T3.
 - Số `IP.Interface` của LAN trên board: do `ip_int_instance` đã gán sẵn trên board quyết định (§61). Test host chỉ
   thấy số của fixture.
+
+## 69. TR-181 trên MTK: T3 Wi-Fi (`tr181-0005`) (08/10 16:36–)
+
+**Phạm vi:** 75 tham số Wi-Fi của cây TR-098 sản phẩm: `WLANConfiguration.{1..12}` (+`AssociatedDevice`, `Stats`, `WPS`,
+`PreSharedKey`, `WEPKey`), `LANWLANConfigurationNumberOfEntries`, `X_AIS_Mesh`, hai lá công suất `X-AIS_*`,
+`WiFi.NeighboringWiFiDiagnostic`. Bảng TR-181 nằm cạnh bảng TR-098 trong `wlan_mtk.c`, `wlansec_mtk.c`,
+`wlanassoc_mtk.c`, `x_ais_mesh_mtk.c`, `lan_mtk.c`, `root_hidden_mtk.c`, dùng cùng getter/setter.
+
+**Cách tách (Verified bằng đọc getter, rồi so cặp trên host):**
+- `WLANConfiguration.{i}` thành `WiFi.SSID.{i}` và `WiFi.AccessPoint.{i}`, giữ đúng 12 số của bảng cố định
+  (ra0..ra3, rai0..rai3, rai4, ra4, ra5, rai5). Nhờ vậy `Hosts.Host.Layer1Interface` = `Device.WiFi.SSID.<n>` của T2
+  trỏ đúng (mục chưa chứng minh ở §68 đã đóng).
+- `WiFi.Radio.1` (2.4 GHz) và `.2` (5 GHz):
+  - Lá theo radio (`Channel`, `AutoChannelEnable`, `ChannelsInUse`, `PossibleChannels`, `TransmitPower`,
+    `TransmitPowerSupported`, `RegulatoryDomain`, hai lá tốc độ) đọc section radio qua interface được giao. Mọi
+    interface cùng băng đọc ra cùng giá trị, nên gộp N:1 là đúng.
+  - Instance Radio được giao interface đầu của băng (ra0, rai0).
+  - Bảng ánh xạ dùng `{radio:i2}`, tra từ `SSID.{i}.LowerLayers` lúc so cặp.
+- **Lá theo interface, không theo radio:**
+  - `RadioEnabled` của sản phẩm là cờ `wireless.<iface>.disabled`, cùng cờ với `Enable`. Vì vậy nó là
+    `AccessPoint.{i}.Enable`, không phải `Radio.Enable`. `Radio.Enable` mới đọc `wireless.<radio>.disabled`.
+  - `X_AIS_WlanStandard` chỉ có giá trị ở ra0/rai0, nên ở lại `SSID.{i}`, loại C.
+- **Bảo mật:** `AccessPoint.{i}.Security.ModeEnabled` là một enumeration TR-181 dựng từ `wireless.<iface>.encryption`:
+  - `none` → None
+  - `wep+shared+64` → WEP-64, `wep+shared+128` → WEP-128
+  - `psk` → WPA-Personal, `psk2*` → WPA2-Personal, `psk-mixed*` → WPA-WPA2-Personal
+  - `sae` → WPA3-Personal, `sae-mixed` → WPA3-Personal-Transition
+  - Ghi theo đúng đường của `BeaconType`: option, bản sao của mapd (`mapd_security`), `wifi reload`.
+  - `KeyPassphrase` và `PreSharedKey` giữ setter TR-098. `WEPKey` ghi vào slot của key index.
+  - Sáu lá mode của TR-098, `WEPEncryptionLevel`, `WEPKeyIndex` và `PreSharedKey.{i}.KeyPassphrase` là D, vì đã gộp
+    vào `ModeEnabled`/`KeyPassphrase`/`WEPKey`.
+- **Loại B (6), giá trị viết theo TR-181:**
+  - `SSID.Status`: Disabled → Down.
+  - `Radio.OperatingStandards`: danh sách chữ, chính là giá trị `X_AIS_WlanStandard` của băng; ghi cũng chọn htmode
+    như cũ.
+  - `Radio.SupportedStandards`.
+  - `Security.ModeEnabled`, `Security.WEPKey`.
+  - `SSIDNumberOfEntries`: TR-181 đếm 12 instance; TR-098 đếm interface AP đang bật.
+- **Không có tương ứng (D, 17):** ngoài nhóm bảo mật ở trên còn:
+  - `MaxBitRate` (sản phẩm trả "Auto"), `BeaconAdvertisementEnabled`;
+  - `MruEnable`: tên của sản phẩm không có tiền tố vendor, object chuẩn TR-181 không mang được; cần thống nhất tên
+    với nhà mạng ở T7;
+  - của `AssociatedDevice`: `AssociatedDeviceIPAddress`, `RSSI`, `Stats.ErrorsReceived`/`TxDropCount`/`RxDropCount`.
+- **Operator (C, 8):** `Device.WiFi.X_AIS_Mesh.*` (cùng bảng, kể cả forced inform), `Device.WiFi.X-AIS_2-4GHzTransmitPower`,
+  `X-AIS_5GHzTransmitPower`, `SSID.{i}.X_AIS_APModuleEnable`/`X_AIS_WlanStandard`.
+- **`NeighboringWiFiDiagnostic`:** TR-098 để cả `WiFi.` ẩn. TR-181 để `Device.WiFi` hiện (vì có Radio/SSID/
+  AccessPoint) và chỉ ẩn object con này (`addressed_only`).
+- **Instance:** browse TR-181 dùng cấp 1 (SSID/AccessPoint/Radio) và cấp 2 (`AssociatedDevice`). `browseAssocInst`
+  của TR-098 nay gọi `assoc_browse(level)` chung.
+
+**Công cụ:**
+- `tr181_mapping.tsv` có quy tắc T3. `tr181-map.py` hiểu `{radio:iN}`.
+- `tr181-schema.py` bỏ qua tên `X-` như `X_`; tên `X-AIS_` có dấu `-` trước đây bị cắt thành `Device.WiFi.X`.
+- `shelltypes_mtk.h` sinh lại theo mapping mới: 297 dòng, 104 tên TR-181.
+
+**Kiểm (host):**
+- `tr181-map.py check`: TR-181 mong đợi 441 = cây C 441, thiếu 0. Nguồn theo loại: A 324, B 13, C 88, D 54; chờ:
+  T4 185, T5 136.
+- `run.sh tr181` trên fixture `wireless` (2 radio, 12 interface, mỗi kiểu encryption một interface):
+  - duyệt 1129 tên;
+  - so cặp **884 bằng** + 2 bằng theo tham chiếu, B 111, D 185, 0 tên TR-181 thiếu cặp.
+- **Kiểm riêng T3:**
+  - các lá đếm 2/12/12;
+  - Radio 1: kênh 6, công suất 60, chuẩn `b,g,n,ax,be`; Radio 2: auto, 5GHz, `TH `;
+  - SSID 2 Down; SSID 9 = `rai4` trên Radio 2;
+  - `ModeEnabled` của 7 interface đúng bảng.
+- **Ghi qua tên TR-181, đọc lại UCI:**
+  - `ModeEnabled` WPA3-Personal → `sae`;
+  - `Radio.1.Channel` 11; `OperatingStandards` `b,g,n,ax` → `HE40`;
+  - `SSID.1.SSID`; `AccessPoint.3.Enable` false → `ra2.disabled` 1.
+- **Từ chối 9007:** `ModeEnabled` sai, `Radio.2.Channel` 7, `Radio.1.TransmitPower` abc.
+- **Cổng tĩnh:** check-c-sanity lib 69/0; verify-dm-paths tr098 thiếu 0; claims 142, 0 cặp chồng; automake 0;
+  cross-gcc SDK lib 69 file 0 lỗi, không cảnh báo ở file đã sửa.
+- Chưa build SDK, chưa chạy board.
+
+**Chưa chứng minh được:**
+- `ChannelsInUse`, `PossibleChannels` và `AssociatedDevice` đọc `ubus hni` (getCurrentChannel, getChannelList,
+  getWlanDeviceList). Host không có `hni`, nên chỉ thấy giá trị rỗng/0 và không có station. Cần board (T6).
+- `Radio.Enable` đọc `wireless.<radio>.disabled`. Sản phẩm có dùng option này để tắt radio không thì chưa kiểm trên
+  board.

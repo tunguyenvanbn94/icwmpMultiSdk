@@ -9,8 +9,9 @@ rules in tr181_mapping.tsv:
 
 A rule maps a TR-098 path (instances spelled {i}) to a TR-181 one.  On the
 TR-181 side {iN} is the Nth instance of the TR-098 path, {i} the next one, and
-{lan} the Device.IP.Interface instance whose Name is "lan" (read from the
-TR-181 dump; "{i}" for check):
+{lan} the Device.IP.Interface instance whose Name is "lan", {radio:iN} the
+Device.WiFi.Radio of the SSID numbered like the Nth instance (both read from
+the TR-181 dump; "{i}" for check):
   prefix  the longest matching prefix wins, the rest of the path is kept
   leaf    exactly that TR-098 parameter (wins over every prefix)
   new     a TR-181 name with no TR-098 source
@@ -38,6 +39,7 @@ DYNAMIC = [r"\.Stats\.", r"\.(Bytes|Packets)(Sent|Received)$", r"\.UpTime$", r"\
 
 def pat(p):
     p = p.replace("{lan}", "{i}")
+    p = re.sub(r"\{radio:(\d+|\{i\})\}", "{i}", p)
     p = re.sub(r"\$\d", "{i}", p)
     p = re.sub(r"\.\d+\.", ".{i}.", p)
     p = re.sub(r"\.\d+\.", ".{i}.", p)
@@ -89,7 +91,8 @@ def target(rule, m, path):
     if not rule or rule[3] not in ("A", "B", "C") or rule[2] in ("?", "-"):
         return None
     caps = list(m.groups())
-    out = re.sub(r"\{i(\d)\}", lambda x: caps[int(x.group(1)) - 1], rule[2])
+    out = re.sub(r"\{radio:i(\d)\}", lambda x: "{radio:%s}" % caps[int(x.group(1)) - 1], rule[2])
+    out = re.sub(r"\{i(\d)\}", lambda x: caps[int(x.group(1)) - 1], out)
     it = iter(caps)
     out = re.sub(r"\{i\}", lambda x: next(it), out)
     return out + (path[m.end():] if rule[0] == "prefix" else "")
@@ -141,6 +144,13 @@ def named(d181):
     return out
 
 
+def radio_of(d181, ssid):
+    """Device.WiFi.Radio instance of Device.WiFi.SSID.<ssid> (its LowerLayers)"""
+    v = d181.get("Device.WiFi.SSID.%s.LowerLayers" % ssid, {}).get("value", "")
+    m = re.search(r"Radio\.(\d+)$", v)
+    return m.group(1) if m else "{radio:%s}" % ssid
+
+
 def dump(path):
     return {p["parameter"]: p for p in json.load(open(path, encoding="utf-8", errors="replace")).get("parameters", [])}
 
@@ -182,6 +192,8 @@ def main():
             t = target(r, m, name)
             for k, v in names.items():
                 t = t.replace(k, v) if t else t
+            if t and "{radio:" in t:
+                t = re.sub(r"\{radio:(\d+)\}", lambda x: radio_of(d181, x.group(1)), t)
             kind = r[3] if r else "none"
             if not t:
                 cls[kind] = cls.get(kind, 0) + 1

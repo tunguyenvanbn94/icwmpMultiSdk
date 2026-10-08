@@ -1533,7 +1533,7 @@ PY
 # must be one of them.
 # T2 (LAN) fixtures: a LAN, a WAN, four switch ports, a DHCP pool and two
 # hosts, one on Wi-Fi and one on a LAN port.  Saved and put back like p8's.
-TR181_CONFIGS="network dhcp lanhost"
+TR181_CONFIGS="network dhcp lanhost wireless"
 tr181_fixtures() {
 	for c in $TR181_CONFIGS; do
 		if [ -f "/etc/config/$c" ]; then cp "/etc/config/$c" "$RUN/$c.t181saved"; else rm -f "${RUN:?}/${c:?}.t181saved"; fi
@@ -1604,6 +1604,17 @@ config host
 	option layer2interface 'LAN3'
 EOF2
 	echo "$(( $(date +%s) + 3600 )) aa:bb:cc:11:22:33 192.168.1.101 phone-a *" > /tmp/dhcp.leases
+	# T3 (Wi-Fi): the two radios and the twelve interfaces of the fixed map,
+	# one encryption of each kind on the fronthaul ones
+	{ printf "config wifi-device 'MT7993_1_1'\n\toption channel '6'\n\toption htmode 'EHT40'\n\toption txpower '60'\n\toption country 'TH'\n\toption map_mode '0'\n\n"
+	  printf "config wifi-device 'MT7993_1_2'\n\toption channel '0'\n\toption htmode 'EHT160'\n\toption txpower '100'\n\toption country 'TH'\n\toption map_mode '0'\n\n"
+	  for e in "ra0 psk2+ccmp 0" "ra1 none 1" "ra2 sae-mixed 0" "ra3 wep+shared+64 0" "ra4 psk2+ccmp 0" "ra5 psk2+ccmp 0" \
+		   "rai0 sae 0" "rai1 psk 0" "rai2 psk-mixed+ccmp 0" "rai3 none 0" "rai4 psk2+ccmp 0" "rai5 psk2+ccmp 0"; do
+		set -- $e
+		case $1 in rai*) d=MT7993_1_2 ;; *) d=MT7993_1_1 ;; esac
+		printf "config wifi-iface '%s'\n\toption device '%s'\n\toption mode 'ap'\n\toption ssid 'ssid-%s'\n\toption encryption '%s'\n\toption key 'pass-%s'\n\toption disabled '%s'\n\toption hidden '0'\n\n" "$1" "$d" "$1" "$2" "$1" "$3"
+	  done
+	  printf "config wifi-iface 'apmld1'\n\toption disabled '0'\n\nconfig wifi-iface 'apmld2'\n\toption disabled '0'\n\n"; } > /etc/config/wireless
 }
 
 tr181_fixtures_restore() {
@@ -1677,6 +1688,29 @@ print(sum(1 for p in json.load(open(sys.argv[1]))["parameters"] if re.match(r"De
 	expect "set Ethernet 2 MaxBitRate abc" "$(dm_set_fault $E.2.MaxBitRate abc "$key")" "9007"
 	expect "set Ethernet 1 MaxBitRate 10 (2.5G PHY)" "$(dm_set_fault $E.1.MaxBitRate 10 "$key")" "9007"
 	expect "  SwitchPara[0] unchanged" "$(uci -q get network.@SwitchPara[0].maxBitRate)" "auto"
+	# T3 Wi-Fi: Radio from the radio sections, SSID/AccessPoint numbered like
+	# WLANConfiguration, Security.ModeEnabled from wireless.<iface>.encryption
+	R=Device.WiFi.Radio S=Device.WiFi.SSID A=Device.WiFi.AccessPoint
+	expect "WiFi counts" "$(dm_value Device.WiFi.RadioNumberOfEntries) $(dm_value Device.WiFi.SSIDNumberOfEntries) $(dm_value Device.WiFi.AccessPointNumberOfEntries)" "2 12 12"
+	expect "Radio 1 Channel/Power/Standards" "$(dm_value $R.1.Channel) $(dm_value $R.1.TransmitPower) $(dm_value $R.1.OperatingStandards)" "6 60 b,g,n,ax,be"
+	expect "Radio 2 auto channel, band" "$(dm_value $R.2.AutoChannelEnable) $(dm_value $R.2.OperatingFrequencyBand) $(dm_value $R.2.RegulatoryDomain)" "true 5GHz TH "
+	expect "SSID 2 Status (disabled)" "$(dm_value $S.2.Status)" "Down"
+	expect "SSID 9 Name, LowerLayers" "$(dm_value $S.9.Name) $(dm_value $S.9.LowerLayers)" "rai4 Device.WiFi.Radio.2"
+	expect "AccessPoint 5 SSIDReference" "$(dm_value $A.5.SSIDReference)" "Device.WiFi.SSID.5"
+	expect "ModeEnabled 1 2 3 4 5 6 7" "$(for i in 1 2 3 4 5 6 7; do printf '%s ' "$(dm_value $A.$i.Security.ModeEnabled)"; done)" "WPA2-Personal None WPA3-Personal-Transition WEP-64 WPA3-Personal WPA-Personal WPA-WPA2-Personal "
+	expect "set ModeEnabled WPA3-Personal on 2" "$(dm_set_fault $A.2.Security.ModeEnabled WPA3-Personal "$key")" "0"
+	expect "  wireless.ra1.encryption" "$(uci -q get wireless.ra1.encryption)" "sae"
+	expect "set ModeEnabled bogus" "$(dm_set_fault $A.2.Security.ModeEnabled WPA9-Personal "$key")" "9007"
+	expect "set Radio 1 Channel 11" "$(dm_set_fault $R.1.Channel 11 "$key")" "0"
+	expect "  wireless.MT7993_1_1.channel" "$(uci -q get wireless.MT7993_1_1.channel)" "11"
+	expect "set Radio 2 Channel 7 (not 5 GHz)" "$(dm_set_fault $R.2.Channel 7 "$key")" "9007"
+	expect "set Radio 1 OperatingStandards b,g,n,ax" "$(dm_set_fault $R.1.OperatingStandards b,g,n,ax "$key")" "0"
+	expect "  wireless.MT7993_1_1.htmode" "$(uci -q get wireless.MT7993_1_1.htmode)" "HE40"
+	expect "set SSID 1 SSID" "$(dm_set_fault $S.1.SSID home-new "$key")" "0"
+	expect "  wireless.ra0.ssid" "$(uci -q get wireless.ra0.ssid)" "home-new"
+	expect "set AccessPoint 3 Enable false" "$(dm_set_fault $A.3.Enable false "$key")" "0"
+	expect "  wireless.ra2.disabled" "$(uci -q get wireless.ra2.disabled)" "1"
+	expect "set Radio 1 TransmitPower abc (xsd:unsignedInt)" "$(dm_set_fault $R.1.TransmitPower abc "$key")" "9007"
 	# the shell's type check holds for the TR-181 names too (shelltypes_mtk.h
 	# carries both): setters that leave it to that check must not take these
 	old=$(dm_value Device.X_AIS_Conf.auto_upload_delay)
@@ -1702,7 +1736,7 @@ print(sum(1 for p in json.load(open(sys.argv[1]))["parameters"] if re.match(r"De
 	restore_cfg cwmp
 	tr181_fixtures_restore
 	if [ $bad_n = 0 ]; then
-		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, LAN (T2) values and writes, DataModel back to tr098; pairs: $(tail -2 "$RUN/tr181.equiv" | head -1)"
+		pass "tr181: latched cwmp.cpe.datamodel, Inform and walk on Device. ($(grep -c '"parameter"' "$RUN/tr181.gpn") names), IGD 9005, LAN (T2) and Wi-Fi (T3) values and writes, DataModel back to tr098; pairs: $(tail -2 "$RUN/tr181.equiv" | head -1)"
 	else
 		bad "tr181: $bad_n mismatches above"
 	fi

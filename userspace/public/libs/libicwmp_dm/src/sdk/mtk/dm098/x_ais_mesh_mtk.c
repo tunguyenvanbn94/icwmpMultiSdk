@@ -244,3 +244,30 @@ static const struct dm_module mesh_mtk_module = {
 	.paths = mesh_mtk_paths,
 };
 DM_MODULE_REGISTER(mesh_mtk_module);
+
+/* TR-181 (cwmp.cpe.datamodel=tr181): LANDevice.1.X_AIS_Mesh is
+ * Device.WiFi.X_AIS_Mesh, the same leaves (forced inform included) */
+static DMOBJ tWifi181MeshObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"X_AIS_Mesh", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tMeshParam, NULL},
+{0}
+};
+
+static DMOBJ tWifi181MeshRoot[] = {
+{"WiFi", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWifi181MeshObj, NULL, NULL},
+{0}
+};
+
+static const char *const mesh181_mtk_paths[] = {
+	"Device.WiFi.X_AIS_Mesh.",
+	NULL
+};
+
+static const struct dm_module mesh181_mtk_module = {
+	.name  = "mtk-x-ais-mesh-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tWifi181MeshRoot,
+	.paths = mesh181_mtk_paths,
+};
+DM_MODULE_REGISTER(mesh181_mtk_module);

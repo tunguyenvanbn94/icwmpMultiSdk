@@ -65,11 +65,11 @@ def main():
     if len(sys.argv) == 4 and sys.argv[2] == "--check":
         seen, bad = set(), 0
         for line in open(sys.argv[3], encoding="utf-8", errors="replace"):
-            for p in re.findall(r"\bDevice\.[A-Za-z0-9_.{}]+", line):
+            for p in re.findall(r"\bDevice\.[A-Za-z0-9_.{}-]+", line):
                 if "InternetGatewayDevice" in line[:line.find(p)][-25:]:
                     continue
                 n = norm(p)
-                if n in seen or n.split(".")[-1].startswith("X_") or ".X_" in n:
+                if n in seen or re.match(r"X[_-]", n.split(".")[-1]) or re.search(r"\.X[_-]", n):
                     continue
                 seen.add(n)
                 if n not in idx and n + "." not in idx:

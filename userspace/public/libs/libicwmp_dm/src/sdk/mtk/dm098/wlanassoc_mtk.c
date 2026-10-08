@@ -154,7 +154,10 @@ static int get_assoc_zero(char *refparam, struct dmctx *ctx, void *data, char *i
 	return 0;
 }
 
-static int browseAssocInst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+/* level: where the station number sits in the path, 3 for
+ * IGD.LANDevice.1.WLANConfiguration.{i}.AssociatedDevice.{i}, 2 for
+ * Device.WiFi.AccessPoint.{i}.AssociatedDevice.{i} */
+static int assoc_browse(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, int level)
 {
 	const struct wlan_iface *w = wlan_iface_of(prev_data);
 	json_object *infor = assoc_list(w);
@@ -185,12 +188,17 @@ static int browseAssocInst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_
 		a.rx_error   = field_or(val, "RxErrorPkt", "0");
 		a.rx_drop    = field_or(val, "RxDropPkt", "0");
 
-		idx = handle_update_instance(3, dmctx, &idx_last, update_instance_without_section,
+		idx = handle_update_instance(level, dmctx, &idx_last, update_instance_without_section,
 					     1, ++id);
 		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)&a, idx) == DM_STOP)
 			break;
 	}
 	return 0;
+}
+
+static int browseAssocInst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	return assoc_browse(dmctx, parent_node, prev_data, 3);
 }
 
 /* ------------------------------------------------------------------ */
@@ -256,3 +264,73 @@ static const struct dm_module wlanassoc_mtk_module = {
 	.objs  = tLanDeviceAssocRoot,
 };
 DM_MODULE_REGISTER(wlanassoc_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181)                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Device.WiFi.AccessPoint.{i}.AssociatedDevice.{i}: the same stations from
+ * the same ubus call.  AssociatedDeviceMACAddress is MACAddress,
+ * AssociatedDeviceAuthenticationState AuthenticationState, LastDataTransmitRate
+ * LastDataDownlinkRate.  No TR-181 counterpart: AssociatedDeviceIPAddress
+ * (Hosts.Host has it), RSSI (SignalStrength stays), Stats.ErrorsReceived,
+ * Stats.TxDropCount, Stats.RxDropCount.
+ */
+
+static int browseAssoc181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	return assoc_browse(dmctx, parent_node, prev_data, 2);
+}
+
+static DMLEAF tAssoc181StatsParam[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"BytesSent", &DMREAD, DMT_UNINT, get_assoc_tx_bytes, NULL, NULL, NULL},
+{"BytesReceived", &DMREAD, DMT_UNINT, get_assoc_rx_bytes, NULL, NULL, NULL},
+{"PacketsSent", &DMREAD, DMT_UNINT, get_assoc_tx_packets, NULL, NULL, NULL},
+{"PacketsReceived", &DMREAD, DMT_UNINT, get_assoc_rx_packets, NULL, NULL, NULL},
+{"ErrorsSent", &DMREAD, DMT_UNINT, get_assoc_tx_fail, NULL, NULL, NULL},
+{"RetransCount", &DMREAD, DMT_UNINT, get_assoc_zero, NULL, NULL, NULL},
+{"RetryCount", &DMREAD, DMT_UNINT, get_assoc_zero, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tAssoc181Obj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tAssoc181StatsParam, NULL},
+{0}
+};
+
+static DMLEAF tAssoc181Param[] = {
+{"MACAddress", &DMREAD, DMT_STRING, get_assoc_mac, NULL, NULL, NULL},
+{"AuthenticationState", &DMREAD, DMT_BOOL, get_assoc_true, NULL, NULL, NULL},
+{"LastDataDownlinkRate", &DMREAD, DMT_STRING, get_assoc_rate, NULL, NULL, NULL},
+{"SignalStrength", &DMREAD, DMT_INT, get_assoc_rssi, NULL, NULL, NULL},
+{"Active", &DMREAD, DMT_BOOL, get_assoc_true, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tAp181AssocObj[] = {
+{"AssociatedDevice", &DMREAD, NULL, NULL, NULL, browseAssoc181Inst, NULL, NULL, tAssoc181Obj, tAssoc181Param, NULL},
+{0}
+};
+
+/* browseinstobj left NULL: wlan_mtk.c makes the AccessPoint instances */
+static DMOBJ tWifi181AssocObj[] = {
+{"AccessPoint", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tAp181AssocObj, NULL, NULL},
+{0}
+};
+
+static DMOBJ tWifi181AssocRoot[] = {
+{"WiFi", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWifi181AssocObj, NULL, NULL},
+{0}
+};
+
+/* No .paths: wlan_mtk.c claims Device.WiFi.AccessPoint. */
+static const struct dm_module wlanassoc181_mtk_module = {
+	.name  = "mtk-wlan-assoc-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tWifi181AssocRoot,
+};
+DM_MODULE_REGISTER(wlanassoc181_mtk_module);

@@ -31,7 +31,74 @@ leaf	InternetGatewayDevice.X_HNI_Icwmp.DataModel	Device.X_HNI_Icwmp.DataModel	B	
 prefix	InternetGatewayDevice.X_HNI_Icwmp.	Device.X_HNI_Icwmp.	A	icwmpd's own settings, root181_mtk.c
 leaf	InternetGatewayDevice.DeviceSummary	-	D	TR-181 reports Device.RootDataModelVersion
 new	-	Device.RootDataModelVersion	A	TR-181 only, root181_mtk.c
-prefix	InternetGatewayDevice.LANDevice.{i}.	?	T3	LANDevice rows not mapped below are Wi-Fi (WLANConfiguration, X_AIS_Mesh, X-AIS_ TransmitPower, LANWLANConfigurationNumberOfEntries)
+prefix	InternetGatewayDevice.LANDevice.{i}.	?	T3	LANDevice rows no rule below maps (none expected after T3)
+prefix	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.	Device.WiFi.SSID.	A	wlan_mtk.c: the same twelve numbers (fixed map ra0..rai5); per-interface leaves stay on SSID.{i}, the rest below
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.Status	Device.WiFi.SSID.{i2}.Status	B	TR-181 enumeration: Disabled -> Down
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TotalBytesSent	Device.WiFi.SSID.{i2}.Stats.BytesSent	A	TR-181 leaf name (the product counts br-lan for every SSID)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TotalBytesReceived	Device.WiFi.SSID.{i2}.Stats.BytesReceived	A	TR-181 leaf name
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TotalPacketsSent	Device.WiFi.SSID.{i2}.Stats.PacketsSent	A	TR-181 leaf name
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TotalPacketsReceived	Device.WiFi.SSID.{i2}.Stats.PacketsReceived	A	TR-181 leaf name
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.X_AIS_APModuleEnable	Device.WiFi.SSID.{i2}.X_AIS_APModuleEnable	C	operator leaf, per interface
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.X_AIS_WlanStandard	Device.WiFi.SSID.{i2}.X_AIS_WlanStandard	C	operator leaf, per interface (empty but on ra0/rai0)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.Channel	Device.WiFi.Radio.{radio:i2}.Channel	A	radio-wide: every interface of the band reads the radio section ({radio:i2} = SSID.{i2}.LowerLayers)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AutoChannelEnable	Device.WiFi.Radio.{radio:i2}.AutoChannelEnable	A	radio-wide: every interface of the band reads the radio section ({radio:i2} = SSID.{i2}.LowerLayers)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.ChannelsInUse	Device.WiFi.Radio.{radio:i2}.ChannelsInUse	A	radio-wide: every interface of the band reads the radio section ({radio:i2} = SSID.{i2}.LowerLayers)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.PossibleChannels	Device.WiFi.Radio.{radio:i2}.PossibleChannels	A	radio-wide: every interface of the band reads the radio section ({radio:i2} = SSID.{i2}.LowerLayers)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TransmitPower	Device.WiFi.Radio.{radio:i2}.TransmitPower	A	radio-wide: every interface of the band reads the radio section ({radio:i2} = SSID.{i2}.LowerLayers)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TransmitPowerSupported	Device.WiFi.Radio.{radio:i2}.TransmitPowerSupported	A	radio-wide: every interface of the band reads the radio section ({radio:i2} = SSID.{i2}.LowerLayers)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.RegulatoryDomain	Device.WiFi.Radio.{radio:i2}.RegulatoryDomain	A	radio-wide: every interface of the band reads the radio section ({radio:i2} = SSID.{i2}.LowerLayers)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BasicDataTransmitRates	Device.WiFi.Radio.{radio:i2}.BasicDataTransmitRates	A	radio-wide: every interface of the band reads the radio section ({radio:i2} = SSID.{i2}.LowerLayers)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.OperationalDataTransmitRates	Device.WiFi.Radio.{radio:i2}.OperationalDataTransmitRates	A	radio-wide: every interface of the band reads the radio section ({radio:i2} = SSID.{i2}.LowerLayers)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.Standard	Device.WiFi.Radio.{radio:i2}.OperatingStandards	B	TR-181 letter list (what X_AIS_WlanStandard reads for the band), TR-098 the coarse letter
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.SupportedStandards	Device.WiFi.Radio.{radio:i2}.SupportedStandards	B	TR-181 letter list of the band
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.MaxBitRate	-	D	"Auto" placeholder; TR-181 Radio.MaxBitRate is a number in Mbps
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.RadioEnabled	Device.WiFi.AccessPoint.{i2}.Enable	A	the interface's own disabled flag on this product (not the radio)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.SSIDAdvertisementEnabled	Device.WiFi.AccessPoint.{i2}.SSIDAdvertisementEnabled	A	AccessPoint leaf in TR-181
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WMMEnable	Device.WiFi.AccessPoint.{i2}.WMMEnable	A	AccessPoint leaf in TR-181
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.UAPSDEnable	Device.WiFi.AccessPoint.{i2}.UAPSDEnable	A	AccessPoint leaf in TR-181
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.MACAddressControlEnabled	Device.WiFi.AccessPoint.{i2}.MACAddressControlEnabled	A	AccessPoint leaf in TR-181
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TotalAssociations	Device.WiFi.AccessPoint.{i2}.AssociatedDeviceNumberOfEntries	A	TR-181 leaf name
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BeaconAdvertisementEnabled	-	D	no TR-181 counterpart
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.MruEnable	-	D	product name without a vendor prefix: a standard TR-181 object cannot carry it (name to agree with the operator, T7)
+prefix	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.	Device.WiFi.AccessPoint.{i2}.WPS.	A	AccessPoint.{i}.WPS in TR-181
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.DevicePassword	Device.WiFi.AccessPoint.{i2}.WPS.PIN	A	TR-181 leaf name
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BeaconType	Device.WiFi.AccessPoint.{i2}.Security.ModeEnabled	B	TR-181 enumeration (None, WEP-64, WPA2-Personal, WPA3-Personal ...) of the same wireless encryption option
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.KeyPassphrase	Device.WiFi.AccessPoint.{i2}.Security.KeyPassphrase	A	wlansec_mtk.c, same setter (MLO pair sync)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.PreSharedKey.{i}.PreSharedKey	Device.WiFi.AccessPoint.{i2}.Security.PreSharedKey	A	same setter (8..63, key1 digest)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.PreSharedKey.{i}.KeyPassphrase	-	D	TR-181 has one KeyPassphrase (WLANConfiguration.KeyPassphrase above)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WEPKey.{i}.WEPKey	Device.WiFi.AccessPoint.{i2}.Security.WEPKey	B	TR-181 has one WEP key: the slot of the key index
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WEPKeyIndex	-	D	folded into Security.WEPKey
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WEPEncryptionLevel	-	D	folded into Security.ModeEnabled (WEP-64/WEP-128)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BasicAuthenticationMode	-	D	folded into Security.ModeEnabled
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BasicEncryptionModes	-	D	folded into Security.ModeEnabled
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPAAuthenticationMode	-	D	folded into Security.ModeEnabled
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPAEncryptionModes	-	D	folded into Security.ModeEnabled
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.IEEE11iAuthenticationMode	-	D	folded into Security.ModeEnabled
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.IEEE11iEncryptionModes	-	D	folded into Security.ModeEnabled
+prefix	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AssociatedDevice.	Device.WiFi.AccessPoint.{i2}.AssociatedDevice.	A	wlanassoc_mtk.c, the same stations of the same ubus call
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AssociatedDevice.{i}.AssociatedDeviceMACAddress	Device.WiFi.AccessPoint.{i2}.AssociatedDevice.{i3}.MACAddress	A	TR-181 leaf name
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AssociatedDevice.{i}.AssociatedDeviceAuthenticationState	Device.WiFi.AccessPoint.{i2}.AssociatedDevice.{i3}.AuthenticationState	A	TR-181 leaf name
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AssociatedDevice.{i}.LastDataTransmitRate	Device.WiFi.AccessPoint.{i2}.AssociatedDevice.{i3}.LastDataDownlinkRate	A	TR-181 leaf name
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AssociatedDevice.{i}.AssociatedDeviceIPAddress	-	D	TR-181 keeps the address on Hosts.Host
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AssociatedDevice.{i}.RSSI	-	D	TR-181 has SignalStrength (same value)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AssociatedDevice.{i}.Stats.ErrorsReceived	-	D	not in TR-181 AssociatedDevice.Stats
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AssociatedDevice.{i}.Stats.TxDropCount	-	D	not in TR-181 AssociatedDevice.Stats
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AssociatedDevice.{i}.Stats.RxDropCount	-	D	not in TR-181 AssociatedDevice.Stats
+leaf	InternetGatewayDevice.LANDevice.{i}.LANWLANConfigurationNumberOfEntries	Device.WiFi.SSIDNumberOfEntries	B	TR-181 counts the instances (12), TR-098 the enabled AP interfaces
+prefix	InternetGatewayDevice.LANDevice.{i}.X_AIS_Mesh.	Device.WiFi.X_AIS_Mesh.	C	x_ais_mesh_mtk.c, same table
+prefix	InternetGatewayDevice.LANDevice.{i}.X-AIS_	Device.WiFi.X-AIS_	C	lan_mtk.c, the operator's band power steps
+prefix	InternetGatewayDevice.WiFi.	Device.WiFi.	A	NeighboringWiFiDiagnostic, hidden as in TR-098 (root_hidden_mtk.c)
+new	-	Device.WiFi.RadioNumberOfEntries	A	wlan_mtk.c, 2
+new	-	Device.WiFi.AccessPointNumberOfEntries	A	wlan_mtk.c, 12
+new	-	Device.WiFi.Radio.{i}.Enable	A	wlan_mtk.c, wireless.<radio>.disabled
+new	-	Device.WiFi.Radio.{i}.Status	A	wlan_mtk.c
+new	-	Device.WiFi.Radio.{i}.Name	A	wlan_mtk.c, the radio section
+new	-	Device.WiFi.Radio.{i}.OperatingFrequencyBand	A	wlan_mtk.c
+new	-	Device.WiFi.SSID.{i}.Name	A	wlan_mtk.c, the interface
+new	-	Device.WiFi.SSID.{i}.LowerLayers	A	wlan_mtk.c, Device.WiFi.Radio.n
+new	-	Device.WiFi.SSID.{i}.MACAddress	A	wlan_mtk.c, = BSSID
+new	-	Device.WiFi.AccessPoint.{i}.SSIDReference	A	wlan_mtk.c, Device.WiFi.SSID.i
+new	-	Device.WiFi.AccessPoint.{i}.Security.ModesSupported	A	wlansec_mtk.c
 prefix	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.	Device.DHCPv4.Server.Pool.{i}.	A	lan_mtk.c, one pool like the one LANDevice; same getters/setters
 leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPServerEnable	Device.DHCPv4.Server.Pool.{i}.Enable	A	dhcp.lan.dynamicdhcp
 leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPLeaseTime	Device.DHCPv4.Server.Pool.{i}.LeaseTime	A	TR-181 leaf name
@@ -66,12 +133,7 @@ new	-	Device.DHCPv4.Server.PoolNumberOfEntries	A	lan_mtk.c
 new	-	Device.DHCPv4.Server.Pool.{i}.Interface	A	lan_mtk.c, Device.IP.Interface of network.lan
 new	-	Device.Ethernet.Interface.{i}.Upstream	A	laneth_mtk.c, false
 new	-	Device.Hosts.Host.{i}.Layer3Interface	A	lanhosts_mtk.c, Device.IP.Interface of network.lan
-prefix	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.	?	T3	WiFi.Radio/SSID/AccessPoint
-prefix	InternetGatewayDevice.LANDevice.{i}.X_AIS_Mesh.	?	T3	Device.WiFi.X_AIS_Mesh
-prefix	InternetGatewayDevice.LANDevice.{i}.X-AIS_	?	T3	WiFi.Radio.{r}.TransmitPower
-prefix	InternetGatewayDevice.LANDevice.{i}.LANWLANConfigurationNumberOfEntries	?	T3	WiFi.SSIDNumberOfEntries
 prefix	InternetGatewayDevice.Layer2Bridging.	-	D	objects only, no parameter in the product; TR-181 Bridging.Bridge built when an ACS needs it (T7)
-prefix	InternetGatewayDevice.WiFi.	?	T3	WiFi.NeighboringWiFiDiagnostic
 prefix	InternetGatewayDevice.WANDevice.	?	T4	IP.Interface WAN, PPP, DHCPv4/v6 Client, NAT, Routing, DNS, Ethernet/Optical
 prefix	InternetGatewayDevice.Layer3Forwarding.	?	T4	Routing.Router.1.IPv4Forwarding
 prefix	InternetGatewayDevice.IPPingDiagnostics.	?	T5	IP.Diagnostics.IPPing

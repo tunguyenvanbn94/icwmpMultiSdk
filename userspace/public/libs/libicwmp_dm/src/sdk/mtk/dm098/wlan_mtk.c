@@ -957,3 +957,245 @@ static const struct dm_module wlan_mtk_module = {
 	.paths = wlan_mtk_paths,
 };
 DM_MODULE_REGISTER(wlan_mtk_module);
+
+/* ------------------------------------------------------------------ */
+/* TR-181 (cwmp.cpe.datamodel=tr181)                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * WLANConfiguration.{i} splits into Device.WiFi.SSID.{i} and
+ * Device.WiFi.AccessPoint.{i}, the same twelve numbers of the fixed map
+ * above, and Device.WiFi.Radio.1 (2.4 GHz) / .2 (5 GHz).  The radio-wide
+ * leaves of WLANConfiguration already read the radio section through the
+ * interface they are given, so a Radio instance is handed the first interface
+ * of its band (ra0, rai0) and the same getters and setters serve it.
+ *
+ * Spelled the TR-181 way: SSID.Status (Disabled -> Down), Radio.
+ * OperatingStandards (the letter list X_AIS_WlanStandard reads for the
+ * band's first interface, written the same way) and SupportedStandards.
+ * RadioEnabled is the interface's own "disabled" flag on this product, so it
+ * is AccessPoint.{i}.Enable, not Radio.Enable.  No TR-181 counterpart:
+ * MaxBitRate ("Auto"), BeaconAdvertisementEnabled, and MruEnable (a product
+ * name without a vendor prefix, which a standard TR-181 object cannot carry).
+ * Security is wlansec_mtk.c, AssociatedDevice wlanassoc_mtk.c.
+ */
+
+static const struct wlan_iface *const radio181_ifaces[] = { &wlan_ifaces[0], &wlan_ifaces[4] };	/* ra0, rai0 */
+#define RADIO181_COUNT	2
+
+static int radio181_number(void *data)
+{
+	return strncmp(iface_name(data), "rai", 3) == 0 ? 2 : 1;
+}
+
+static int get_radio181_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = strcmp(mtk_uci("wireless", radio_section(data), "disabled"), "1") == 0 ? "false" : "true";
+	return 0;
+}
+
+static int get_radio181_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = strcmp(mtk_uci("wireless", radio_section(data), "disabled"), "1") == 0 ? "Down" : "Up";
+	return 0;
+}
+
+static int get_radio181_name(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = radio_section(data);
+	return 0;
+}
+
+static int get_radio181_band(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = radio181_number(data) == 2 ? "5GHz" : "2.4GHz";
+	return 0;
+}
+
+static int get_radio181_supported(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = radio181_number(data) == 2 ? "a,n,ac,ax,be" : "b,g,n,ax,be";
+	return 0;
+}
+
+static int get_ssid181_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *v = NULL;
+
+	get_wlan_status(refparam, ctx, data, instance, &v);
+	*value = (v && strcmp(v, "Disabled") == 0) ? "Down" : (v ? v : "Error");
+	return 0;
+}
+
+static int get_ssid181_name(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = iface_name(data);
+	return 0;
+}
+
+static int get_ssid181_lowerlayers(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	dmasprintf(value, "Device.WiFi.Radio.%d", radio181_number(data));
+	return 0;
+}
+
+static int get_ap181_ssidref(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	dmasprintf(value, "Device.WiFi.SSID.%d", wlan_iface_of(data)->index);
+	return 0;
+}
+
+static int get_wifi181_radio_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	dmasprintf(value, "%d", RADIO181_COUNT);
+	return 0;
+}
+
+static int get_wifi181_iface_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	dmasprintf(value, "%d", WLAN_IFACE_COUNT);
+	return 0;
+}
+
+static int browseRadio181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	char *idx, *idx_last = NULL;
+	int i;
+
+	for (i = 0; i < RADIO181_COUNT; i++) {
+		idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section, 1, i + 1);
+		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)radio181_ifaces[i], idx) == DM_STOP)
+			break;
+	}
+	return 0;
+}
+
+/* SSID.{i} and AccessPoint.{i}: the fixed map, instance level 1 */
+static int browseWlan181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	char *idx, *idx_last = NULL;
+	int i;
+
+	for (i = 0; i < WLAN_IFACE_COUNT; i++) {
+		idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section,
+					     1, wlan_ifaces[i].index);
+		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)&wlan_ifaces[i], idx) == DM_STOP)
+			break;
+	}
+	return 0;
+}
+
+static DMLEAF tRadio181Param[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMREAD, DMT_BOOL, get_radio181_enable, NULL, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_radio181_status, NULL, NULL, NULL},
+{"Name", &DMREAD, DMT_STRING, get_radio181_name, NULL, NULL, NULL},
+{"OperatingFrequencyBand", &DMREAD, DMT_STRING, get_radio181_band, NULL, NULL, NULL},
+{"SupportedStandards", &DMREAD, DMT_STRING, get_radio181_supported, NULL, NULL, NULL},
+{"OperatingStandards", &DMWRITE, DMT_STRING, get_wlan_standard, set_wlan_standard, NULL, NULL},
+{"PossibleChannels", &DMREAD, DMT_STRING, get_possible_channels, NULL, NULL, NULL},
+{"ChannelsInUse", &DMREAD, DMT_STRING, get_channels_in_use, NULL, NULL, NULL},
+{"Channel", &DMWRITE, DMT_UNINT, get_channel, set_channel, NULL, NULL},
+{"AutoChannelEnable", &DMWRITE, DMT_BOOL, get_auto_channel, set_auto_channel, NULL, NULL},
+{"TransmitPowerSupported", &DMREAD, DMT_STRING, get_power_supported, NULL, NULL, NULL},
+{"TransmitPower", &DMWRITE, DMT_UNINT, get_transmit_power, set_transmit_power, NULL, NULL},
+{"RegulatoryDomain", &DMWRITE, DMT_STRING, get_regulatory_domain, set_regulatory_domain, NULL, NULL},
+{"BasicDataTransmitRates", &DMREAD, DMT_STRING, get_transmit_rates, NULL, NULL, NULL},
+{"OperationalDataTransmitRates", &DMREAD, DMT_STRING, get_transmit_rates, NULL, NULL, NULL},
+{0}
+};
+
+static DMLEAF tSsid181StatsParam[] = {
+{"BytesSent", &DMREAD, DMT_UNINT, get_total_bytes_sent, NULL, NULL, NULL},
+{"BytesReceived", &DMREAD, DMT_UNINT, get_total_bytes_received, NULL, NULL, NULL},
+{"PacketsSent", &DMREAD, DMT_UNINT, get_total_packets_sent, NULL, NULL, NULL},
+{"PacketsReceived", &DMREAD, DMT_UNINT, get_total_packets_received, NULL, NULL, NULL},
+{"ErrorsSent", &DMREAD, DMT_UNINT, get_zero, NULL, NULL, NULL},
+{"ErrorsReceived", &DMREAD, DMT_UNINT, get_zero, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tSsid181Obj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tSsid181StatsParam, NULL},
+{0}
+};
+
+static DMLEAF tSsid181Param[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_wlan_enable, set_wlan_enable, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_ssid181_status, NULL, NULL, NULL},
+{"Name", &DMREAD, DMT_STRING, get_ssid181_name, NULL, NULL, NULL},
+{"LowerLayers", &DMREAD, DMT_STRING, get_ssid181_lowerlayers, NULL, NULL, NULL},
+{"BSSID", &DMREAD, DMT_STRING, get_bssid, NULL, NULL, NULL},
+{"MACAddress", &DMREAD, DMT_STRING, get_bssid, NULL, NULL, NULL},
+{"SSID", &DMWRITE, DMT_STRING, get_ssid, set_ssid, NULL, NULL},
+{"X_AIS_APModuleEnable", &DMWRITE, DMT_BOOL, get_apmodule_enable, set_apmodule_enable, NULL, NULL},
+{"X_AIS_WlanStandard", &DMWRITE, DMT_STRING, get_wlan_standard, set_wlan_standard, NULL, NULL},
+{0}
+};
+
+static DMLEAF tWps181Param[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_wps_enable, set_accept_and_drop, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_wps_status, NULL, NULL, NULL},
+{"ConfigMethodsSupported", &DMREAD, DMT_STRING, get_wps_methods, NULL, NULL, NULL},
+{"ConfigMethodsEnabled", &DMWRITE, DMT_STRING, get_wps_methods, set_accept_and_drop, NULL, NULL},
+{"PIN", &DMWRITE, DMT_STRING, get_wps_password, set_accept_and_drop, NULL, NULL},
+{0}
+};
+
+static DMOBJ tAp181Obj[] = {
+{"WPS", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tWps181Param, NULL},
+{0}
+};
+
+static DMLEAF tAp181Param[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_radio_enabled, set_radio_enabled, NULL, NULL},
+{"SSIDReference", &DMREAD, DMT_STRING, get_ap181_ssidref, NULL, NULL, NULL},
+{"SSIDAdvertisementEnabled", &DMWRITE, DMT_BOOL, get_ssid_advertisement, set_ssid_advertisement, NULL, NULL},
+{"WMMEnable", &DMWRITE, DMT_BOOL, get_false, set_accept_and_drop, NULL, NULL},
+{"UAPSDEnable", &DMWRITE, DMT_BOOL, get_false, set_accept_and_drop, NULL, NULL},
+{"MACAddressControlEnabled", &DMWRITE, DMT_BOOL, get_false, set_accept_and_drop, NULL, NULL},
+{"AssociatedDeviceNumberOfEntries", &DMREAD, DMT_UNINT, get_total_associations, NULL, NULL, NULL},
+{0}
+};
+
+static DMLEAF tWifi181Param[] = {
+{"RadioNumberOfEntries", &DMREAD, DMT_UNINT, get_wifi181_radio_count, NULL, NULL, NULL},
+{"SSIDNumberOfEntries", &DMREAD, DMT_UNINT, get_wifi181_iface_count, NULL, NULL, NULL},
+{"AccessPointNumberOfEntries", &DMREAD, DMT_UNINT, get_wifi181_iface_count, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tWifi181Obj[] = {
+{"Radio", &DMREAD, NULL, NULL, NULL, browseRadio181Inst, NULL, NULL, NULL, tRadio181Param, NULL},
+{"SSID", &DMREAD, NULL, NULL, NULL, browseWlan181Inst, NULL, NULL, tSsid181Obj, tSsid181Param, NULL},
+{"AccessPoint", &DMREAD, NULL, NULL, NULL, browseWlan181Inst, NULL, NULL, tAp181Obj, tAp181Param, NULL},
+{0}
+};
+
+static DMOBJ tWifi181Root[] = {
+{"WiFi", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWifi181Obj, tWifi181Param, NULL},
+{0}
+};
+
+/* the three instance branches and the counts; X_AIS_Mesh, the X-AIS_ power
+ * leaves and NeighboringWiFiDiagnostic are claimed by their own modules, and
+ * wlansec/wlanassoc join AccessPoint unclaimed, as for TR-098 */
+static const char *const wlan181_mtk_paths[] = {
+	"Device.WiFi.Radio.",
+	"Device.WiFi.SSID.",
+	"Device.WiFi.AccessPoint.",
+	"Device.WiFi.RadioNumberOfEntries",
+	"Device.WiFi.SSIDNumberOfEntries",
+	"Device.WiFi.AccessPointNumberOfEntries",
+	NULL
+};
+
+static const struct dm_module wlan181_mtk_module = {
+	.name  = "mtk-wlan-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tWifi181Root,
+	.paths = wlan181_mtk_paths,
+};
+DM_MODULE_REGISTER(wlan181_mtk_module);

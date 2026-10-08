@@ -226,8 +226,9 @@ DM_MODULE_REGISTER(root_hidden_mtk_module);
  * type A of docs/plan/tr181_mtk_design.md.  USBHosts. and User. sit one
  * level lower there (USB.USBHosts., Users.User.).  Not here:
  * DeviceSummary (TR-181 reports RootDataModelVersion, root181_mtk.c),
- * Layer2Bridging (Bridging, phase T2), WiFi.NeighboringWiFiDiagnostic
- * (with the WiFi tree, phase T3: a hidden WiFi. here would hide it). */
+ * Layer2Bridging (objects only, no TR-181 counterpart built).
+ * WiFi.NeighboringWiFiDiagnostic is hidden one level down: Device.WiFi.
+ * itself carries the Radio/SSID/AccessPoint tree (wlan_mtk.c). */
 /* TR-181 CaptivePortal.URL is TR-098's CaptivePortalURL */
 static DMLEAF tCaptivePortal181Params[] = {
 {"AllowedList", &DMWRITE, DMT_STRING, get_rh_empty, set_rh_captive_fake, NULL, NULL},
@@ -247,6 +248,12 @@ static DMOBJ tUsers181Obj[] = {
 {0}
 };
 
+static DMOBJ tWiFi181ChildObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker, container_leaf, addressed_only */
+{"NeighboringWiFiDiagnostic", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tNeighborWiFiParams, NULL, NULL, 1},
+{0}
+};
+
 static DMOBJ tRootHidden181Obj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker, container_leaf, addressed_only */
 {"SelfTestDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tSelfTestParams, NULL, NULL, 1},
@@ -257,6 +264,7 @@ static DMOBJ tRootHidden181Obj[] = {
 {"CaptivePortal", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tCaptivePortal181Params, NULL, NULL, 1},
 {"FAP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tFAPObj, NULL, NULL, NULL, 1},
 {"Users", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tUsers181Obj, NULL, NULL, NULL, 1},
+{"WiFi", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWiFi181ChildObj, NULL, NULL, NULL, 0},
 {0}
 };
 
@@ -269,6 +277,7 @@ static const char *const root_hidden181_mtk_paths[] = {
 	"Device.CaptivePortal.",
 	"Device.FAP.",
 	"Device.Users.",
+	"Device.WiFi.NeighboringWiFiDiagnostic.",
 	NULL
 };
 

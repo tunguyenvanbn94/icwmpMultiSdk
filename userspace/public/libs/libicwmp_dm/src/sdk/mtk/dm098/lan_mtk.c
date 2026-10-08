@@ -830,8 +830,16 @@ static DMOBJ tDhcp4181Obj[] = {
 {0}
 };
 
+/* the operator's band power steps, LANDevice.1.X-AIS_* in TR-098 */
+static DMLEAF tLanWifi181Param[] = {
+{"X-AIS_2-4GHzTransmitPower", &DMWRITE, DMT_UNINT, get_txpower_2g, set_txpower_2g, NULL, NULL},
+{"X-AIS_5GHzTransmitPower", &DMWRITE, DMT_UNINT, get_txpower_5g, set_txpower_5g, NULL, NULL},
+{0}
+};
+
 static DMOBJ tLan181Root[] = {
 {"DHCPv4", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDhcp4181Obj, NULL, NULL},
+{"WiFi", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tLanWifi181Param, NULL},
 {"IP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLanIp181Obj, NULL, NULL},
 {0}
 };
@@ -840,6 +848,8 @@ static DMOBJ tLan181Root[] = {
  * unclaimed, the way managementserver_core_mtk.c extends ManagementServer */
 static const char *const lan181_mtk_paths[] = {
 	"Device.DHCPv4.",
+	"Device.WiFi.X-AIS_2-4GHzTransmitPower",
+	"Device.WiFi.X-AIS_5GHzTransmitPower",
 	NULL
 };
 
