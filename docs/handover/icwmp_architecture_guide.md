@@ -87,9 +87,9 @@ Ba câu cần nhớ:
 | Một CWMP core bằng C cho mọi SDK | Cùng `apps/icwmp/icwmp` build cho MTK, BDK, OpenWrt chuẩn | Đạt về source. MTK build và chạy board; BDK build image đạt 06/10 tại 0088, chưa chạy board |
 | Giữ nguyên cây tham số ACS đã provision | 783 param / 184 object của sản phẩm (ma trận `docs/issue/tr098_coverage_matrix.tsv`) | 783/783 bằng C (0099), AddObject/DeleteObject WAN bằng C (0100); từ PH5 (0103) build sản phẩm không còn compat shell (`verify-dm-paths.py`: thiếu 0) |
 | Chuyển dần shell sang C, không phải chuyển một lần | Path nào có module C thì C trả lời, còn lại thì shell trả lời | Đạt và xong: router native/compat của MTK đưa từng object sang C, tới 0100 không còn path nào cho shell; PH5 tắt compat |
-| Test được không cần board | `tests/host/run.sh all`: agent thật + ACS giả trên Linux host | Đạt: PASS 06/10 trong container `ubuntu:24.04` trên máy build |
+| Test được không cần board | `tests/host/run.sh all`: agent thật + ACS giả trên Linux host | Đạt: 24/24 PASS 08/10 trong container `ubuntu:24.04` trên máy build, cả từ bundle giao |
 | Thêm SDK mới không đụng code chung | Thêm `sdk/<tên>/` ở lib và app, chạy `tools/sdk-scan.sh` | Đạt về cấu trúc: `--sdk-only` xoá SDK khác mà vẫn build (0083) |
-| Sau này hỗ trợ TR-181 | Model là chiều riêng, không gắn vào SDK | Mới có prototype trên BDK, kiến trúc đích ở PH1/PH6 |
+| Sau này hỗ trợ TR-181 | Model là chiều riêng, không gắn vào SDK | BDK có prototype. MTK: branch `dev_181` chọn model lúc chạy bằng `cwmp.cpe.datamodel`, bảng TR-181 dùng chung getter TR-098 ([tr181_mtk_design.md](../plan/tr181_mtk_design.md)); resolver chung ở PH1 |
 
 ### 1.3 Vì sao chọn icwmp (iopsys) làm core
 
@@ -107,7 +107,7 @@ Ba câu cần nhớ:
 | Chiều | Câu hỏi nó trả lời | Ví dụ | Chọn lúc nào |
 |---|---|---|---|
 | **SDK** | Giá trị nằm ở đâu, ghi bằng cách nào | `mtk` (UCI + ubus + shell của product), `bdk` (Distributed MDM qua `libbcm_generic_hal`), `uci` (OpenWrt chuẩn) | Build: `--with-sdk` |
-| **Data model** | Cây trông thế nào trước ACS | TR-098 (`InternetGatewayDevice.`), TR-181 (`Device.`) | Hiện: theo SDK. Đích (PH1): resolver trung tâm |
+| **Data model** | Cây trông thế nào trước ACS | TR-098 (`InternetGatewayDevice.`), TR-181 (`Device.`) | Hiện: BDK theo SDK; MTK (`dev_181`) theo `cwmp.cpe.datamodel`, chốt lúc khởi động và reload. Đích (PH1): resolver trung tâm |
 | **Product/operator** | Phần riêng của sản phẩm/nhà mạng | `X_AIS_*` của AIS, prefix `X_HNI_`, mặc định, tính năng bật/tắt | Hiện: lẫn trong `sdk/mtk`. Đích (PH4): lớp product riêng |
 
 **Không trộn các chiều.** SDK không được quyết định model ACS thấy. Product policy không được nằm trong
@@ -471,7 +471,7 @@ Việc nên làm (đã đưa vào [progress](icwmp_progress_matrix.md), PH2):
 | Điểm | Ở đâu | Kế hoạch |
 |---|---|---|
 | File chung nhắc tên SDK | [tr098/managementserver.c:238](../../userspace/public/libs/libicwmp_dm/src/tr098/managementserver.c#L238) `#ifdef DM_PLATFORM_BDK` | PH3 (service ManagementServer) |
-| Model do SDK quyết | `dm_platform_select_root()`: BDK đổi root sang `Device.` | PH1 resolver trung tâm |
+| Model do SDK quyết | `dm_platform_select_root()`: BDK đổi root sang `Device.`; MTK (`dev_181`) đổi theo `dm_entry_model()` đọc từ `cwmp.cpe.datamodel` | PH1 resolver trung tâm |
 | Compat provider + prefetch nằm trong `dmplatform_mtk.c` (K7) | `sdk/mtk/dmplatform_mtk.c` | Từ PH5 compat không build; K7 đóng khi xoá hẳn `sdk/mtk/compat/` (sau một bản giao không cần rollback) |
 | Policy operator trong backend MTK | `x_ais_mesh_mtk.c`, prefix `X_HNI_` | PH4 lớp product |
 | ~~`.icwmp-release.json` ghi commit của baseline cũ~~ | — | **Đã sửa ở 0085** (K19): apply ghi `git HEAD` khi chạy từ repo, ghi commit của export khi chạy từ bundle |

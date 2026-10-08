@@ -4371,6 +4371,8 @@ Thiết kế: [../plan/tr181_mtk_design.md](../plan/tr181_mtk_design.md).
   - So cặp: **306 bằng**, 4 động, 2 loại B có mặt (`LocalTimeZone`, `DataModel`), 0 tên TR-181 thiếu cặp.
   - Hai lệch ban đầu (`ParameterKey`, `DataModel`) do chính lệnh đổi model của test. Một lệch `UsedSpace` do đĩa host
     thay đổi giữa hai lần dump; đã xếp vào lớp động.
+- **Cổng của commit T1 (`d01373d`):** `run.sh all` 25/25 PASS (24 nhóm của bản giao + `tr181`), TR-098 không đổi
+  (`verify-dm-paths.py --model tr098` thiếu 0). Chỉ chạy host; chưa build SDK, chưa chạy board.
 
 **Để cải tiến ở T7 (giữ tương đương TR-098 lúc này):** vài tham chiếu của sản phẩm là tên thiết bị Linux chứ không
 phải path TR-181: `IP.Diagnostics.TraceRoute.Interface`, `IP.Interface.{i}.LowerLayers`.

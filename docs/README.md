@@ -13,12 +13,14 @@ SDK đích. Lệnh sử dụng và build ở [README repo](../README.md).
    issue, việc để đóng PH0, lộ trình PH1–PH8.
 
 Từ 2026-10-06, mọi tài liệu về kế hoạch, tiến độ và trạng thái được cập nhật **trong `docs/` của repo này**:
-bằng chứng ở [issue/analysis.md](issue/analysis.md) (đã đồng bộ tới §52), trạng thái ở
+bằng chứng ở [issue/analysis.md](issue/analysis.md) (mục mới nhất ở cuối, hiện §67), trạng thái ở
 [issue/implementation-status.json](issue/implementation-status.json), gate board ở
 [plan/ph0_gate_runbook.md](plan/ph0_gate_runbook.md).
 
 ## Kế hoạch hiện hành
 
+- [TR-181 trên MTK](plan/tr181_mtk_design.md) (branch `dev_181`): thiết kế, ánh xạ TR-098 → TR-181, phase T0–T7,
+  công cụ `tr181-map.py`/`tr181-schema.py`
 - [Đồng bộ main/dev và thiết kế v2](plan/sync-main-dev.md): kết luận, khoảng hở so với code, known
   issue K1–K9, lộ trình PH0–PH8, quy ước branch, commit, cổng PR và nguồn sự thật
 - Kiến trúc đích v2 (rà soát 2026-09-30 trên `main`/0066, đọc kèm §2 của file trên):
@@ -47,8 +49,8 @@ không phản ánh repo này; link tới `../../src/2025q3/...` trong `analysis.
 Build và kiểm chứng bản giao MTK từng bước (máy nào, lệnh gì, kết quả gì):
 [handover/icwmp_mtk_build_verify_guide.md](handover/icwmp_mtk_build_verify_guide.md).
 Trạng thái hiện hành luôn xem ở [handover/icwmp_progress_matrix.md](handover/icwmp_progress_matrix.md) và JSON:
-mốc code mới nhất `0104`, 783/783 parameter TR-098 bằng C (P1–P8, toàn cây) và từ 0100 cả AddObject/DeleteObject
-(K8), test host `run.sh all` đạt tại 0101, board image `0fa9d31` khớp shell sản phẩm (`tests/board`, §63); PH0 đóng băng 08/10 ở tag `baseline/ph0-mtk-tr098-20261008` (§64); PH5 đạt board 08/10: build không còn compat shell, parity compat-off PASS trên image `9f393e4` (mốc code `0104`, §65); chi tiết: xem progress matrix (board đạt G1–G7 phía router trên image 0083; BDK build đạt tại 0088).
+bản giao `release/mtk-20261008` (`dev` = `main` = `dc3d7f7`, mốc code `0104` + `0105` công cụ test, §66); TR-181 trên branch `dev_181` tới `tr181-0002` (T0 nền + T1 object hệ thống, 318 tên, test host, §67); 783/783 parameter TR-098 bằng C (P1–P8, toàn cây) và từ 0100 cả AddObject/DeleteObject
+(K8), test host `run.sh all` 24/24 tại 0104 (25/25 trên `dev_181`), board image `0fa9d31` khớp shell sản phẩm (`tests/board`, §63); PH0 đóng băng 08/10 ở tag `baseline/ph0-mtk-tr098-20261008` (§64); PH5 đạt board 08/10: build không còn compat shell, parity compat-off PASS trên image `9f393e4` (mốc code `0104`, §65); chi tiết: xem progress matrix (board đạt G1–G7 phía router trên image 0083; BDK build đạt tại 0088).
 
 Các script kiểm tĩnh trong `issue/` (`check-c-sanity.py`, `verify-dm-paths.py`,
 `check-automake-conds.py`, `check-pkg-deps.py`) giờ kiểm cây `userspace/` của chính repo này.

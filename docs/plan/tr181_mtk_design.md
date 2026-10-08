@@ -74,7 +74,7 @@ getter); **C** = extension `X_AIS_*`/sản phẩm; **D** = không áp dụng cho
 | `Time.` | `Time.` | A/B | `LocalTimeZone` TR-181 = chuỗi POSIX (TR-098 `LocalTimeZoneName`); `LocalTimeZone` kiểu offset của TR-098 không có |
 | `UserInterface.` (+`CarrierLocking`, `X_AIS_WebUserInfo`) | `UserInterface.` | A/C | |
 | `User.` | `Users.User.{i}` | B | |
-| `Account.`, `Account.Web.` (sản phẩm, không prefix) | chốt khi làm: `Device.X_AIS_Account.` hoặc giữ tên | C | |
+| `Account.`, `Account.Web.` (sản phẩm, không prefix) | `Device.Account.` (giữ tên, T1) | C | ACS đang biết tên này |
 | `XMPP.Connection.{i}.Server.{i}` | `XMPP.Connection.{i}.Server.{i}` | A | |
 | `BulkData.Profile` | `BulkData.Profile` | A | |
 | `FaultMgmt.CurrentAlarm` | `FaultMgmt.CurrentAlarm` | A | |
@@ -183,6 +183,7 @@ T5 136.
 
 ## Chưa chứng minh được
 
-- Giá trị `RootDataModelVersion` công bố (phụ thuộc phiên bản TR-181 mà các bảng theo; chốt khi T1 xong).
+- Giá trị `RootDataModelVersion`: đang đặt `2.19` (`MTK_TR181_ROOT_VERSION`). Chưa đối chiếu từng lá với đúng phiên bản
+  TR-181 đó; chốt cùng T6 khi có ACS thật ở chế độ `tr181`.
 - ACS lab (GenieACS) làm việc với thiết bị ở chế độ `tr181`: chưa thử.
 - Danh sách tham số TR-181 ACS thật sự dùng trên BDK: chưa trích (T7).

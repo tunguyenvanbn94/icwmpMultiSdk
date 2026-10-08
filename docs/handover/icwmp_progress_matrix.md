@@ -5,7 +5,7 @@ Tài liệu tiến độ để chuyển giao. Kiến trúc và cách chia code �
 
 | | |
 |---|---|
-| Cập nhật | 2026-10-06 08:00, repo `dev` sau `[icwmp 0083]`, local, chưa push; board chạy image 0083 |
+| Cập nhật | 2026-10-08 16:08. `dev` = `main` = `dc3d7f7` (tag `release/mtk-20261008`, đã push). TR-181 trên branch `dev_181` tới `[icwmp tr181-0002]` (local, chưa push). Board chạy image `9f393e4` (0104) |
 | Nguồn trạng thái có cấu trúc | [../issue/implementation-status.json](../issue/implementation-status.json), xem nhanh: `python3 docs/issue/progress.py` |
 | Bằng chứng chi tiết | [../issue/analysis.md](../issue/analysis.md) (§ theo thời gian, mới nhất ở cuối) |
 | Quy ước | Trạng thái không cao hơn bằng chứng thấp nhất trên HEAD. "Đạt" ở đây luôn ghi rõ mức: STATIC, SDK build, BOARD, HOST |
@@ -57,7 +57,7 @@ flowchart LR
 | K13, K14 (kiểm input ManagementServer) | Xong (0081, 0082) | **Board** (image 0083, 06/10, analysis §53) |
 | `apply --sdk-only` | Xong (0083) | MTK SDK build trên cây chỉ còn MTK |
 | BDK | Prototype; **build image đạt 06/10 tại 0088** (bundle một SDK, analysis §56) | SDK build BDK; board BDK chưa (PH7) |
-| Test host | Chạy được trên máy build: container `ubuntu:24.04` (§55) | **`run.sh all` PASS 06/10** trên repo (code 0086) và từ chính bundle MTK `e273359` |
+| Test host | Chạy được trên máy build: container `ubuntu:24.04` (§55) | **`run.sh all` 24/24 PASS 08/10** tại 0104 và từ chính bundle `release/mtk-20261008` (§66); trên `dev_181` 25/25 (thêm `tr181`, §67) |
 | **PH0 (đóng băng baseline)** | **Xong 08/10** (PH0.5, tag `baseline/ph0-mtk-tr098-20261008`) | Board image `0fa9d31` (0101), parity PASS. Mang sang sau: G9 24 h (không chặn, quyết định 08/10), WebUI (G6), K15 hoãn (§64) |
 | **PH6 TR-181 MTK** (branch `dev_181`) | **Đang làm**: T0 nền + T1 object hệ thống xong trên host | 318 tên TR-181, `tr181-map.py check` thiếu 0, `run.sh tr181` so cặp 306 bằng (§67); kế hoạch T2–T7: [../plan/tr181_mtk_design.md](../plan/tr181_mtk_design.md) |
 | **Bản giao MTK** | **`release/mtk-20261008`** (08/10): full C, không còn shell data model | bundle `--sdk mtk` kiểm sha256, apply = code image `9f393e4` (board PASS), `run.sh all` từ bundle 24/24 PASS; làm lại từng bước: [icwmp_mtk_build_verify_guide.md](icwmp_mtk_build_verify_guide.md) (§66) |
@@ -192,7 +192,7 @@ Chi tiết: [../plan/sync-main-dev.md §5](../plan/sync-main-dev.md#5-lộ-trìn
 | PH3 | Service contract: ManagementServer (bỏ `#ifdef DM_PLATFORM_BDK` trong `tr098/managementserver.c`), rồi DeviceInfo/Time | Một service, backend MTK + adapter BDK |
 | PH4 | P6 Firewall/UI (97), P7 operator `X_AIS_*` (79) vào lớp product, P8 còn lại (144) + lifecycle Add/Delete | Cần thư viện hàm easycwmp của sản phẩm làm tham chiếu |
 | PH5 | Full C TR-098, build `--disable-dm-script-compat` | Không còn `icwmp_dm.sh` |
-| PH6 | TR-181 trên MTK theo mapping manifest | — |
+| PH6 | TR-181 trên MTK theo mapping manifest (branch `dev_181`, [kế hoạch T0–T7](../plan/tr181_mtk_design.md)) | Mọi tham số TR-098 có tên TR-181 (A/B/C) hoặc ghi rõ không có (D); `tr181-map.py check` thiếu 0; so cặp trên board 0 lệch không giải thích được; một phiên ACS thật ở chế độ `tr181` |
 | PH7 | BDK lên cùng contract (TR-181 proxy, TR-098 facade) | Build + board BDK |
 | PH8 | Ma trận build, CI, release, `.icwmp-release.json` ghi đúng commit đã cài, đổi tên ABI nếu đáng | — |
 
