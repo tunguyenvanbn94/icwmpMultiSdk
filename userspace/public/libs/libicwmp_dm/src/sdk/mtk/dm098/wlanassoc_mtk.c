@@ -144,7 +144,7 @@ ASSOC_GET(get_assoc_rx_drop, rx_drop)
  * definition associated and authenticated */
 static int get_assoc_true(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = "1";
+	*value = "true";
 	return 0;
 }
 

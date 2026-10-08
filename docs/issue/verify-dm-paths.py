@@ -107,8 +107,45 @@ def literal(tok, defines):
     return val
 
 
+# Macro mà build thật định nghĩa (feeds/libtr098/Makefile chỉ có --with-sdk=<sdk>,
+# compat mặc định bật).  Hàng bảng nằm trong #ifdef của macro không có ở đây
+# (XMPP_ENABLE, UPNP_TR064, ...) không được build: trước đây script vẫn đếm,
+# nên ManagementServer.ConnReqXMPPConnection bị coi là có trong cây C.
+BUILD_MACROS = {
+    "mtk": {"DM_SDK_MTK", "DM_PLATFORM_MTK", "DM_MTK_SCRIPT_COMPAT"},
+    "bdk": {"DM_SDK_BDK", "DM_PLATFORM_BDK"},
+}
+ACTIVE_MACROS = BUILD_MACROS["mtk"]
+
+
+def strip_inactive(src, macros):
+    """Bỏ các dòng thuộc nhánh #ifdef/#ifndef không được build.  Chỉ hiểu
+    #ifdef X, #ifndef X, #else, #endif; một #if khác được coi là đúng."""
+    out, stack = [], []          # stack: (nhánh này có build không, cha có build không)
+    for line in src.split("\n"):
+        s = line.strip()
+        m = re.match(r"#\s*(ifdef|ifndef|if|else|endif)\b\s*(\w*)", s)
+        live = all(a for a, _ in stack)
+        if m:
+            kw, name = m.group(1), m.group(2)
+            if kw in ("ifdef", "ifndef"):
+                on = (name in macros) == (kw == "ifdef")
+                stack.append((on, live))
+            elif kw == "if":
+                stack.append((True, live))
+            elif kw == "else" and stack:
+                on, parent = stack.pop()
+                stack.append((not on, parent))
+            elif kw == "endif" and stack:
+                stack.pop()
+            out.append("")
+            continue
+        out.append(line if live else "")
+    return "\n".join(out)
+
+
 def parse_file(path, defines):
-    src = open(path, encoding="utf-8", errors="replace").read()
+    src = strip_inactive(open(path, encoding="utf-8", errors="replace").read(), ACTIVE_MACROS)
     tables, roots, shared, params = {}, [], set(), []
     for is_static, kind, name, body in TABLE_RE.findall(src):
         rows = []
@@ -277,6 +314,8 @@ def main():
     ap.add_argument("--dump", action="store_true", help="in mọi path cây C dựng được")
     ap.add_argument("--claims", action="store_true", help="chỉ kiểm .paths có chồng nhau không")
     args = ap.parse_args()
+    global ACTIVE_MACROS
+    ACTIVE_MACROS = BUILD_MACROS.get(args.sdk, set())
 
     if args.claims:
         return 1 if check_claims(args.src, args.sdk) else 0

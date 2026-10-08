@@ -226,7 +226,7 @@ static void wlan_sync_option(void *data, char *option, char *value, const char *
 
 static int get_wlan_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = strcmp(wlan_opt(data, "disabled"), "1") == 0 ? "0" : "1";
+	*value = strcmp(wlan_opt(data, "disabled"), "1") == 0 ? "false" : "true";
 	return 0;
 }
 
@@ -261,7 +261,7 @@ static int set_wlan_enable(char *refparam, struct dmctx *ctx, void *data, char *
 
 static int get_radio_enabled(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = strcmp(wlan_opt(data, "disabled"), "0") == 0 ? "1" : "0";
+	*value = strcmp(wlan_opt(data, "disabled"), "0") == 0 ? "true" : "false";
 	return 0;
 }
 
@@ -323,7 +323,7 @@ static int set_ssid(char *refparam, struct dmctx *ctx, void *data, char *instanc
 
 static int get_ssid_advertisement(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = strcmp(wlan_opt(data, "hidden"), "1") == 0 ? "0" : "1";
+	*value = strcmp(wlan_opt(data, "hidden"), "1") == 0 ? "false" : "true";
 	return 0;
 }
 
@@ -458,7 +458,7 @@ static int set_channel(char *refparam, struct dmctx *ctx, void *data, char *inst
 
 static int get_auto_channel(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = strcmp(mtk_uci("wireless", radio_section(data), "channel"), "0") == 0 ? "1" : "0";
+	*value = strcmp(mtk_uci("wireless", radio_section(data), "channel"), "0") == 0 ? "true" : "false";
 	return 0;
 }
 
@@ -727,7 +727,7 @@ static int set_mru_enable(char *refparam, struct dmctx *ctx, void *data, char *i
 
 static int get_apmodule_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = strcmp(wlan_opt(data, "disabled"), "1") == 0 ? "0" : "1";
+	*value = strcmp(wlan_opt(data, "disabled"), "1") == 0 ? "false" : "true";
 	return 0;
 }
 
@@ -812,7 +812,7 @@ static int get_zero(char *refparam, struct dmctx *ctx, void *data, char *instanc
 
 static int get_false(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = "0";
+	*value = "false";
 	return 0;
 }
 
@@ -829,7 +829,7 @@ static int set_accept_and_drop(char *refparam, struct dmctx *ctx, void *data, ch
 
 static int get_wps_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = "0";
+	*value = "false";
 	return 0;
 }
 

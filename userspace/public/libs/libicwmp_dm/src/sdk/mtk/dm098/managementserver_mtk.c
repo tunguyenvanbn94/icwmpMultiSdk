@@ -327,6 +327,19 @@ static int set_upgradesmanaged(char *refparam, struct dmctx *ctx, void *data, ch
 	return 0;
 }
 
+/*
+ * ConnReqXMPPConnection: the product lists it read only with the getter
+ * "echo \"\"" -- run through $(...), not eval, so the ACS has been reading
+ * the two quote characters.  The portable leaf in tr098/managementserver.c is
+ * built only with XMPP_ENABLE, which this product does not set.  The value is
+ * the empty string the shell meant: there is no XMPP connection.
+ */
+static int get_conn_req_xmpp(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "";
+	return 0;
+}
+
 static DMLEAF tManagementServerMtkParam[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"EnableCWMP", &DMWRITE, DMT_BOOL, get_enablecwmp, set_enablecwmp, NULL, NULL},
@@ -350,6 +363,7 @@ static DMLEAF tManagementServerMtkParam[] = {
 {"STUNMaximumKeepAlivePeriod", &DMWRITE, DMT_INT, get_stun_max_ka, set_stun_max_ka, NULL, NULL},
 {"STUNMinimumKeepAlivePeriod", &DMWRITE, DMT_UNINT, get_stun_min_ka, set_stun_min_ka, NULL, NULL},
 {"NATDetected", &DMREAD, DMT_BOOL, get_nat_detected, NULL, NULL, NULL},
+{"ConnReqXMPPConnection", &DMREAD, DMT_STRING, get_conn_req_xmpp, NULL, NULL, NULL},
 {0}
 };
 

@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <dirent.h>
 
 #include "dmtr098.h"
@@ -211,6 +212,7 @@ static int set_txpower_5g(char *refparam, struct dmctx *ctx, void *data, char *i
 static int get_lanhost_mac(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
 	char *mac = mtk_file_line("/sys/class/net/br-lan/address");
+	char *u;
 
 	if (!mac || !*mac) {
 		/* what get_LanHostConfig_MacAddress() did */
@@ -231,13 +233,17 @@ static int get_lanhost_mac(char *refparam, struct dmctx *ctx, void *data, char *
 			mac = dmstrdup(buf);
 		}
 	}
+	/* ifconfig prints HWaddr in capitals and that is what the ACS has been
+	 * reading; sysfs has them in lower case */
+	for (u = mac; u && *u; u++)
+		*u = toupper((unsigned char)*u);
 	*value = (mac && *mac) ? mac : "";
 	return 0;
 }
 
 static int get_dhcp_configurable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = lan_locked() ? "0" : "1";
+	*value = lan_locked() ? "false" : "true";
 	return 0;
 }
 
@@ -284,7 +290,7 @@ static int set_dhcp_configurable(char *refparam, struct dmctx *ctx, void *data, 
 
 static int get_dhcp_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = strcmp(mtk_uci("dhcp", "lan", "dynamicdhcp"), "0") == 0 ? "0" : "1";
+	*value = strcmp(mtk_uci("dhcp", "lan", "dynamicdhcp"), "0") == 0 ? "false" : "true";
 	return 0;
 }
 
@@ -305,7 +311,7 @@ static int set_dhcp_enable(char *refparam, struct dmctx *ctx, void *data, char *
 
 static int get_dhcp_relay(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = "0";
+	*value = "false";
 	return 0;
 }
 
@@ -586,7 +592,7 @@ static int get_zero(char *refparam, struct dmctx *ctx, void *data, char *instanc
 
 static int get_ipif_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = "0";
+	*value = "false";
 	return 0;
 }
 

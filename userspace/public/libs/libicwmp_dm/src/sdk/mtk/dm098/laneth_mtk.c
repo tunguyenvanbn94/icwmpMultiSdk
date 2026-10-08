@@ -68,9 +68,11 @@ static char *eth_switchpara(int inst, char *option)
 /* ------------------------------------------------------------------ */
 
 /*
- * The dump is a flat file of "[ Port N ]" sections, each a list of
- * "<name> = <value>" rows (decimal, sometimes 0x hex).  Sum the rows whose
- * name appears in keys[], inside this port's section only.
+ * The dump is a flat file of "[ Port N ]" sections; a row carries two
+ * counters, "<name> = <value>, <name> = <value>" (0x hex).  Sum every counter
+ * whose name is in keys[], inside this port's section only -- per key, like
+ * LANEthernet_Stats_sum_keys(): "Rx Unicase Pkts" and "Rx Multicast Pkts"
+ * share a row, and stopping at the first match on a row lost the second.
  */
 static unsigned long long gsw_sum(int inst, const char *const keys[])
 {
@@ -105,11 +107,10 @@ static unsigned long long gsw_sum(int inst, const char *const keys[])
 
 			if (!p)
 				continue;
-			eq = strchr(p, '=');
+			eq = strchr(p + strlen(keys[i]), '=');
 			if (!eq)
 				continue;
 			total += strtoull(eq + 1, NULL, 0);
-			break;
 		}
 	}
 	fclose(f);
@@ -151,7 +152,7 @@ static int get_eth_name(char *refparam, struct dmctx *ctx, void *data, char *ins
 
 static int get_eth_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = strcmp(eth_switchpara(eth_inst(data), "enable"), "Yes") == 0 ? "1" : "0";
+	*value = strcmp(eth_switchpara(eth_inst(data), "enable"), "Yes") == 0 ? "true" : "false";
 	return 0;
 }
 
@@ -253,7 +254,7 @@ static int get_eth_mac(char *refparam, struct dmctx *ctx, void *data, char *inst
 
 static int get_eth_mac_control(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = "1";
+	*value = "true";
 	return 0;
 }
 

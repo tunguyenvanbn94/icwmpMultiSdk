@@ -182,7 +182,7 @@ static int dst_date(int field, char **value)
 
 static int get_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	*value = mtk_bool(mtk_uci("system", "ntp", "enabled")) ? "1" : "0";
+	*value = strcmp(mtk_uci("system", "ntp", "enabled"), "1") == 0 ? "true" : "false";
 	return 0;
 }
 
@@ -369,10 +369,10 @@ static int get_dst_used(char *refparam, struct dmctx *ctx, void *data, char *ins
 	char *tz = mtk_uci("system", "@system[0]", "timezone");
 
 	if (!tz || !strchr(tz, ',')) {
-		*value = "0";
+		*value = "false";
 		return 0;
 	}
-	*value = mtk_bool(mtk_uci("system", "@system[0]", "timezone_dst")) ? "1" : "0";
+	*value = strcmp(mtk_uci("system", "@system[0]", "timezone_dst"), "1") == 0 ? "true" : "false";
 	return 0;
 }
 

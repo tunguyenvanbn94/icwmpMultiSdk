@@ -51,7 +51,7 @@ static int get_host_active(char *refparam, struct dmctx *ctx, void *data, char *
 {
 	/* the shell answered a constant "true" here, the tracker only keeps
 	 * sections for hosts it still sees */
-	*value = "1";
+	*value = "true";
 	return 0;
 }
 
