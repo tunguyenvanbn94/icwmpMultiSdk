@@ -1727,7 +1727,13 @@ EOF2
 a="$*"
 case "$a" in
 *"call network.interface.if0 status"*)
-	echo '{"up":true,"uptime":120,"l3_device":"pon.10","ipv4-address":[{"address":"100.64.1.10","mask":24}],"route":[{"target":"0.0.0.0","mask":0,"nexthop":"100.64.1.1"}],"dns-server":["8.8.4.4","9.9.9.9"]}'
+	# T7 S4c: an address and a delegated /56 (odhcp6c), no lifetime on the
+	# prefix's valid side is infinite
+	echo '{"up":true,"uptime":120,"proto":"dhcp","l3_device":"pon.10","ipv4-address":[{"address":"100.64.1.10","mask":24}],"ipv6-address":[{"address":"fe80::10","mask":64},{"address":"2001:db8:ff::10","mask":128,"preferred":3600,"valid":7200}],"ipv6-prefix":[{"address":"2001:db8:10::","mask":56,"preferred":0,"class":"if0"}],"route":[{"target":"0.0.0.0","mask":0,"nexthop":"100.64.1.1"}],"dns-server":["8.8.4.4","9.9.9.9"]}'
+	exit 0 ;;
+*"call network.interface.lan status"*)
+	# T7 S4c: the /64 odhcpd gives out on the LAN and the CPE's address in it
+	echo '{"up":true,"uptime":300,"proto":"static","l3_device":"br-lan","ipv4-address":[{"address":"192.168.1.1","mask":24}],"ipv6-address":[{"address":"fe80::1","mask":64}],"ipv6-prefix-assignment":[{"address":"2001:db8:10:1::","mask":64,"preferred":3000,"valid":7000,"local-address":{"address":"2001:db8:10:1::1","mask":64}}]}'
 	exit 0 ;;
 *"call network.interface.if1 status"*)
 	echo '{"up":true,"uptime":60,"l3_device":"pppoe-if1","ipv4-address":[{"address":"10.20.30.40","mask":32,"ptpaddress":"10.20.30.1"}],"route":[{"target":"0.0.0.0","mask":0,"nexthop":"10.20.30.1"}],"dns-server":["1.0.0.1"]}'
@@ -2021,6 +2027,17 @@ PY
 	expect "S4b counts, SupportedNCPs" "$(dm_value Device.PPP.InterfaceNumberOfEntries) $(dm_value Device.PPP.SupportedNCPs) $(dm_value Device.DeviceInfo.TemperatureStatus.TemperatureSensorNumberOfEntries) $(dm_value Device.Services.StorageServiceNumberOfEntries | grep -c '^[1-9]')" \
 		"1 IPCP,IPv6CP 1 1"
 	expect "S4b: IPv4Address count = rows (LAN, IPoE, PPP, bridge)" "$(dm_value $I.$lan.IPv4AddressNumberOfEntries) $(dm_value $I.$w0.IPv4AddressNumberOfEntries) $(dm_value $I.$w1.IPv4AddressNumberOfEntries) $(dm_value $I.$w2.IPv4AddressNumberOfEntries)" "1 1 1 0"
+	# T7 S4c: IPv6Address / IPv6Prefix rows of netifd's status, counted by
+	# the same arrays; the LAN's /64 is a child of the WAN's delegated /56
+	A6=$I.$w0.IPv6Address.1 P6=$I.$w0.IPv6Prefix.1 LA6=$I.$lan.IPv6Address.1 LP6=$I.$lan.IPv6Prefix.1
+	expect "S4c counts (IPoE, LAN)" "$(dm_value $I.$w0.IPv6AddressNumberOfEntries) $(dm_value $I.$w0.IPv6PrefixNumberOfEntries) $(dm_value $I.$lan.IPv6AddressNumberOfEntries) $(dm_value $I.$lan.IPv6PrefixNumberOfEntries)" "1 1 1 1"
+	expect "S4c WAN address" "$(dm_value $A6.IPAddress) $(dm_value $A6.Origin) $(dm_value $A6.IPAddressStatus) $(dm_value $A6.Prefix) $(dm_value $A6.Status)" "2001:db8:ff::10 DHCPv6 Preferred  Enabled"
+	expect "S4c delegated prefix" "$(dm_value $P6.Prefix) $(dm_value $P6.Origin) $(dm_value $P6.StaticType) $(dm_value $P6.PrefixStatus) $(dm_value $P6.ValidLifetime) $(dm_value $P6.OnLink)" \
+		"2001:db8:10::/56 PrefixDelegation Inapplicable Deprecated 9999-12-31T23:59:59Z false"
+	expect "S4c LAN address and prefix" "$(dm_value $LA6.IPAddress) $(dm_value $LA6.Origin) $(dm_value $LA6.Prefix) $(dm_value $LP6.Prefix) $(dm_value $LP6.Origin) $(dm_value $LP6.ParentPrefix) $(dm_value $LP6.OnLink) $(dm_value $LP6.Autonomous)" \
+		"2001:db8:10:1::1 AutoConfigured $LP6 2001:db8:10:1::/64 Child $P6 true true"
+	expect "S4c lifetimes are dateTime" "$(dm_value $LA6.PreferredLifetime | grep -c '^20[0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]Z$')" "1"
+	expect "S4c set-same: IPAddress, Anycast, Prefix" "$(dm_set_fault $A6.IPAddress 2001:db8:ff::10 "$key") $(dm_set_fault $A6.IPAddress 2001:db8:ff::11 "$key") $(dm_set_fault $A6.Anycast true "$key") $(dm_set_fault $LP6.Prefix 2001:db8:10:2::/64 "$key")" "0 9007 9007 9007"
 	expect "S4b: no UserAccount/PhysicalMedium/Folder counts, PhysicalReference empty" "$(dm_value Device.Services.StorageService.1.UserAccountNumberOfEntries) $(dm_value Device.Services.StorageService.1.PhysicalMediumNumberOfEntries) $(dm_value Device.Services.StorageService.1.LogicalVolume.1.FolderNumberOfEntries) [$(dm_value Device.Services.StorageService.1.LogicalVolume.1.PhysicalReference)]" \
 		"<none> <none> <none> []"
 	# T7: Time.Client.1 for the NTPServer1..5 TR-181 2.19 deleted; Status from

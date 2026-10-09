@@ -423,3 +423,26 @@ new	-	Device.PPP.InterfaceNumberOfEntries	A	T7 S4b: count of a standard table, d
 new	-	Device.PPP.SupportedNCPs	A	T7 S4b: count of a standard table, device_ppp_mtk.c: IPCP,IPv6CP (hal_network.c pppoe interfaces, option ipv6)
 new	-	Device.RouterAdvertisement.InterfaceSettingNumberOfEntries	A	T7 S4b: count of a standard table, device_ra_mtk.c: the settings browse_ra links (ra_list)
 new	-	Device.Services.StorageServiceNumberOfEntries	A	T7 S4b: count of a standard table, services_mtk.c: what browse_ss links (TR-140 model parameter mounted on Device.Services.)
+new	-	Device.IP.Interface.{i}.IPv6Address.{i}.Enable	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-address / the local-address of an ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Address.{i}.Status	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-address / the local-address of an ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Address.{i}.IPAddressStatus	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-address / the local-address of an ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Address.{i}.Alias	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-address / the local-address of an ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Address.{i}.IPAddress	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-address / the local-address of an ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Address.{i}.Origin	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-address / the local-address of an ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Address.{i}.Prefix	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-address / the local-address of an ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Address.{i}.PreferredLifetime	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-address / the local-address of an ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Address.{i}.ValidLifetime	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-address / the local-address of an ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Address.{i}.Anycast	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-address / the local-address of an ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.Enable	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.Status	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.PrefixStatus	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.Alias	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.Prefix	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.Origin	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.StaticType	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.ParentPrefix	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.ChildPrefixBits	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.OnLink	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.Autonomous	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.PreferredLifetime	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
+new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.ValidLifetime	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment

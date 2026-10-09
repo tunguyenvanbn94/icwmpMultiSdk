@@ -67,6 +67,7 @@
 #include "device_ip_mtk.h"
 #include "wanconn_mtk.h"
 #include "stack181_mtk.h"
+#include "ipv6_181_mtk.h"
 
 #define IP_PKG		"network"
 #define WAN_RELOAD	"/usr/sbin/hni_wan_reload.sh"
@@ -961,6 +962,20 @@ static int get_dip181_lowerlayers(char *refparam, struct dmctx *ctx, void *data,
 
 MTK_SET_SAME(dip181_lowerlayers, get_dip181_lowerlayers)
 
+/* T7 S4c: the IPv6Address / IPv6Prefix rows of ipv6_181_mtk.c (the same
+ * netifd arrays as get_dip_v6_count / get_dip_prefix_count) */
+static int get_dip181_v6_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = dip_num(ipv6181_count(DIP_SEC(data), 0));
+	return 0;
+}
+
+static int get_dip181_prefix_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = dip_num(ipv6181_count(DIP_SEC(data), 1));
+	return 0;
+}
+
 /* T7 S4b: the IPv4Address rows lan_mtk.c (browseLanIpv4Inst) gives the
  * interface -- one on the LAN and on a routed connection, configured even
  * while down -- not the addresses netifd reports up right now */
@@ -987,8 +1002,8 @@ static DMLEAF tDip181InterfaceParams[] = {
 {"LowerLayers", &DMWRITE, DMT_STRING, get_dip181_lowerlayers, set_same_dip181_lowerlayers, NULL, NULL},
 {"MaxMTUSize", &DMWRITE, DMT_UNINT, get_dip181_mtu, set_dip181_mtu, NULL, NULL},
 {"IPv4AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip181_v4_count, NULL, NULL, NULL},
-{"IPv6AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip_v6_count, NULL, NULL, NULL},
-{"IPv6PrefixNumberOfEntries", &DMREAD, DMT_UNINT, get_dip_prefix_count, NULL, NULL, NULL},
+{"IPv6AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip181_v6_count, NULL, NULL, NULL},
+{"IPv6PrefixNumberOfEntries", &DMREAD, DMT_UNINT, get_dip181_prefix_count, NULL, NULL, NULL},
 {0}
 };
 
