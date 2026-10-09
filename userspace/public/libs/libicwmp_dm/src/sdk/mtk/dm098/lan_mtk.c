@@ -892,16 +892,15 @@ static DMOBJ tDhcp4181Obj[] = {
 {0}
 };
 
-/* the operator's band power steps, LANDevice.1.X-AIS_* in TR-098 */
-static DMLEAF tLanWifi181Param[] = {
-{"X-AIS_2-4GHzTransmitPower", &DMWRITE, DMT_UNINT, get_txpower_2g, set_txpower_2g, NULL, NULL},
-{"X-AIS_5GHzTransmitPower", &DMWRITE, DMT_UNINT, get_txpower_5g, set_txpower_5g, NULL, NULL},
-{0}
-};
+/* The operator's band power steps (LANDevice.1.X-AIS_2-4GHzTransmitPower,
+ * X-AIS_5GHzTransmitPower) are not in the TR-181 tree: "X-AIS_" is no
+ * vendor prefix (TR-106 wants X_<id>_), and the standard
+ * Device.WiFi.Radio.{i}.TransmitPower (wlan_mtk.c) reads and writes the
+ * same wireless.<radio>.txpower, as a percentage instead of the NBTC
+ * step codes. */
 
 static DMOBJ tLan181Root[] = {
 {"DHCPv4", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDhcp4181Obj, NULL, NULL},
-{"WiFi", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tLanWifi181Param, NULL},
 {"IP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLanIp181Obj, NULL, NULL},
 {0}
 };
@@ -910,8 +909,6 @@ static DMOBJ tLan181Root[] = {
  * unclaimed, the way managementserver_core_mtk.c extends ManagementServer */
 static const char *const lan181_mtk_paths[] = {
 	"Device.DHCPv4.Server.",
-	"Device.WiFi.X-AIS_2-4GHzTransmitPower",
-	"Device.WiFi.X-AIS_5GHzTransmitPower",
 	NULL
 };
 

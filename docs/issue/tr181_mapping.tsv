@@ -5,28 +5,43 @@ leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.HopHos
 leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.HopErrorCode	Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.ErrorCode	A	TR-181 leaf name
 leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.HopRTTTimes	Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.RTTimes	A	TR-181 leaf name (the product spells HopRTTTimes)
 leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.Interface	Device.IP.Diagnostics.TraceRoute.Interface	B	the product's grafted branch reads the device name; TR-181 a Device.IP.Interface reference of the device name the product stores (IFREF181, device_ip_mtk.h), a device name still taken
-leaf	InternetGatewayDevice.CaptivePortal.CaptivePortalURL	Device.CaptivePortal.URL	A	TR-181 leaf name
 prefix	InternetGatewayDevice.DeviceInfo.	Device.DeviceInfo.	A	same getters, deviceinfo_mtk.c
+leaf	InternetGatewayDevice.DeviceInfo.X_AIS.PonPassword	Device.XPON.ONU.1.ANI.1.TC.Authentication.Password	B	T7 standard: the standard leaf for the PLOAM password (same getter/setter); X_AIS. is no X_<id>_<name>
+leaf	InternetGatewayDevice.DeviceInfo.X_AIS.PonPasswordState	Device.XPON.ONU.1.ANI.1.TC.ONUActivation.ONUState	B	T7 standard: the ONU state itself (O1..O9), the product reports 0 in O5 and 2 otherwise
+prefix	InternetGatewayDevice.DeviceInfo.X_AIS_DSL.	-	D	T7 standard: constants, no DSL on the product
+leaf	InternetGatewayDevice.DeviceInfo.X_AIS_reuseCPE_cycles	-	D	T7 standard: always empty
+leaf	InternetGatewayDevice.DeviceInfo.X_AIS_reuseCPE_status	-	D	T7 standard: always empty
 leaf	InternetGatewayDevice.DeviceInfo.DeviceLog	-	D	TR-181 has DeviceInfo.VendorLogFile.{i}, not DeviceLog
 prefix	InternetGatewayDevice.ManagementServer.	Device.ManagementServer.	A	same tables, managementserver_core_mtk.c + managementserver_mtk.c
+leaf	InternetGatewayDevice.ManagementServer.SupportedConnReqMethods	Device.ManagementServer.SupportedConnReqMethods	B	T7 standard: HTTP,STUN in TR-181 (no XMPP client), HTTP,XMPP,STUN in the product's TR-098
+leaf	InternetGatewayDevice.ManagementServer.ConnReqXMPPConnection	-	D	T7 standard: no XMPP in the TR-181 tree
 prefix	InternetGatewayDevice.Time.	Device.Time.	A	time_mtk.c
+leaf	InternetGatewayDevice.Time.NTPServer1	Device.Time.Client.1.Servers	B	T7 standard: NTPServer1..5 deleted in TR-181 2.19: one comma list in Time.Client.1.Servers (position 1)
+leaf	InternetGatewayDevice.Time.NTPServer2	Device.Time.Client.1.Servers	B	T7 standard: NTPServer1..5 deleted in TR-181 2.19: one comma list in Time.Client.1.Servers (position 2)
+leaf	InternetGatewayDevice.Time.NTPServer3	Device.Time.Client.1.Servers	B	T7 standard: NTPServer1..5 deleted in TR-181 2.19: one comma list in Time.Client.1.Servers (position 3)
+leaf	InternetGatewayDevice.Time.NTPServer4	Device.Time.Client.1.Servers	B	T7 standard: NTPServer1..5 deleted in TR-181 2.19: one comma list in Time.Client.1.Servers (position 4)
+leaf	InternetGatewayDevice.Time.NTPServer5	Device.Time.Client.1.Servers	B	T7 standard: NTPServer1..5 deleted in TR-181 2.19: one comma list in Time.Client.1.Servers (position 5)
+leaf	InternetGatewayDevice.Time.Status	Device.Time.Status	B	T7 standard: TR-181 reads the sync state (/var/state/dnsmasqsec of the ntp hotplug), the product's TR-098 a constant Synchronized
 leaf	InternetGatewayDevice.Time.LocalTimeZoneName	Device.Time.LocalTimeZone	B	city name (TR-098) vs POSIX TZ of that city (TR-181), same write path; values differ by design
 leaf	InternetGatewayDevice.Time.LocalTimeZone	-	D	TR-098 UTC offset form; TR-181 LocalTimeZone is the POSIX TZ
 leaf	InternetGatewayDevice.Time.DaylightSavingsStart	-	D	TR-181 keeps the DST rules in LocalTimeZone
 leaf	InternetGatewayDevice.Time.DaylightSavingsEnd	-	D	TR-181 keeps the DST rules in LocalTimeZone
 leaf	InternetGatewayDevice.Time.DaylightSavingsUsed	-	D	TR-181 keeps the DST rules in LocalTimeZone
 prefix	InternetGatewayDevice.UserInterface.	Device.UserInterface.	A	CarrierLocking and X_AIS_WebUserInfo are product/operator objects
-prefix	InternetGatewayDevice.Account.	Device.Account.	C	product object without vendor prefix, kept as the ACS knows it
-prefix	InternetGatewayDevice.XMPP.	Device.XMPP.	A	xmpp_mtk.c
+prefix	InternetGatewayDevice.UserInterface.CarrierLocking.	Device.UserInterface.X_AIS_CarrierLocking.	C	T7 standard: CarrierLocking has no vendor prefix, X_AIS_CarrierLocking in TR-181 (same leaves)
+prefix	InternetGatewayDevice.Account.	-	D	T7 standard: Account. has no vendor prefix; its leaf is UserInterface.X_AIS_WebUserInfo.SessionMaxTime (rule below)
+leaf	InternetGatewayDevice.Account.Web.SessionMaxTime	Device.UserInterface.X_AIS_WebUserInfo.SessionMaxTime	C	account_mtk.c, the WebUI session timeout with the other WebUI settings
+prefix	InternetGatewayDevice.XMPP.	-	D	T7 standard: placeholder (no XMPP client, fixed values, writes store nothing), not in the TR-181 tree
 prefix	InternetGatewayDevice.Services.	Device.Services.	A	STBService, StorageService
-prefix	InternetGatewayDevice.SelfTestDiagnostics.	Device.SelfTestDiagnostics.	A	placeholder of the product
-prefix	InternetGatewayDevice.FaultMgmt.	Device.FaultMgmt.	A	placeholder of the product
-prefix	InternetGatewayDevice.BulkData.	Device.BulkData.	A	placeholder of the product
-prefix	InternetGatewayDevice.SoftwareModules.	Device.SoftwareModules.	A	placeholder of the product
-prefix	InternetGatewayDevice.CaptivePortal.	Device.CaptivePortal.	A	placeholder of the product
-prefix	InternetGatewayDevice.FAP.	Device.FAP.	A	placeholder of the product
-prefix	InternetGatewayDevice.USBHosts.	Device.USB.USBHosts.	A	one level lower in TR-181
-prefix	InternetGatewayDevice.User.	Device.Users.User.	A	one level lower in TR-181
+prefix	InternetGatewayDevice.Services.STBService.	-	D	T7 standard: placeholder (no set-top box, fixed values), not in the TR-181 tree
+prefix	InternetGatewayDevice.SelfTestDiagnostics.	-	D	T7 standard: placeholder of the product (constants, writes that store nothing), not in the TR-181 tree
+prefix	InternetGatewayDevice.FaultMgmt.	-	D	T7 standard: placeholder of the product (constants, writes that store nothing), not in the TR-181 tree
+prefix	InternetGatewayDevice.BulkData.	-	D	T7 standard: placeholder of the product (constants, writes that store nothing), not in the TR-181 tree
+prefix	InternetGatewayDevice.SoftwareModules.	-	D	T7 standard: placeholder of the product (constants, writes that store nothing), not in the TR-181 tree
+prefix	InternetGatewayDevice.CaptivePortal.	-	D	T7 standard: placeholder of the product (constants, writes that store nothing), not in the TR-181 tree
+prefix	InternetGatewayDevice.FAP.	-	D	T7 standard: placeholder of the product (constants, writes that store nothing), not in the TR-181 tree
+prefix	InternetGatewayDevice.USBHosts.	-	D	T7 standard: placeholder of the product (constants, writes that store nothing), not in the TR-181 tree
+prefix	InternetGatewayDevice.User.	-	D	T7 standard: placeholder of the product (constants, writes that store nothing), not in the TR-181 tree
 prefix	InternetGatewayDevice.X_AIS_	Device.X_AIS_	C	operator objects at the root, same tables
 leaf	InternetGatewayDevice.X_HNI_Icwmp.DataModel	Device.X_HNI_Icwmp.DataModel	B	the model switch itself: tr098 in one tree, tr181 in the other
 prefix	InternetGatewayDevice.X_HNI_Icwmp.	Device.X_HNI_Icwmp.	A	icwmpd's own settings, root181_mtk.c
@@ -61,8 +76,7 @@ leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.MACAddressControl
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TotalAssociations	Device.WiFi.AccessPoint.{i2}.AssociatedDeviceNumberOfEntries	A	TR-181 leaf name
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BeaconAdvertisementEnabled	-	D	no TR-181 counterpart
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.MruEnable	-	D	product name without a vendor prefix: a standard TR-181 object cannot carry it (name to agree with the operator, T7)
-prefix	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.	Device.WiFi.AccessPoint.{i2}.WPS.	A	AccessPoint.{i}.WPS in TR-181
-leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.DevicePassword	Device.WiFi.AccessPoint.{i2}.WPS.PIN	A	TR-181 leaf name
+prefix	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.	-	D	T7 standard: WPS leaves are constants (a fixed PIN) and writes are dropped: no AccessPoint.{i}.WPS in the TR-181 tree
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BeaconType	Device.WiFi.AccessPoint.{i2}.Security.ModeEnabled	B	TR-181 enumeration (None, WEP-64, WPA2-Personal, WPA3-Personal ...) of the same wireless encryption option
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.KeyPassphrase	Device.WiFi.AccessPoint.{i2}.Security.KeyPassphrase	A	wlansec_mtk.c, same setter (MLO pair sync)
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.PreSharedKey.{i}.PreSharedKey	Device.WiFi.AccessPoint.{i2}.Security.PreSharedKey	A	same setter (8..63, key1 digest)
@@ -87,8 +101,8 @@ leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AssociatedDevice.
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.AssociatedDevice.{i}.Stats.RxDropCount	-	D	not in TR-181 AssociatedDevice.Stats
 leaf	InternetGatewayDevice.LANDevice.{i}.LANWLANConfigurationNumberOfEntries	Device.WiFi.SSIDNumberOfEntries	B	TR-181 counts the instances (12), TR-098 the enabled AP interfaces
 prefix	InternetGatewayDevice.LANDevice.{i}.X_AIS_Mesh.	Device.WiFi.X_AIS_Mesh.	C	x_ais_mesh_mtk.c, same table
-prefix	InternetGatewayDevice.LANDevice.{i}.X-AIS_	Device.WiFi.X-AIS_	C	lan_mtk.c, the operator's band power steps
-prefix	InternetGatewayDevice.WiFi.	Device.WiFi.	A	NeighboringWiFiDiagnostic, hidden as in TR-098 (root_hidden_mtk.c)
+prefix	InternetGatewayDevice.LANDevice.{i}.X-AIS_	-	D	T7 standard: "X-AIS_" is no vendor prefix; Device.WiFi.Radio.{i}.TransmitPower sets the same wireless.<radio>.txpower (percent)
+prefix	InternetGatewayDevice.WiFi.	-	D	T7 standard: placeholder of the product (constants, writes that store nothing), not in the TR-181 tree
 new	-	Device.WiFi.RadioNumberOfEntries	A	wlan_mtk.c, 2
 new	-	Device.WiFi.AccessPointNumberOfEntries	A	wlan_mtk.c, 12
 new	-	Device.WiFi.Radio.{i}.Enable	A	wlan_mtk.c, wireless.<radio>.disabled
@@ -130,6 +144,11 @@ prefix	InternetGatewayDevice.LANDevice.{i}.Hosts.	Device.Hosts.	A	lanhosts_mtk.c
 leaf	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.{i}.MACAddress	Device.Hosts.Host.{i2}.PhysAddress	A	TR-181 leaf name
 leaf	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.{i}.Layer2Interface	Device.Hosts.Host.{i2}.Layer1Interface	B	TR-181 path reference (Device.Ethernet.Interface.n, Device.WiFi.SSID.n) instead of the TR-098 object path
 leaf	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.{i}.InterfaceType	-	D	dropped in TR-181 (Layer1Interface tells the medium)
+leaf	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.{i}.AddressSource	-	D	T7 standard: deleted in TR-181 2.19 (DHCPv4.Server.Pool.{i}.Client holds the DHCP view)
+leaf	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.{i}.LeaseTimeRemaining	-	D	T7 standard: deleted in TR-181 2.19 (DHCPv4.Server.Pool.{i}.Client holds the DHCP view)
+leaf	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.{i}.VendorClassID	-	D	T7 standard: deleted in TR-181 2.19 (DHCPv4.Server.Pool.{i}.Client holds the DHCP view)
+leaf	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.{i}.ClientID	-	D	T7 standard: deleted in TR-181 2.19 (DHCPv4.Server.Pool.{i}.Client holds the DHCP view)
+leaf	InternetGatewayDevice.LANDevice.{i}.Hosts.Host.{i}.UserClassID	-	D	T7 standard: deleted in TR-181 2.19 (DHCPv4.Server.Pool.{i}.Client holds the DHCP view)
 new	-	Device.DHCPv4.Server.PoolNumberOfEntries	A	lan_mtk.c
 new	-	Device.DHCPv4.Server.Pool.{i}.Interface	A	lan_mtk.c, Device.IP.Interface of network.lan
 new	-	Device.Ethernet.Interface.{i}.Upstream	A	laneth_mtk.c, false
@@ -296,14 +315,14 @@ prefix	InternetGatewayDevice.UploadDiagnostics.	Device.IP.Diagnostics.UploadDiag
 leaf	InternetGatewayDevice.UploadDiagnostics.Interface	Device.IP.Diagnostics.UploadDiagnostics.Interface	B	TR-181 a Device.IP.Interface reference of the device name the product stores (IFREF181, device_ip_mtk.h), a device name still taken
 prefix	InternetGatewayDevice.NSLookupDiagnostics.	Device.DNS.Diagnostics.NSLookupDiagnostics.	A	lookupdiag_mtk.c, same store and launcher
 leaf	InternetGatewayDevice.NSLookupDiagnostics.Interface	Device.DNS.Diagnostics.NSLookupDiagnostics.Interface	B	TR-181 a Device.IP.Interface reference of the device name the product stores (IFREF181, device_ip_mtk.h), a device name still taken
-prefix	InternetGatewayDevice.DNSDiagnostics.	Device.DNSDiagnostics.	C	product object without a vendor prefix, kept as Device.DNSDiagnostics (like Account)
+prefix	InternetGatewayDevice.DNSDiagnostics.	-	D	T7 standard: product object without a vendor prefix; Device.DNS.Diagnostics.NSLookupDiagnostics is the standard test
 prefix	InternetGatewayDevice.DNSDiagnostics.Result.	-	D	the product never reaches these leaves (verify-dm-paths "unreachable")
 prefix	InternetGatewayDevice.Firewall.	Device.Firewall.	C	firewall_mtk.c: Config/Enable and the X_AIS_ objects, same tables
 leaf	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.Ingress	Device.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.{i}.Ingress	B	a WAN connection path is a Device.IP.Interface reference (LAN, WAN_ALL, NULL kept)
 leaf	InternetGatewayDevice.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.Ingress	Device.Firewall.X_AIS_ServiceControl.IPV6ServiceControl.{i}.Ingress	B	same
 leaf	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.SourceInterface	Device.Firewall.X_AIS_IPFilter.{i}.SourceInterface	B	the LAN/WAN paths are Device.IP.Interface references
 leaf	InternetGatewayDevice.Firewall.X_AIS_IPFilter.{i}.DestInterface	Device.Firewall.X_AIS_IPFilter.{i}.DestInterface	B	same
-prefix	InternetGatewayDevice.LTE.	Device.LTE.	C	product object without a vendor prefix, kept as Device.LTE (Cellular has another shape, T7)
+prefix	InternetGatewayDevice.LTE.	-	D	T7 standard: placeholder (no LTE modem, fixed values), not in the TR-181 tree
 prefix	InternetGatewayDevice.DOCSIS.	-	D	no TR-181 counterpart, static values of the product
 new	-	Device.Ethernet.Interface.{i}.Alias	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
 new	-	Device.Ethernet.Interface.{i}.MACAddress	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
@@ -320,3 +339,25 @@ new	-	Device.Ethernet.Interface.{i}.Stats.UnicastPacketsSent	A	the WAN port (ins
 new	-	Device.Ethernet.Interface.{i}.Stats.UnicastPacketsReceived	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
 new	-	Device.Ethernet.Interface.{i}.Stats.UnknownProtoPacketsReceived	A	the WAN port (instance 5) has no TR-098 source for it; the LAN ports get it from LANEthernetInterfaceConfig
 new	-	Device.DNS.Client.Server.{i}.DNSServer	A	the second and third address of a connection (the first is the pair of the TR-098 DNSServers list)
+new	-	Device.XPON.ONUNumberOfEntries	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.Enable	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.Name	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.SoftwareImageNumberOfEntries	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.EthernetUNINumberOfEntries	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.ANINumberOfEntries	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.ANI.{i}.Enable	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.ANI.{i}.Status	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.ANI.{i}.Name	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.ANI.{i}.PONMode	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.ANI.{i}.TransceiverNumberOfEntries	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.VendorID	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.SerialNumber	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.ONUID	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.XPON.ONU.{i}.ANI.{i}.TC.Authentication.HexadecimalPassword	A	deviceinfo_mtk.c, the product's G-PON ONU (T7)
+new	-	Device.Time.ClientNumberOfEntries	A	time_mtk.c, sysntpd as Time.Client.1 (T7)
+new	-	Device.Time.Client.{i}.Enable	A	time_mtk.c, sysntpd as Time.Client.1 (T7)
+new	-	Device.Time.Client.{i}.Status	A	time_mtk.c, sysntpd as Time.Client.1 (T7)
+new	-	Device.Time.Client.{i}.Mode	A	time_mtk.c, sysntpd as Time.Client.1 (T7)
+new	-	Device.Time.Client.{i}.Port	A	time_mtk.c, sysntpd as Time.Client.1 (T7)
+new	-	Device.Time.Client.{i}.Version	A	time_mtk.c, sysntpd as Time.Client.1 (T7)
+new	-	Device.Time.Client.{i}.Interface	A	time_mtk.c, sysntpd as Time.Client.1 (T7)

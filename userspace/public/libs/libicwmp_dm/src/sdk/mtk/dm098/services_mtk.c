@@ -974,8 +974,20 @@ static const struct dm_module services_mtk_module = {
 };
 DM_MODULE_REGISTER(services_mtk_module);
 
-/* TR-181 (cwmp.cpe.datamodel=tr181): the same tables under Device., type A
- * of docs/plan/tr181_mtk_design.md */
+/* TR-181 (cwmp.cpe.datamodel=tr181): StorageService.{i} with the same
+ * tables under Device. (type A of docs/plan/tr181_mtk_design.md).  The
+ * STBService.1 placeholder (fixed values, no set-top box on the product) is
+ * not in the TR-181 tree (T7). */
+static DMOBJ tServices181Obj[] = {
+{"StorageService", &DMWRITE, add_ss_none, del_ss_none, NULL, browse_ss, NULL, NULL, tSsChildObj, tSsParams, NULL},
+{0}
+};
+
+static DMOBJ tServices181Root[] = {
+{"Services", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tServices181Obj, NULL, NULL},
+{0}
+};
+
 static const char *const services_mtk_paths181[] = {
 	"Device.Services.",
 	NULL
@@ -985,7 +997,7 @@ static const struct dm_module services_mtk_module181 = {
 	.name  = "mtk-services-181",
 	.model = DM_MODEL_TR181,
 	.order = DM_ORDER_SDK,
-	.objs  = tServicesRoot,
+	.objs  = tServices181Root,
 	.paths = services_mtk_paths181,
 };
 DM_MODULE_REGISTER(services_mtk_module181);

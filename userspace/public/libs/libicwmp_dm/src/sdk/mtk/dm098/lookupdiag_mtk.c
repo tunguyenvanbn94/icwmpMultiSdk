@@ -306,9 +306,9 @@ DM_MODULE_REGISTER(lookupdiag_mtk_module);
  * tables (Result.{i} included), except its Interface: a Device.IP.Interface
  * reference for the device name the product stores (device_ip_mtk.h
  * IFREF181_*), a device name still taken; tNSLookup181Params is a copy of
- * tNSLookupParams, keep in step.  DNSDiagnostics is the product's own
- * object without a vendor prefix, kept as Device.DNSDiagnostics like
- * Device.Account, Interface a device name as on the product. */
+ * tNSLookupParams, keep in step.  The product's DNSDiagnostics (an object
+ * without a vendor prefix) is not in the TR-181 tree: NSLookupDiagnostics is
+ * the standard object for the same test (docs/plan/tr181_mtk_design.md T7). */
 IFREF181_GET(nsl_interface, get_nsl_interface)
 IFREF181_SET(nsl_interface, set_nsl_interface)
 
@@ -338,14 +338,11 @@ static DMOBJ tLookup181DnsObj[] = {
 
 static DMOBJ tLookup181Root[] = {
 {"DNS", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tLookup181DnsObj, NULL, NULL},
-{"DNSDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL,
- NULL, tDNSDiagParams, NULL},
 {0}
 };
 
 static const char *const lookupdiag181_mtk_paths[] = {
 	"Device.DNS.Diagnostics.",
-	"Device.DNSDiagnostics.",
 	NULL
 };
 

@@ -486,22 +486,138 @@ static int set_localtimezone181(char *refparam, struct dmctx *ctx, void *data, c
 	return set_zonename(refparam, ctx, data, instance, (char *)e->city, action);
 }
 
+/*
+ * TR-181 2.19 deleted NTPServer1..5: the client is Time.Client.{i} (2.16).
+ * One client, sysntpd:
+ *   Enable           system.ntp.enabled, as Time.Enable
+ *   Status           Disabled when not enabled; Synchronized once ntpd has
+ *                    reported a stratum since boot -- the product's
+ *                    /etc/hotplug.d/ntp/25-dnsmasqsec then writes
+ *                    /var/state/dnsmasqsec (tmpfs) -- else Unsynchronized.
+ *                    Time.Status the same (TR-098 keeps the product's
+ *                    constant "Synchronized")
+ *   Servers          system.ntp.server, comma separated; a set replaces the
+ *                    list (at most 5, each at most 64 characters, as the 5
+ *                    TR-098 NTPServer leaves) and restarts sysntpd
+ *   Mode Unicast, Port 123, Version 4, Interface "" (any): what busybox ntpd
+ *                    does; another value is 9007
+ */
+#define NTP_VALID_FILE	"/var/state/dnsmasqsec"
+
+static int get_status181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	if (strcmp(mtk_uci("system", "ntp", "enabled"), "1") != 0)
+		*value = "Disabled";
+	else
+		*value = check_file(NTP_VALID_FILE) ? "Synchronized" : "Unsynchronized";
+	return 0;
+}
+
+static int browse_time_client(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	DM_LINK_INST_OBJ(dmctx, parent_node, prev_data, dmstrdup("1"));
+	return 0;
+}
+
+static int get_time_one(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "1";
+	return 0;
+}
+
+static int get_client_servers(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct uci_list *list = NULL;
+	struct uci_element *e;
+	char buf[512];
+	size_t n = 0;
+
+	buf[0] = '\0';
+	dmuci_get_option_value_list("system", "ntp", "server", &list);
+	if (list) {
+		uci_foreach_element(list, e) {
+			if (!e->name || !e->name[0] || n >= sizeof(buf) - 1)
+				continue;
+			n += snprintf(buf + n, sizeof(buf) - n, "%s%s", n ? "," : "", e->name);
+		}
+	}
+	*value = dmstrdup(buf);
+	return 0;
+}
+
+static int set_client_servers(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	char *copy = dmstrdup(value ? value : ""), *tok, *save = NULL, *end;
+	int n = 0;
+
+	if (action == VALUESET)
+		dmuci_delete("system", "ntp", "server", NULL);
+	for (tok = strtok_r(copy, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+		while (*tok == ' ')
+			tok++;
+		end = tok + strlen(tok);
+		while (end > tok && end[-1] == ' ')
+			*--end = '\0';
+		if (!*tok)
+			continue;
+		if (strlen(tok) > 64 || ++n > NTP_SERVER_MAX)
+			return FAULT_9007;
+		if (action == VALUESET)
+			dmuci_add_list_value("system", "ntp", "server", tok);
+	}
+	if (action == VALUESET)
+		mtk_apply_service("/etc/init.d/sysntpd restart");
+	return 0;
+}
+
+#define TIME_FIXED(name, text)							\
+static int get_client_##name(char *refparam, struct dmctx *ctx, void *data,	\
+			     char *instance, char **value)			\
+{										\
+	*value = text;								\
+	return 0;								\
+}										\
+static int set_client_##name(char *refparam, struct dmctx *ctx, void *data,	\
+			     char *instance, char *value, int action)		\
+{										\
+	return strcmp(value ? value : "", text) == 0 ? 0 : FAULT_9007;		\
+}
+
+TIME_FIXED(mode, "Unicast")
+TIME_FIXED(port, "123")
+TIME_FIXED(version, "4")
+TIME_FIXED(interface, "")
+
+static DMLEAF tTimeClient181Params[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMWRITE, DMT_BOOL, get_enable, set_enable, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_status181, NULL, NULL, NULL},
+{"Mode", &DMWRITE, DMT_STRING, get_client_mode, set_client_mode, NULL, NULL},
+{"Port", &DMWRITE, DMT_UNINT, get_client_port, set_client_port, NULL, NULL},
+{"Version", &DMWRITE, DMT_UNINT, get_client_version, set_client_version, NULL, NULL},
+{"Servers", &DMWRITE, DMT_STRING, get_client_servers, set_client_servers, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_client_interface, set_client_interface, NULL, NULL},
+{0}
+};
+
 static DMLEAF tTime181Params[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Enable", &DMWRITE, DMT_BOOL, get_enable, set_enable, NULL, NULL},
-{"Status", &DMREAD, DMT_STRING, get_status, NULL, NULL, NULL},
-{"NTPServer1", &DMWRITE, DMT_STRING, get_ntp1, set_ntp1, NULL, NULL},
-{"NTPServer2", &DMWRITE, DMT_STRING, get_ntp2, set_ntp2, NULL, NULL},
-{"NTPServer3", &DMWRITE, DMT_STRING, get_ntp3, set_ntp3, NULL, NULL},
-{"NTPServer4", &DMWRITE, DMT_STRING, get_ntp4, set_ntp4, NULL, NULL},
-{"NTPServer5", &DMWRITE, DMT_STRING, get_ntp5, set_ntp5, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_status181, NULL, NULL, NULL},
 {"CurrentLocalTime", &DMREAD, DMT_TIME, get_currentlocaltime, NULL, NULL, NULL},
 {"LocalTimeZone", &DMWRITE, DMT_STRING, get_localtimezone181, set_localtimezone181, NULL, NULL},
+{"ClientNumberOfEntries", &DMREAD, DMT_UNINT, get_time_one, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tTime181ChildObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Client", &DMREAD, NULL, NULL, NULL, browse_time_client, NULL, NULL, NULL, tTimeClient181Params, NULL},
 {0}
 };
 
 static DMOBJ tTime181Obj[] = {
-{"Time", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tTime181Params, NULL},
+{"Time", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tTime181ChildObj, tTime181Params, NULL},
 {0}
 };
 

@@ -342,17 +342,15 @@ static int browseHost181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *pre
 	return 0;
 }
 
+/* AddressSource, LeaseTimeRemaining, VendorClassID, ClientID and UserClassID
+ * of the TR-098 table are deleted in TR-181 2.19 (the DHCP view of a host is
+ * DHCPv4.Server.Pool.{i}.Client): not in this table (T7) */
 static DMLEAF tHost181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"PhysAddress", &DMREAD, DMT_STRING, get_host_mac, NULL, NULL, NULL},
 {"IPAddress", &DMREAD, DMT_STRING, get_host_ip, NULL, NULL, NULL},
-{"AddressSource", &DMREAD, DMT_STRING, get_host_addresssource, NULL, NULL, NULL},
-{"LeaseTimeRemaining", &DMREAD, DMT_INT, get_host_leasetime, NULL, NULL, NULL},
 {"Layer1Interface", &DMREAD, DMT_STRING, get_host_layer1_181, NULL, NULL, NULL},
 {"Layer3Interface", &DMREAD, DMT_STRING, get_host_layer3_181, NULL, NULL, NULL},
-{"VendorClassID", &DMREAD, DMT_STRING, get_host_empty, NULL, NULL, NULL},
-{"ClientID", &DMREAD, DMT_STRING, get_host_empty, NULL, NULL, NULL},
-{"UserClassID", &DMREAD, DMT_STRING, get_host_empty, NULL, NULL, NULL},
 {"HostName", &DMREAD, DMT_STRING, get_host_name, NULL, NULL, NULL},
 {"Active", &DMREAD, DMT_BOOL, get_host_active, NULL, NULL, NULL},
 {0}

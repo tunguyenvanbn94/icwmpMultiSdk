@@ -1167,19 +1167,9 @@ static DMLEAF tSsid181Param[] = {
 {0}
 };
 
-static DMLEAF tWps181Param[] = {
-{"Enable", &DMWRITE, DMT_BOOL, get_wps_enable, set_accept_and_drop, NULL, NULL},
-{"Status", &DMREAD, DMT_STRING, get_wps_status, NULL, NULL, NULL},
-{"ConfigMethodsSupported", &DMREAD, DMT_STRING, get_wps_methods, NULL, NULL, NULL},
-{"ConfigMethodsEnabled", &DMWRITE, DMT_STRING, get_wps_methods, set_accept_and_drop, NULL, NULL},
-{"PIN", &DMWRITE, DMT_STRING, get_wps_password, set_accept_and_drop, NULL, NULL},
-{0}
-};
-
-static DMOBJ tAp181Obj[] = {
-{"WPS", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tWps181Param, NULL},
-{0}
-};
+/* No AccessPoint.{i}.WPS in the TR-181 tree (T7): the product's WPS leaves
+ * are constants (a fixed PIN among them) and writes are dropped, which the
+ * standard does not allow; it comes back with a real WPS control. */
 
 static DMLEAF tAp181Param[] = {
 {"Enable", &DMWRITE, DMT_BOOL, get_radio_enabled, set_radio_enabled, NULL, NULL},
@@ -1202,7 +1192,7 @@ static DMLEAF tWifi181Param[] = {
 static DMOBJ tWifi181Obj[] = {
 {"Radio", &DMREAD, NULL, NULL, NULL, browseRadio181Inst, NULL, NULL, NULL, tRadio181Param, NULL},
 {"SSID", &DMREAD, NULL, NULL, NULL, browseWlan181Inst, NULL, NULL, tSsid181Obj, tSsid181Param, NULL},
-{"AccessPoint", &DMREAD, NULL, NULL, NULL, browseWlan181Inst, NULL, NULL, tAp181Obj, tAp181Param, NULL},
+{"AccessPoint", &DMREAD, NULL, NULL, NULL, browseWlan181Inst, NULL, NULL, NULL, tAp181Param, NULL},
 {0}
 };
 

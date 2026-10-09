@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <ctype.h>
 #include <math.h>
 #include <unistd.h>
 
@@ -389,8 +390,9 @@ static char *ponmgr_field(const char *what, const char *key)
 	return "";
 }
 
-/* "ONU State: O5" of "ponmgr gpon get info" */
-static char *ponmgr_onu_state(void)
+/* the value after "<label>" ("ONU State:", "ONU ID:") in "ponmgr gpon get
+ * info", "" when absent */
+static char *ponmgr_info(const char *label)
 {
 	char *argv[] = { PONMGR, "gpon", "get", "info", NULL };
 	char *out, *p;
@@ -398,14 +400,20 @@ static char *ponmgr_onu_state(void)
 	if (!check_file(PONMGR))
 		return "";
 	out = mtk_exec(argv);
-	p = out ? strstr(out, "ONU State:") : NULL;
+	p = out ? strstr(out, label) : NULL;
 	if (!p)
 		return "";
-	p += strlen("ONU State:");
+	p += strlen(label);
 	while (*p == ' ' || *p == '\t')
 		p++;
 	p[strcspn(p, "\r\n")] = '\0';
 	return p;
+}
+
+/* "ONU State: O5" of "ponmgr gpon get info" */
+static char *ponmgr_onu_state(void)
+{
+	return ponmgr_info("ONU State:");
 }
 
 static int get_pon_password(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
@@ -600,7 +608,20 @@ DM_MODULE_REGISTER(deviceinfo_mtk_module);
 
 /* TR-181 (cwmp.cpe.datamodel=tr181): Device.DeviceInfo., the same getters
  * and sub-objects (type A of docs/plan/tr181_mtk_design.md) without
- * DeviceLog, which TR-181 does not have (it lists VendorLogFile.{i}) */
+ * DeviceLog, which TR-181 does not have (it lists VendorLogFile.{i}), and
+ * without the product's placeholders and non-standard names (T7):
+ * X_AIS_DSL (constants, no DSL here), X_AIS_reuseCPE_cycles/_status (always
+ * empty) and X_AIS. (an object named X_AIS, not X_<id>_<name>), whose PON
+ * password and state are the standard Device.XPON leaves below. */
+static DMOBJ tDeviceInfoMtk181Obj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"ProcessStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tProcessStatusObj, tProcessStatusParam, NULL},
+{"MemoryStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tMemoryStatusParam, NULL},
+{"TemperatureStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tTemperatureStatusObj, NULL, NULL},
+{"X_AIS_GPON", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, NULL, tXAisGponParam, NULL},
+{0}
+};
+
 static DMLEAF tDeviceInfo181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Manufacturer", &DMREAD, DMT_STRING, get_manufacturer, NULL, &DMFINFRM, NULL},
@@ -617,13 +638,11 @@ static DMLEAF tDeviceInfo181Param[] = {
 {"X_AIS_CpuUsed", &DMWRITE, DMT_UNINT, get_cpu_used, set_cpu_used, &DMFINFRM, NULL},
 {"X_AIS_MemUsedResponse", &DMREAD, DMT_UNINT, get_mem_used_response, NULL, &DMFINFRM, NULL},
 {"X_AIS_MemUsed", &DMWRITE, DMT_UNINT, get_mem_used, set_mem_used, &DMFINFRM, NULL},
-{"X_AIS_reuseCPE_cycles", &DMREAD, DMT_STRING, get_empty, NULL, &DMFINFRM, NULL},
-{"X_AIS_reuseCPE_status", &DMREAD, DMT_STRING, get_empty, NULL, &DMFINFRM, NULL},
 {0}
 };
 
 static DMOBJ tDeviceInfo181Root[] = {
-{"DeviceInfo", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, tDeviceInfoMtkObj, tDeviceInfo181Param, NULL},
+{"DeviceInfo", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, tDeviceInfoMtk181Obj, tDeviceInfo181Param, NULL},
 {0}
 };
 
@@ -640,3 +659,224 @@ static const struct dm_module deviceinfo181_mtk_module = {
 	.paths = deviceinfo181_mtk_paths,
 };
 DM_MODULE_REGISTER(deviceinfo181_mtk_module);
+
+/*
+ * TR-181 Device.XPON. -- the product's G-PON ONU: one ONU, one ANI.
+ *   ONU.1 / ANI.1  Enable true (the product cannot switch them off: false
+ *                  is 9007); Name "pon", the ANI's network device
+ *   ANI.1.Status   Up in ONU state O5 (operation), Down otherwise, Unknown
+ *                  without ponmgr
+ *   ANI.1.PONMode  pon.xpon_auth.pon_mode: GPON -> G-PON, XGPON, XGSPON,
+ *                  NGPON2 -> their TR-181 spelling, else Unknown
+ *   TC.ONUActivation  ONUState / ONUID of "ponmgr gpon get info"; VendorID
+ *                  and SerialNumber from pon.xpon_auth.sn (4 vendor
+ *                  characters + 8 hex digits)
+ *   TC.Authentication.Password  the product's X_AIS.PonPassword:
+ *                  pon.xpon_auth.sn_ascii_password, a set restarts pon;
+ *                  HexadecimalPassword false -- the product keeps an ASCII
+ *                  password only, true is 9007
+ * Password and ONUState keep the forced Inform of the TR-098 X_AIS.PonPassword
+ * and X_AIS.PonPasswordState, the operator's Inform content.
+ */
+static int browse_xpon_one(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	DM_LINK_INST_OBJ(dmctx, parent_node, prev_data, dmstrdup("1"));
+	return 0;
+}
+
+static int get_xpon_one(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "1";
+	return 0;
+}
+
+static int get_xpon_zero(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "0";
+	return 0;
+}
+
+static int get_xpon_true(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "true";
+	return 0;
+}
+
+static int get_xpon_false(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "false";
+	return 0;
+}
+
+static int get_xpon_name(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "pon";
+	return 0;
+}
+
+/* true is what it is; anything else is a value the product cannot take */
+static int set_xpon_true_only(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	return mtk_parse_bool(value) == 1 ? 0 : FAULT_9007;
+}
+
+static int set_xpon_false_only(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	return mtk_parse_bool(value) == 0 ? 0 : FAULT_9007;
+}
+
+static int get_ani_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *st = ponmgr_onu_state();
+
+	if (!*st)
+		*value = "Unknown";
+	else
+		*value = strcmp(st, "O5") == 0 ? "Up" : "Down";
+	return 0;
+}
+
+static int get_ani_ponmode(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	static const char *const modes[][2] = {
+		{ "GPON", "G-PON" }, { "XGPON", "XG-PON" }, { "XGSPON", "XGS-PON" },
+		{ "NGPON2", "NG-PON2" }, { NULL, NULL }
+	};
+	char m[16];
+	const char *c;
+	size_t n = 0;
+	int i;
+
+	/* "XGS-PON" and "XGSPON" alike: letters and digits only */
+	for (c = mtk_uci("pon", "xpon_auth", "pon_mode"); *c && n < sizeof(m) - 1; c++)
+		if (isalnum((unsigned char)*c))
+			m[n++] = toupper((unsigned char)*c);
+	m[n] = '\0';
+	*value = "Unknown";
+	for (i = 0; modes[i][0]; i++) {
+		if (strcmp(m, modes[i][0]) == 0) {
+			*value = (char *)modes[i][1];
+			break;
+		}
+	}
+	return 0;
+}
+
+static int get_onu_state(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	static const char *const states[] = { "O1", "O2", "O3", "O2-3", "O4", "O5", "O6", "O7", "O8", "O9", NULL };
+	char *st = ponmgr_onu_state();
+	int i;
+
+	*value = "";
+	for (i = 0; states[i]; i++) {
+		if (strcmp(st, states[i]) == 0) {
+			*value = (char *)states[i];
+			break;
+		}
+	}
+	return 0;
+}
+
+static int get_onu_id(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *id = ponmgr_info("ONU ID:");
+
+	*value = (*id && strspn(id, "0123456789") == strlen(id)) ? id : "0";
+	return 0;
+}
+
+static int get_onu_vendor_id(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *sn = mtk_uci("pon", "xpon_auth", "sn");
+
+	*value = "";
+	if (strlen(sn) >= 4)
+		dmasprintf(value, "%.4s", sn);
+	return 0;
+}
+
+static int get_onu_serial(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = mtk_uci("pon", "xpon_auth", "sn");
+	return 0;
+}
+
+static DMLEAF tXponActivationParams[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"ONUState", &DMREAD, DMT_STRING, get_onu_state, NULL, &DMFINFRM, NULL},
+{"VendorID", &DMREAD, DMT_STRING, get_onu_vendor_id, NULL, NULL, NULL},
+{"SerialNumber", &DMREAD, DMT_STRING, get_onu_serial, NULL, NULL, NULL},
+{"ONUID", &DMREAD, DMT_UNINT, get_onu_id, NULL, NULL, NULL},
+{0}
+};
+
+static DMLEAF tXponAuthParams[] = {
+{"Password", &DMWRITE, DMT_STRING, get_pon_password, set_pon_password, &DMFINFRM, NULL},
+{"HexadecimalPassword", &DMWRITE, DMT_BOOL, get_xpon_false, set_xpon_false_only, NULL, NULL},
+{0}
+};
+
+static DMOBJ tXponTcObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"ONUActivation", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, NULL, tXponActivationParams, NULL},
+{"Authentication", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, NULL, tXponAuthParams, NULL},
+{0}
+};
+
+static DMOBJ tXponAniObj[] = {
+{"TC", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, tXponTcObj, NULL, NULL},
+{0}
+};
+
+static DMLEAF tXponAniParams[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_xpon_true, set_xpon_true_only, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_ani_status, NULL, NULL, NULL},
+{"Name", &DMREAD, DMT_STRING, get_xpon_name, NULL, NULL, NULL},
+{"PONMode", &DMREAD, DMT_STRING, get_ani_ponmode, NULL, NULL, NULL},
+{"TransceiverNumberOfEntries", &DMREAD, DMT_UNINT, get_xpon_zero, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tXponOnuObj[] = {
+{"ANI", &DMREAD, NULL, NULL, NULL, browse_xpon_one, &DMFINFRM, NULL, tXponAniObj, tXponAniParams, NULL},
+{0}
+};
+
+static DMLEAF tXponOnuParams[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_xpon_true, set_xpon_true_only, NULL, NULL},
+{"Name", &DMREAD, DMT_STRING, get_xpon_name, NULL, NULL, NULL},
+{"SoftwareImageNumberOfEntries", &DMREAD, DMT_UNINT, get_xpon_zero, NULL, NULL, NULL},
+{"EthernetUNINumberOfEntries", &DMREAD, DMT_UNINT, get_xpon_zero, NULL, NULL, NULL},
+{"ANINumberOfEntries", &DMREAD, DMT_UNINT, get_xpon_one, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tXponObj[] = {
+{"ONU", &DMREAD, NULL, NULL, NULL, browse_xpon_one, &DMFINFRM, NULL, tXponOnuObj, tXponOnuParams, NULL},
+{0}
+};
+
+static DMLEAF tXponParams[] = {
+{"ONUNumberOfEntries", &DMREAD, DMT_UNINT, get_xpon_one, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tXpon181Root[] = {
+{"XPON", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, tXponObj, tXponParams, NULL},
+{0}
+};
+
+static const char *const xpon181_mtk_paths[] = {
+	"Device.XPON.",
+	NULL
+};
+
+static const struct dm_module xpon181_mtk_module = {
+	.name  = "mtk-xpon-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tXpon181Root,
+	.paths = xpon181_mtk_paths,
+};
+DM_MODULE_REGISTER(xpon181_mtk_module);

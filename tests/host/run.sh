@@ -1533,12 +1533,24 @@ PY
 # must be one of them.
 # T2 (LAN) fixtures: a LAN, a WAN, four switch ports, a DHCP pool and two
 # hosts, one on Wi-Fi and one on a LAN port.  Saved and put back like p8's.
-TR181_CONFIGS="network dhcp lanhost wireless wan firewall_clay"
+TR181_CONFIGS="network dhcp lanhost wireless wan firewall_clay hmxwslbackend pon system"
 tr181_fixtures() {
 	for c in $TR181_CONFIGS; do
 		if [ -f "/etc/config/$c" ]; then cp "/etc/config/$c" "$RUN/$c.t181saved"; else rm -f "${RUN:?}/${c:?}.t181saved"; fi
 	done
 	if [ -f /tmp/dhcp.leases ]; then cp /tmp/dhcp.leases "$RUN/dhcp.leases.t181saved"; else rm -f "${RUN:?}/dhcp.leases.t181saved"; fi
+	# the WebUI backend's session timeout (T7: X_AIS_WebUserInfo.SessionMaxTime)
+	printf 'config hmxwslbackend\n\toption SessionTimeOut 900\n' > /etc/config/hmxwslbackend
+	# sysntpd (T7: Time.Client.1)
+	[ -f /etc/config/system ] || : > /etc/config/system
+	uci -q delete system.ntp
+	uci -q set system.ntp=timeserver
+	uci -q set system.ntp.enabled=1
+	uci -q add_list system.ntp.server=a.pool.ntp.org
+	uci -q add_list system.ntp.server=b.pool.ntp.org
+	uci -q commit system
+	# the G-PON ONU (T7: Device.XPON)
+	printf "config xpon_auth 'xpon_auth'\n\toption pon_mode 'GPON'\n\toption sn 'HMXA0000ABCD'\n\toption sn_ascii_password 'pw-1234'\n" > /etc/config/pon
 	cat > /etc/config/network <<'EOF2'
 config interface 'loopback'
 	option device 'lo'
@@ -1915,7 +1927,36 @@ for x in json.load(open(sys.argv[1]))["parameters"]:
 	for d in traceroute downloadDiag uploadDiag nslookup; do
 		uci -q -P /var/state/$d set easycwmp.@local[0].Interface=
 	done
-	expect "LTE, DNSDiagnostics, Firewall.Config present" "$(dm_value Device.LTE.RSSI | grep -c none) $(dm_value Device.DNSDiagnostics.DiagnosticsState) $(dm_value Device.Firewall.Config)" "0 None High"
+	# T7 S1: the product's placeholders (XMPP, LTE, STBService) and the names
+	# the standard does not have are not in the TR-181 tree, or take their
+	# standard / vendor form (docs/plan/tr181_mtk_design.md T7)
+	expect "placeholders and non-standard names gone" "$(dm_value Device.LTE.RSSI) $(dm_value Device.XMPP.Connection.1.Enable) $(dm_value Device.DNSDiagnostics.DiagnosticsState) $(dm_value Device.Account.Web.SessionMaxTime) $(dm_value Device.WiFi.X-AIS_5GHzTransmitPower) $(dm_value Device.Services.STBService.1.ServiceMonitoring.Enable) $(dm_value Device.ManagementServer.ConnReqXMPPConnection) $(dm_value Device.Hosts.Host.1.AddressSource) $(dm_value Device.UserInterface.CarrierLocking.X_AIS_LockingEnable)" \
+		"<none> <none> <none> <none> <none> <none> <none> <none> <none>"
+	expect "placeholders gone (2)" "$(dm_value Device.CaptivePortal.Enable) $(dm_value Device.SelfTestDiagnostics.DiagnosticsState) $(dm_value Device.FAP.GPS.Latitude) $(dm_value Device.BulkData.Enable) $(dm_value Device.WiFi.AccessPoint.1.WPS.Enable) $(dm_value Device.DeviceInfo.X_AIS_DSL.SNR) $(dm_value Device.DeviceInfo.X_AIS_reuseCPE_status) $(dm_value Device.DeviceInfo.X_AIS.PonPassword)" \
+		"<none> <none> <none> <none> <none> <none> <none> <none>"
+	# T7: Time.Client.1 for the NTPServer1..5 TR-181 2.19 deleted; Status from
+	# the file the ntp hotplug writes at ntpd's first stratum
+	T=Device.Time
+	expect "Time.Client.1, NTPServer1 gone" "$(dm_value $T.ClientNumberOfEntries) $(dm_value $T.Client.1.Servers) $(dm_value $T.Client.1.Mode) $(dm_value $T.Client.1.Port) $(dm_value $T.NTPServer1)" "1 a.pool.ntp.org,b.pool.ntp.org Unicast 123 <none>"
+	rm -f /var/state/dnsmasqsec
+	expect "Time Status before the first stratum" "$(dm_value $T.Status) $(dm_value $T.Client.1.Status)" "Unsynchronized Unsynchronized"
+	mkdir -p /var/state && : > /var/state/dnsmasqsec
+	expect "Time Status after it" "$(dm_value $T.Status) $(dm_value $T.Client.1.Status)" "Synchronized Synchronized"
+	rm -f /var/state/dnsmasqsec
+	expect "set Client.1.Servers" "$(dm_set_fault $T.Client.1.Servers x.pool.ntp.org,y.pool.ntp.org,z.pool.ntp.org "$key") $(uci -q get system.ntp.server)" "0 x.pool.ntp.org y.pool.ntp.org z.pool.ntp.org"
+	expect "set Servers, six of them" "$(dm_set_fault $T.Client.1.Servers a,b,c,d,e,f "$key")" "9007"
+	expect "set Port 124, Mode Broadcast, Port 123" "$(dm_set_fault $T.Client.1.Port 124 "$key") $(dm_set_fault $T.Client.1.Mode Broadcast "$key") $(dm_set_fault $T.Client.1.Port 123 "$key")" "9007 9007 0"
+	# T7: the PON password and the ONU state on the standard Device.XPON
+	# (no ponmgr here: ONUState empty, ANI Status Unknown)
+	X=Device.XPON.ONU.1.ANI.1
+	expect "XPON counts, PONMode, Status" "$(dm_value Device.XPON.ONUNumberOfEntries) $(dm_value Device.XPON.ONU.1.ANINumberOfEntries) $(dm_value $X.PONMode) $(dm_value $X.Status)" "1 1 G-PON Unknown"
+	expect "XPON VendorID, SerialNumber, Password" "$(dm_value $X.TC.ONUActivation.VendorID) $(dm_value $X.TC.ONUActivation.SerialNumber) $(dm_value $X.TC.Authentication.Password) $(dm_value $X.TC.Authentication.HexadecimalPassword)" "HMXA HMXA0000ABCD pw-1234 false"
+	expect "set XPON Password" "$(dm_set_fault $X.TC.Authentication.Password pw-5678 "$key") $(uci -q get pon.xpon_auth.sn_ascii_password)" "0 pw-5678"
+	expect "set HexadecimalPassword true, ONU Enable false" "$(dm_set_fault $X.TC.Authentication.HexadecimalPassword true "$key") $(dm_set_fault Device.XPON.ONU.1.Enable false "$key")" "9007 9007"
+	expect "SupportedConnReqMethods, Firewall.Config" "$(dm_value Device.ManagementServer.SupportedConnReqMethods) $(dm_value Device.Firewall.Config)" "HTTP,STUN High"
+	expect "X_AIS_CarrierLocking" "$(dm_value Device.UserInterface.X_AIS_CarrierLocking.X_AIS_LockingEnable | grep -c none)" "0"
+	expect "X_AIS_WebUserInfo.SessionMaxTime, set 600" "$(dm_value Device.UserInterface.X_AIS_WebUserInfo.SessionMaxTime) $(dm_set_fault Device.UserInterface.X_AIS_WebUserInfo.SessionMaxTime 600 "$key") $(uci -q get hmxwslbackend.@hmxwslbackend[0].SessionTimeOut)" "900 0 600"
+	expect "set SessionMaxTime abc (shell type)" "$(dm_set_fault Device.UserInterface.X_AIS_WebUserInfo.SessionMaxTime abc "$key")" "9007"
 	# T3 Wi-Fi: Radio from the radio sections, SSID/AccessPoint numbered like
 	# WLANConfiguration, Security.ModeEnabled from wireless.<iface>.encryption
 	R=Device.WiFi.Radio S=Device.WiFi.SSID A=Device.WiFi.AccessPoint

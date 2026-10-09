@@ -222,70 +222,10 @@ static const struct dm_module root_hidden_mtk_module = {
 };
 DM_MODULE_REGISTER(root_hidden_mtk_module);
 
-/* TR-181 (cwmp.cpe.datamodel=tr181): the same placeholders under Device.,
- * type A of docs/plan/tr181_mtk_design.md.  USBHosts. and User. sit one
- * level lower there (USB.USBHosts., Users.User.).  Not here:
- * DeviceSummary (TR-181 reports RootDataModelVersion, root181_mtk.c),
- * Layer2Bridging (objects only, no TR-181 counterpart built).
- * WiFi.NeighboringWiFiDiagnostic is hidden one level down: Device.WiFi.
- * itself carries the Radio/SSID/AccessPoint tree (wlan_mtk.c). */
-/* TR-181 CaptivePortal.URL is TR-098's CaptivePortalURL */
-static DMLEAF tCaptivePortal181Params[] = {
-{"AllowedList", &DMWRITE, DMT_STRING, get_rh_empty, set_rh_captive_fake, NULL, NULL},
-{"URL", &DMWRITE, DMT_STRING, get_rh_captive_url, set_rh_captive_fake, NULL, NULL},
-{"Enable", &DMWRITE, DMT_BOOL, get_rh_false, set_rh_captive_fake, NULL, NULL},
-{"Status", &DMREAD, DMT_STRING, get_rh_captive_status, NULL, NULL, NULL},
-{0}
-};
-
-static DMOBJ tUsb181Obj[] = {
-{"USBHosts", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tUSBHostsObj, NULL, NULL},
-{0}
-};
-
-static DMOBJ tUsers181Obj[] = {
-{"User", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
-{0}
-};
-
-static DMOBJ tWiFi181ChildObj[] = {
-/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker, container_leaf, addressed_only */
-{"NeighboringWiFiDiagnostic", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tNeighborWiFiParams, NULL, NULL, 1},
-{0}
-};
-
-static DMOBJ tRootHidden181Obj[] = {
-/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker, container_leaf, addressed_only */
-{"SelfTestDiagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tSelfTestParams, NULL, NULL, 1},
-{"FaultMgmt", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tFaultMgmtObj, NULL, NULL, NULL, 1},
-{"BulkData", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tBulkDataObj, tBulkDataParams, NULL, NULL, 1},
-{"SoftwareModules", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tSoftwareModulesObj, NULL, NULL, NULL, 1},
-{"USB", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tUsb181Obj, NULL, NULL, NULL, 1},
-{"CaptivePortal", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tCaptivePortal181Params, NULL, NULL, 1},
-{"FAP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tFAPObj, NULL, NULL, NULL, 1},
-{"Users", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tUsers181Obj, NULL, NULL, NULL, 1},
-{"WiFi", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tWiFi181ChildObj, NULL, NULL, NULL, 0},
-{0}
-};
-
-static const char *const root_hidden181_mtk_paths[] = {
-	"Device.SelfTestDiagnostics.",
-	"Device.FaultMgmt.",
-	"Device.BulkData.",
-	"Device.SoftwareModules.",
-	"Device.USB.",
-	"Device.CaptivePortal.",
-	"Device.FAP.",
-	"Device.Users.",
-	"Device.WiFi.NeighboringWiFiDiagnostic.",
-	NULL
-};
-
-static const struct dm_module root_hidden181_mtk_module = {
-	.name   = "mtk-root-hidden-181",
-	.model  = DM_MODEL_TR181,
-	.order  = DM_ORDER_SDK,
-	.objs   = tRootHidden181Obj,
-	.paths  = root_hidden181_mtk_paths,
-};
-DM_MODULE_REGISTER(root_hidden181_mtk_module);
+/* Not in the TR-181 tree (cwmp.cpe.datamodel=tr181, docs/plan/tr181_mtk_design.md
+ * T7): every object here is a placeholder -- constants, writes that store
+ * nothing, empty tables, diagnostics that run nothing -- which the standard
+ * does not allow for an object the CPE lists.  SelfTestDiagnostics,
+ * FaultMgmt, BulkData, SoftwareModules, USB.USBHosts, CaptivePortal, FAP,
+ * Users.User and WiFi.NeighboringWiFiDiagnostic come back when the product
+ * implements them, or when the operator's ACS needs them. */

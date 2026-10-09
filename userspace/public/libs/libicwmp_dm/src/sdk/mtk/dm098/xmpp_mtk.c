@@ -140,27 +140,10 @@ static const struct dm_module xmpp_mtk_module = {
 };
 DM_MODULE_REGISTER(xmpp_mtk_module);
 
-/* TR-181 (cwmp.cpe.datamodel=tr181): Device.XMPP., the same tables (type A
- * of docs/plan/tr181_mtk_design.md).  LTE. is the product's own object
- * without a vendor prefix, kept as Device.LTE like Device.Account; the
- * standard Device.Cellular.Interface.{i} has another shape (T7). */
-static DMOBJ tXmpp181RootObj[] = {
-{"XMPP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tXmppObj, NULL, NULL},
-{"LTE", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tLteParams, NULL},
-{0}
-};
-
-static const char *const xmpp181_mtk_paths[] = {
-	"Device.XMPP.",
-	"Device.LTE.",
-	NULL
-};
-
-static const struct dm_module xmpp181_mtk_module = {
-	.name  = "mtk-xmpp-181",
-	.model = DM_MODEL_TR181,
-	.order = DM_ORDER_SDK,
-	.objs  = tXmpp181RootObj,
-	.paths = xmpp181_mtk_paths,
-};
-DM_MODULE_REGISTER(xmpp181_mtk_module);
+/* Not in the TR-181 tree (cwmp.cpe.datamodel=tr181, docs/plan/tr181_mtk_design.md
+ * T7): both objects are placeholders -- no XMPP client, no LTE modem, fixed
+ * values, writes that store nothing -- which the standard does not allow
+ * (a CPE without XMPP has no Device.XMPP.Connection; LTE. has no vendor
+ * prefix, and the radio figures of Device.Cellular.Interface are measured
+ * ones).  ManagementServer.SupportedConnReqMethods says HTTP,STUN there
+ * (managementserver_mtk.c).  Add them back if the operator's ACS needs them. */

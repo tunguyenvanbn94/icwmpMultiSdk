@@ -5,7 +5,7 @@
 #  2. reject all traffic to the ACS host of cwmp.acs.url, stop icwmpd, keep its
 #     queued events (.icwmpd_backup_session.xml), the notify list and /etc/config
 #  3. cwmp.cpe.datamodel=tr181, start: GPV/GPN Device., writes through TR-181
-#     names with the current ParameterKey (NTPServer3 set and put back, a
+#     names with the current ParameterKey (Time.Client.1.Servers set and put back, a
 #     wrongly typed X_AIS_Conf value that must fail 9007)
 #  4. stop, model and saved files back, start, then open the ACS again
 # Results in $1 (default /tmp/t6); on the host:
@@ -68,11 +68,11 @@ t2=$(date +%s)
 log "tr181 dump: $(grep -c '"parameter"' "$D/tr181.gpv") values in $((t1 - t0)) s, names $((t2 - t1)) s"
 # writes through TR-181 names, the current ParameterKey kept
 key=$(val Device.ManagementServer.ParameterKey)
-ntp=$(val Device.Time.NTPServer3)
-log "NTPServer3 before: '$ntp' uci '$(uci -q get system.ntp.server)'"
-log "set Device.Time.NTPServer3: fault $(fault_set Device.Time.NTPServer3 t6.pool.ntp.org "$key")"
+ntp=$(val Device.Time.Client.1.Servers)
+log "Time.Client.1.Servers before: '$ntp' uci '$(uci -q get system.ntp.server)', Status $(val Device.Time.Status)"
+log "set Servers (third replaced): fault $(fault_set Device.Time.Client.1.Servers "$(echo "$ntp" | awk -F, -v OFS=, '{$3="t6.pool.ntp.org"; print}')" "$key")"
 log "  uci after set: '$(uci -q get system.ntp.server)'"
-log "restore NTPServer3: fault $(fault_set Device.Time.NTPServer3 "$ntp" "$key")"
+log "restore Servers: fault $(fault_set Device.Time.Client.1.Servers "$ntp" "$key")"
 log "  uci after restore: '$(uci -q get system.ntp.server)'"
 log "set Device.X_AIS_Conf.auto_upload_delay=abc: fault $(fault_set Device.X_AIS_Conf.auto_upload_delay abc "$key")"
 log "ParameterKey after: '$(val Device.ManagementServer.ParameterKey)' (was '$key')"
@@ -84,6 +84,8 @@ for r in 1 2; do
 done
 wan=$(val Device.NAT.InterfaceSetting.1.Interface)
 log "first WAN $wan: IPv4 AddressingType $(val $wan.IPv4Address.1.AddressingType), PPP $(val Device.PPP.InterfaceNumberOfEntries)"
+X=Device.XPON.ONU.1.ANI.1
+log "XPON: Status $(val $X.Status), PONMode $(val $X.PONMode), ONUState $(val $X.TC.ONUActivation.ONUState), ONUID $(val $X.TC.ONUActivation.ONUID), VendorID $(val $X.TC.ONUActivation.VendorID)"
 trc=$(uci -q -P /var/state/traceroute get easycwmp.@local[0].Interface)
 log "set TraceRoute.Interface=$wan: fault $(fault_set Device.IP.Diagnostics.TraceRoute.Interface "$wan" "$key"), stored '$(uci -q -P /var/state/traceroute get easycwmp.@local[0].Interface)', reads '$(val Device.IP.Diagnostics.TraceRoute.Interface)'"
 uci -q -P /var/state/traceroute set easycwmp.@local[0].Interface="$trc"

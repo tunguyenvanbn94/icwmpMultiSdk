@@ -386,8 +386,53 @@ static const struct dm_module ms_mtk_module = {
 };
 DM_MODULE_REGISTER(ms_mtk_module);
 
-/* TR-181 (cwmp.cpe.datamodel=tr181): the same tables under Device., type A
- * of docs/plan/tr181_mtk_design.md */
+/*
+ * TR-181 (cwmp.cpe.datamodel=tr181): the same leaves under Device. (type A of
+ * docs/plan/tr181_mtk_design.md), except the XMPP ones -- the product has no
+ * XMPP client and the TR-181 tree has no Device.XMPP (xmpp_mtk.c):
+ * ConnReqXMPPConnection is left out, and SupportedConnReqMethods (the
+ * portable leaf says HTTP,XMPP,STUN) lists what this agent answers: HTTP
+ * connection requests and UDP ones over STUN.  A copy of
+ * tManagementServerMtkParam: keep in step.
+ */
+static int get_supported_conn_req181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "HTTP,STUN";
+	return 0;
+}
+
+static DMLEAF tManagementServerMtk181Param[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"EnableCWMP", &DMWRITE, DMT_BOOL, get_enablecwmp, set_enablecwmp, NULL, NULL},
+{"UpgradesManaged", &DMWRITE, DMT_BOOL, get_upgradesmanaged, set_upgradesmanaged, NULL, NULL},
+{"URL", &DMWRITE, DMT_STRING, get_url, set_url, NULL, NULL},
+{"Username", &DMWRITE, DMT_STRING, get_username, set_username, NULL, NULL},
+{"Password", &DMWRITE, DMT_STRING, get_password, set_password, NULL, NULL},
+{"PeriodicInformEnable", &DMWRITE, DMT_BOOL, get_periodic_en, set_periodic_en, NULL, NULL},
+{"PeriodicInformInterval", &DMWRITE, DMT_UNINT, get_periodic_int, set_periodic_int, NULL, NULL},
+{"PeriodicInformTime", &DMWRITE, DMT_TIME, get_periodic_time, set_periodic_time, NULL, NULL},
+{"ConnectionRequestUsername", &DMWRITE, DMT_STRING, get_cr_username, set_cr_username, NULL, NULL},
+{"ConnectionRequestPassword", &DMWRITE, DMT_STRING, get_cr_password, set_cr_password, NULL, NULL},
+{"CWMPRetryMinimumWaitInterval", &DMWRITE, DMT_UNINT, get_retry_min, set_retry_min, NULL, NULL},
+{"CWMPRetryIntervalMultiplier", &DMWRITE, DMT_UNINT, get_retry_mult, set_retry_mult, NULL, NULL},
+{"UDPConnectionRequestAddress", &DMREAD, DMT_STRING, get_udp_cr_addr, NULL, NULL, &DMACTIVE},
+{"STUNEnable", &DMWRITE, DMT_BOOL, get_stun_enable, set_stun_enable, NULL, NULL},
+{"STUNServerAddress", &DMWRITE, DMT_STRING, get_stun_server, set_stun_server, NULL, NULL},
+{"STUNServerPort", &DMWRITE, DMT_UNINT, get_stun_port, set_stun_port, NULL, NULL},
+{"STUNUsername", &DMWRITE, DMT_STRING, get_stun_user, set_stun_user, NULL, NULL},
+{"STUNPassword", &DMWRITE, DMT_STRING, get_stun_pass, set_stun_pass, NULL, NULL},
+{"STUNMaximumKeepAlivePeriod", &DMWRITE, DMT_INT, get_stun_max_ka, set_stun_max_ka, NULL, NULL},
+{"STUNMinimumKeepAlivePeriod", &DMWRITE, DMT_UNINT, get_stun_min_ka, set_stun_min_ka, NULL, NULL},
+{"NATDetected", &DMREAD, DMT_BOOL, get_nat_detected, NULL, NULL, NULL},
+{"SupportedConnReqMethods", &DMREAD, DMT_STRING, get_supported_conn_req181, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tManagementServerMtk181Root[] = {
+{"ManagementServer", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, NULL, tManagementServerMtk181Param, NULL},
+{0}
+};
+
 static const char *const ms_mtk_paths181[] = {
 	"Device.ManagementServer.",
 	NULL
@@ -397,7 +442,7 @@ static const struct dm_module ms_mtk_module181 = {
 	.name  = "mtk-managementserver-181",
 	.model = DM_MODEL_TR181,
 	.order = DM_ORDER_LATE,
-	.objs  = tManagementServerMtkRoot,
+	.objs  = tManagementServerMtk181Root,
 	.paths = ms_mtk_paths181,
 };
 DM_MODULE_REGISTER(ms_mtk_module181);
