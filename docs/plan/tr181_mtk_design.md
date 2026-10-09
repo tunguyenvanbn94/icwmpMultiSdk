@@ -208,8 +208,11 @@ Kiểm kê ban đầu (`tr181-bbf-check.py` trên dump host tại `tr181-0012`):
 | S4 tầng interface — **xong phần stack** (`tr181-0016`, analysis §82); `PPP.` gốc và lá `NumberOfEntries` còn lại là S4b | `Ethernet.Link` (LAN `br-lan`, link WAN trên `pon`/cổng Ethernet WAN), `Ethernet.VLANTermination` (mỗi kết nối có VLAN), `Bridging.Bridge` (LAN, port quản lý + cổng Ethernet + SSID), `LowerLayers` là tham chiếu và ghi được (đặt VLAN qua `VLANTermination.VLANID`), `InterfaceStack` sinh từ `LowerLayers`; `PPP.` gốc; lá `NumberOfEntries` của mọi bảng | stack đọc ra đúng trên board, `InterfaceStack` khớp |
 | S4b lá đếm — **xong** (`tr181-0017`, analysis §83) | Mọi `…NumberOfEntries` bằng số dòng bảng của nó; thêm lá đếm còn thiếu (DHCPv6 Pool, RA, PPP + `SupportedNCPs`, TemperatureSensor, StorageService), bỏ lá đếm của bảng không có | kiểm chung dump: 0 lệch |
 | S4c IPv6 — **xong** (`tr181-0018`, analysis §84) | `IP.Interface.{i}.IPv6Address.{i}` / `IPv6Prefix.{i}` từ netifd (đang có lá đếm mà chưa có bảng) | lá đếm = số dòng trên board |
-| S4d DynamicDNS | `DynamicDNS.Server.{i}` từ danh sách nhà cung cấp, `Client.{i}.Server` là tham chiếu | bỏ miễn trừ trong kiểm chung |
-| S5 profile | Lá bắt buộc của các profile khai báo (Baseline...) | danh sách thiếu = 0 |
+| S4d DynamicDNS — **xong** (`tr181-0019`, analysis §86) | `DynamicDNS.Server.{i}` từ danh sách nhà cung cấp, `Client.{i}.Server` là tham chiếu | bỏ miễn trừ trong kiểm chung |
+| S5a profile, tầng interface — **xong** (`tr181-0020`, analysis §87) | `Stats`/`LastChange`/`PortState` của Link, VLANTermination, Bridge Port, PPP, Optical, Radio; mức quang `Dbm1000`; `Max*BridgeEntries` | EthernetLink:1, VLANTermination:1, Bridge:1, Optical:1 đủ lá |
+| S5b profile, lá trạng thái | DHCP/RA/DNS `Enable`/`Status`, PPPoE/IPv6CP, TemperatureSensor, Radio/AP/SSID còn thiếu… | lá thiếu của bộ 29 profile = 0 hoặc ghi rõ lý do |
+| S5c profile, create/delete | Ghi rõ bảng profile đòi create/delete mà sản phẩm không làm được → không khai profile đó | danh sách có lý do |
+| S5 profile (gốc) | Lá bắt buộc của các profile khai báo (Baseline...) | danh sách thiếu = 0 |
 
 Để sau: tạo kết nối IPoE qua TR-181 (user, chatlog 97). Nếu ACS nhà mạng cần lại object đã bỏ (ví dụ XMPP giữ chỗ),
 thêm lại theo yêu cầu thực tế.

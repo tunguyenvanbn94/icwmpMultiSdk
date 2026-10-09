@@ -5507,3 +5507,57 @@ Kết quả:
 2. Giữ `TCP/UDP` như sản phẩm, ghi là lệch chuẩn đã biết.
 
 Cần người dùng / nhà mạng quyết: ACS có tạo rule `tcp/udp` qua TR-069 không, WebUI có cần thấy lại một rule không.
+
+## 87. T7 chuẩn hoá S5a: lá bắt buộc của profile, phần tầng interface (`tr181-0020`) (09/10 15:00–15:17)
+
+**Cách kiểm profile** (`tr181-bbf-check.py --profile <P:v>,…`, S4b). Đi theo `base`/`extends` của profile trong XML TR-181 2.19,
+báo ba loại: lá bắt buộc còn thiếu, lá `readWrite` mà ở đây read-only, và bảng profile đòi create/delete mà không làm được.
+Bảng không có dòng nào trong dump thì báo là chưa kiểm được.
+
+Bộ profile ứng với các chức năng cây có (29): Baseline:4, Time:2, MemoryStatus:1, ProcessStatus:1, TempStatus:1,
+EthernetInterface:2, EthernetLink:1, VLANTermination:1, Bridge:1, IPInterface:2, IPv6Interface:1, PPPInterface:2,
+Routing:2, DHCPv4Server:1, DHCPv4Client:1, DHCPv6Server:1, RouterAdvertisement:1, NAT:1, WiFiRadio:1, WiFiSSID:2,
+WiFiAccessPoint:2, Optical:1, IPPing:1, TraceRoute:1, DownloadTCP:1, UploadTCP:1, NSLookupDiag:1, Download:1, Upload:1.
+
+Trên dump S4d: thiếu 166 lá, 26 yêu cầu create/delete. Chia lô:
+- **S5a** (bước này): `Stats` / `LastChange` / `PortState` của các object tầng interface;
+- **S5b**: các lá trạng thái/bật tắt còn lại;
+- **S5c**: ghi rõ yêu cầu create/delete nào sản phẩm không đáp ứng được, tức là không khai profile đó.
+
+**S5a — thay đổi:**
+- `device_ip_mtk.c`: hàm export `dip_stat181(dev, leaf)` trả một lá Stats TR-181 của netdev bất kỳ, đọc từ
+  `/sys/class/net/<dev>/statistics`. Đây là cùng các bộ đếm mà `IP.Interface.Stats` của sản phẩm đã dùng; unicast = packets −
+  multicast − broadcast. Bộ đếm mà kernel không giữ đọc `0`.
+  - Conditional: `tx_multicast`/`tx_broadcast`/`rx_broadcast` không phải bộ đếm chuẩn của Linux. Có trên kernel Airoha hay
+    không phải xem trên board; không có thì các lá đó là 0 và unicast = packets.
+- `stack181_mtk.c`:
+  - `Ethernet.Link`, `VLANTermination` và `Bridging.Bridge.{i}.Port` có `Stats` (15 lá) theo netdev của dòng;
+  - `LastChange` = uptime của interface netifd nằm trên object: `lan` cho Link.1 và port quản lý của Bridge.1, interface của
+    kết nối cho VLAN và bridge của nó. Không có thì 0, vì kernel không lưu thời điểm đổi trạng thái của netdev (Conditional);
+  - `PortState` từ `/sys/class/net/<port>/brport/state` (0..4 → `Disabled`/`Listening`/`Learning`/`Forwarding`/`Blocking`);
+    port quản lý là `Forwarding` khi bridge Up;
+  - `Bridging.MaxBridgeEntries`/`MaxDBridgeEntries` = 1 + `WAN_MAX_ENTRIES` (33).
+- `device_ppp_mtk.c`: `PPP.Interface.{i}.Stats` của netdev phiên PPP (`l3_device` của netifd, không có thì `pppoe-<iface>`).
+- `wan_mtk.c`: `Optical.Interface.1` có thêm `Alias` (kho), `LastChange` 0, `Upstream` true, `Stats` (8 lá) của netdev `pon`.
+- `deviceinfo_mtk.c`: `OpticalSignalLevel`/`TransmitOpticalLevel` gộp vào `Optical.Interface`. Dùng cùng số đọc ponmgr
+  như `X_AIS_GPON` (0,1 µW), đổi sang đơn vị `Dbm1000` (0,001 dBm, bước 2). Không có số đọc → `-65536` (đáy thang, tức không
+  có ánh sáng).
+- `wlan_mtk.c`: `WiFi.Radio.{i}.Stats` (8 lá) = tổng các interface của band đó. Driver MTK không có netdev cho radio
+  (Conditional).
+- Bảng Stats viết thẳng ra, không qua macro: `verify-dm-paths.py` (bộ quét tĩnh) không mở macro trong header, nên trước đó
+  báo thiếu 45 tên.
+- `check-c-sanity.py`: thêm `lround`, `json_object_get_boolean` vào danh sách tên thư viện.
+- Mapping: 87 dòng `new`.
+
+**Kiểm (host):**
+- `run.sh tr181` thêm:
+  - `LastChange` Link.1 / VLAN.1 / Link.2 / port quản lý / Port.2 = `300 120 0 300 0` (uptime trong ubus giả);
+  - `PortState`, `Max*BridgeEntries` 33;
+  - bộ đếm 0 vì container không có netdev đó;
+  - Optical: `true cpe-Optical-1 0 -65536 -65536 0`;
+  - PPP Stats 0.
+- `tr181-map.py check` 756 = 756. `tr181-bbf-check` 707+ tham số: type/access/status/secured 0, enum 1 (NAT, §86).
+- Profile sau S5a: EthernetLink:1, VLANTermination:1, Bridge:1, Optical:1 không còn lá thiếu. Tổng còn thiếu 98 − 15
+  (PPP Stats) = 83, dồn sang S5b.
+- Giá trị bộ đếm thật chỉ kiểm được trên board.
+- `run.sh all` 25/25 (`ALL_RC=0`, 15:17). Commit code `08042b8`.
