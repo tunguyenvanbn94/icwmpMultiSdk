@@ -24,7 +24,7 @@ là kỳ vọng theo source, không phải log thật. Mask password trước kh
 | Dump một object/param | `ubus call tr069 dm '{"cmd":"get","path":"Device.WiFi.SSID.1."}'` |
 | Giả lập ACS Set | `ubus call tr069 dm '{"cmd":"set","path":"…","value":"…","key":"k1"}'` |
 | Giả lập ACS Inform ngay | `ubus call tr069 inform` (`'{"event":"6 CONNECTION REQUEST"}'` để chọn event) |
-| Đổi model TR-098 ↔ TR-181 | `$U set cwmp.cpe.datamodel=tr181; $U commit cwmp; ubus call tr069 command '{"command":"reload"}'` |
+| Đổi model TR-098 ↔ TR-181 | `$U set cwmp.cpe.datamodel=tr181; $U commit cwmp; ubus call tr069 command '{"command":"reload"}'` — model có hiệu lực từ lúc reload (giữa hai session); chỉ đổi UCI mà không reload thì agent vẫn phục vụ model cũ, như MTK (`tr181-0023`) |
 | Sự thật phía MDM (không qua icwmp) | `tr69_mdmcli` → `mdm getpv Device.ManagementServer. 0` · `dumpmdm` |
 
 ## 1. Process, bus, file

@@ -62,6 +62,7 @@
 #include "dmuci.h"
 #include "dmjson.h"
 #include "dmentry.h"
+#include "dm_registry.h"
 #include "dmcommon.h"
 #include "sdk/sdk.h"
 #include "dmbdk.h"
@@ -126,14 +127,15 @@ static const size_t proxy_target_len = sizeof(PROXY_TARGET) - 1;
 /* mode                                                                      */
 /* ------------------------------------------------------------------------ */
 
-/* dm_platform_ctx_init(): the UCI context of libtr098 is up at that point */
+/* dm_platform_ctx_init(): the model icwmpd latched from cwmp.cpe.datamodel
+ * between sessions (dm_entry_load_model(), sdk/bdk/icwmp_bdk.c at start and
+ * at every config reload), as on MTK -- not the option itself, which an ACS
+ * write of DataModel changes in the middle of a session */
 void bdk_proxy_load_mode(void)
 {
-	char *v = NULL;
 	int was = proxy_tr181;
 
-	dmuci_get_option_value_string("cwmp", "cpe", "datamodel", &v);
-	proxy_tr181 = (v && strcasecmp(v, "tr181") == 0) ? 1 : 0;
+	proxy_tr181 = dm_entry_model() == DM_MODEL_TR181;
 	if (proxy_tr181 != was)
 		cmsLog_notice("data model root: %s", proxy_tr181 ? "Device. (TR-181, generic HAL passthrough)"
 		                                                  : "InternetGatewayDevice. (TR-098)");

@@ -477,9 +477,9 @@ int dm_entry_reload_enabled_notify(unsigned int dm_type, unsigned int amd_versio
 /* Data model the agent serves, latched from cwmp.cpe.datamodel.  icwmpd
  * calls dm_entry_load_model() at start and at every config reload, i.e.
  * between sessions, so a DataModel the ACS writes (X_HNI_Icwmp.DataModel)
- * takes effect at the next session, never half way through one.  Following
- * it is up to the SDK (dm_platform_select_root(): mtk does; bdk still reads
- * the option at every context).  "tr181" needs TR-181 modules in this
+ * takes effect at the next session, never half way through one.  The SDK's
+ * dm_platform_select_root() follows it (mtk, and bdk through
+ * bdk_proxy_load_mode()).  "tr181" needs TR-181 modules in this
  * build: without them TR-098 stays and the log says why. */
 static int dm_latched_model = DM_MODEL_TR098;
 

@@ -55,6 +55,7 @@
 
 /* libtr098 BDK helpers (single MDM set with proper type lookup) */
 #include <icwmp_dm/dmbdk.h>
+#include <icwmp_dm/dmentry.h>
 
 #define BDK_LOCK_TIMEOUT_MS   (6 * 1000)   /* TR69C_LOCK_TIMEOUT */
 #define BDK_BOOT_WAIT_SEC     20           /* tr69c: wait for sysmgmt when boot launched */
@@ -93,8 +94,10 @@ int icwmp_bdk_tr181_mode(void)
 }
 
 /* init and every config reload ("ubus call tr069 command reload", end of a
- * session that changed the ACS config): libtr098 re-reads the option at the
- * same moments (dm_platform_ctx_init), so a switch needs no restart */
+ * session that changed the ACS config): the model is latched here for
+ * libtr098 as well (dm_entry_load_model(); dmproxy_bdk.c follows
+ * dm_entry_model()), so both sides switch together, between sessions, and a
+ * switch needs no restart.  "tr181" without a TR-181 module stays TR-098. */
 void icwmp_bdk_load_mode(void)
 {
 	struct uci_context *c = uci_alloc_context();
@@ -105,7 +108,7 @@ void icwmp_bdk_load_mode(void)
 		uci_get_str(c, "cwmp.cpe.datamodel", v, sizeof(v));
 		uci_free_context(c);
 	}
-	bdkTr181 = (strcasecmp(v, "tr181") == 0);
+	bdkTr181 = dm_entry_load_model() ? 1 : 0;
 	if (bdkTr181 != was)
 		cmsLog_notice("data model: %s (cwmp.cpe.datamodel='%s')",
 		              bdkTr181 ? "TR-181 Device." : "TR-098 InternetGatewayDevice.", v);
@@ -910,14 +913,16 @@ void icwmp_platform_config_reloaded(struct cwmp *cwmp)
 	 * from UCI (cwmp.cpe.manufacturer/oui/product_class/serial_number, see
 	 * libtr098 tr098/bdk/deviceinfo_bdk.c), so a "ubus call tr069 command
 	 * reload" must pick the new identity up as well */
+	/* cwmp.cpe.datamodel may have been switched (tr098 <-> tr181): latch it
+	 * first, so the identity below is read from the model the next session
+	 * serves (libtr098 follows the latch, dmproxy_bdk.c) */
+	icwmp_bdk_load_mode();
 	FREE(cwmp->deviceid.manufacturer);
 	FREE(cwmp->deviceid.oui);
 	FREE(cwmp->deviceid.serialnumber);
 	FREE(cwmp->deviceid.productclass);
 	FREE(cwmp->deviceid.softwareversion);
 	cwmp_get_deviceid(cwmp);
-	/* cwmp.cpe.datamodel may have been switched (tr098 <-> tr181) */
-	icwmp_bdk_load_mode();
 }
 
 int icwmp_platform_uloop_register(void)
