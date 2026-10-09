@@ -684,7 +684,8 @@ static DMLEAF tSec181Param[] = {
 {"ModeEnabled", &DMWRITE, DMT_STRING, get_mode_enabled181, set_mode_enabled181, NULL, NULL},
 {"WEPKey", &DMWRITE, DMT_HEXBIN, get_empty, set_wepkey181, NULL, NULL},
 {"PreSharedKey", &DMWRITE, DMT_HEXBIN, get_empty, set_presharedkey, NULL, NULL},
-{"KeyPassphrase", &DMWRITE, DMT_STRING, get_key_passphrase, set_key_passphrase, NULL, NULL},
+/* T7 S4d: secured in TR-181 (reads empty, whatever the key); written as before */
+{"KeyPassphrase", &DMWRITE, DMT_STRING, get_empty, set_key_passphrase, NULL, NULL},
 {0}
 };
 

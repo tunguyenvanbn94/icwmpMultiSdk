@@ -823,8 +823,17 @@ static DMLEAF tXponActivationParams[] = {
 {0}
 };
 
+/* T7 S4d: Password is secured in TR-181 -- it reads empty whatever the PLOAM
+ * password is, so it is no longer sent in every Inform either (the product's
+ * X_AIS.PonPassword of TR-098 is); a write stores it as before */
+static int get_xpon_secured(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "";
+	return 0;
+}
+
 static DMLEAF tXponAuthParams[] = {
-{"Password", &DMWRITE, DMT_STRING, get_pon_password, set_pon_password, &DMFINFRM, NULL},
+{"Password", &DMWRITE, DMT_STRING, get_xpon_secured, set_pon_password, NULL, NULL},
 {"HexadecimalPassword", &DMWRITE, DMT_BOOL, get_xpon_false, set_xpon_false_only, NULL, NULL},
 {0}
 };

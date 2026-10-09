@@ -7,6 +7,15 @@ leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.HopRTT
 leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.Interface	Device.IP.Diagnostics.TraceRoute.Interface	B	the product's grafted branch reads the device name; TR-181 a Device.IP.Interface reference of the device name the product stores (IFREF181, device_ip_mtk.h), a device name still taken
 leaf	InternetGatewayDevice.Device.IP.Interface.{i}.LowerLayers	Device.IP.Interface.{i}.LowerLayers	B	T7 S4: the product's grafted branch reads the device name (br-lan, pon.10, dev_wanbr2); TR-181 the reference of the layer under the interface (Ethernet.Link, Ethernet.VLANTermination, PPP.Interface), stack181_mtk.c
 leaf	InternetGatewayDevice.Device.PPP.Interface.{i}.LowerLayers	Device.PPP.Interface.{i}.LowerLayers	B	T7 S4: the product's pon / pon.<vid>; TR-181 Ethernet.Link.2 (the uplink) or the connection's Ethernet.VLANTermination, written back as the product's value (stack181_mtk.c)
+leaf	InternetGatewayDevice.Device.DynamicDNS.SupportedServices	Device.DynamicDNS.SupportedServices	B	T7 S4d: the names of the Server rows (first quoted string or first word of each services line); the product keeps what comes before the first '"', empty in the ddns-scripts 2.7 format (same value without a services file)
+leaf	InternetGatewayDevice.Device.DynamicDNS.ServerNumberOfEntries	Device.DynamicDNS.ServerNumberOfEntries	B	T7 S4d: TR-181 counts the Server rows (the services of SupportedServices); the product counts the lines of a services file, blank ones too, 2 without one
+leaf	InternetGatewayDevice.Device.DynamicDNS.Client.{i}.Status	Device.DynamicDNS.Client.{i}.Status	B	T7 S4d: TR-181 enum Updated / Connecting / Error / Disabled (<sec>.update of ddns-scripts); the product Up / Error / Disabled
+leaf	InternetGatewayDevice.Device.DynamicDNS.Client.{i}.LastError	Device.DynamicDNS.Client.{i}.LastError	B	T7 S4d: the product's ERROR_* names in the TR-181 enum (NO_ERROR, MISCONFIGURATION_ERROR...)
+leaf	InternetGatewayDevice.Device.DynamicDNS.Client.{i}.Alias	Device.DynamicDNS.Client.{i}.Alias	B	T7 S4d: TR-181 Alias store (cpe-ddns-<n>); the product its alias option, else the section name
+leaf	InternetGatewayDevice.Device.DynamicDNS.Client.{i}.Server	Device.DynamicDNS.Client.{i}.Server	B	T7 S4d: a reference to Device.DynamicDNS.Server.<n>; the product the service name
+leaf	InternetGatewayDevice.Device.DynamicDNS.Client.{i}.Interface	Device.DynamicDNS.Client.{i}.Interface	B	T7 S4d: empty while the network section has no number; the product Device.IP.Interface.0
+leaf	InternetGatewayDevice.Services.StorageService.{i}.Capabilities.SupportedNetworkProtocols	Device.Services.StorageService.{i}.Capabilities.SupportedNetworkProtocols	B	T7 S4d: TR-140 enum SMB/NFS/AFP only, empty for none; the product adds FTP, SFTP, HTTP and None
+leaf	InternetGatewayDevice.Services.StorageService.{i}.Capabilities.SupportedFileSystemTypes	Device.Services.StorageService.{i}.Capabilities.SupportedFileSystemTypes	B	T7 S4d: TR-140 names (FAT32, exFAT, NTFS...); the product the kernel's (vfat, exfat, fuseblk, squashfs)
 leaf	InternetGatewayDevice.Device.IP.Interface.{i}.IPv4AddressNumberOfEntries	Device.IP.Interface.{i}.IPv4AddressNumberOfEntries	B	T7 S4b: TR-181 counts the IPv4Address rows of the table (LAN and routed connection: 1, configured even while down); the product's branch the addresses netifd reports up
 leaf	InternetGatewayDevice.Services.StorageService.{i}.PhysicalMediumNumberOfEntries	-	D	T7 S4b: no PhysicalMedium table in the tree, a count of its rows has nothing to count
 leaf	InternetGatewayDevice.Services.StorageService.{i}.UserAccountNumberOfEntries	-	D	T7 S4b: no UserAccount table in the tree (the product counts /etc/passwd users)
@@ -85,7 +94,7 @@ leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BeaconAdvertiseme
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.MruEnable	-	D	product name without a vendor prefix: a standard TR-181 object cannot carry it (name to agree with the operator, T7)
 prefix	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.	-	D	T7 standard: WPS leaves are constants (a fixed PIN) and writes are dropped: no AccessPoint.{i}.WPS in the TR-181 tree
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BeaconType	Device.WiFi.AccessPoint.{i2}.Security.ModeEnabled	B	TR-181 enumeration (None, WEP-64, WPA2-Personal, WPA3-Personal ...) of the same wireless encryption option
-leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.KeyPassphrase	Device.WiFi.AccessPoint.{i2}.Security.KeyPassphrase	A	wlansec_mtk.c, same setter (MLO pair sync)
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.KeyPassphrase	Device.WiFi.AccessPoint.{i2}.Security.KeyPassphrase	A	wlansec_mtk.c, same setter (MLO pair sync); secured in TR-181: reads empty (T7 S4d, tr181-map.py SECURED)
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.PreSharedKey.{i}.PreSharedKey	Device.WiFi.AccessPoint.{i2}.Security.PreSharedKey	A	same setter (8..63, key1 digest)
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.PreSharedKey.{i}.KeyPassphrase	-	D	TR-181 has one KeyPassphrase (WLANConfiguration.KeyPassphrase above)
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WEPKey.{i}.WEPKey	Device.WiFi.AccessPoint.{i2}.Security.WEPKey	B	TR-181 has one WEP key: the slot of the key index
@@ -446,3 +455,19 @@ new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.OnLink	A	T7 S4c: ipv6_181_mtk.c, ne
 new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.Autonomous	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
 new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.PreferredLifetime	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
 new	-	Device.IP.Interface.{i}.IPv6Prefix.{i}.ValidLifetime	A	T7 S4c: ipv6_181_mtk.c, netifd's ipv6-prefix / ipv6-prefix-assignment
+new	-	Device.DynamicDNS.Server.{i}.Enable	A	T7 S4d: device_ddns_mtk.c, one row per service of SupportedServices
+new	-	Device.DynamicDNS.Server.{i}.Name	A	T7 S4d: device_ddns_mtk.c, one row per service of SupportedServices
+new	-	Device.DynamicDNS.Server.{i}.Alias	A	T7 S4d: device_ddns_mtk.c, one row per service of SupportedServices
+new	-	Device.DynamicDNS.Server.{i}.ServiceName	A	T7 S4d: device_ddns_mtk.c, one row per service of SupportedServices
+new	-	Device.DynamicDNS.Server.{i}.ServerAddress	A	T7 S4d: device_ddns_mtk.c, one row per service of SupportedServices
+new	-	Device.DynamicDNS.Server.{i}.ServerPort	A	T7 S4d: device_ddns_mtk.c, one row per service of SupportedServices
+new	-	Device.DynamicDNS.Server.{i}.SupportedProtocols	A	T7 S4d: device_ddns_mtk.c, one row per service of SupportedServices
+new	-	Device.DynamicDNS.Server.{i}.Protocol	A	T7 S4d: device_ddns_mtk.c, one row per service of SupportedServices
+new	-	Device.DynamicDNS.Server.{i}.CheckInterval	A	T7 S4d: device_ddns_mtk.c, one row per service of SupportedServices
+new	-	Device.DynamicDNS.Server.{i}.RetryInterval	A	T7 S4d: device_ddns_mtk.c, one row per service of SupportedServices
+new	-	Device.DynamicDNS.Server.{i}.MaxRetries	A	T7 S4d: device_ddns_mtk.c, one row per service of SupportedServices
+new	-	Device.DynamicDNS.Client.{i}.HostnameNumberOfEntries	A	T7 S4d: device_ddns_mtk.c, the one name of a client
+new	-	Device.DynamicDNS.Client.{i}.Hostname.{i}.Enable	A	T7 S4d: device_ddns_mtk.c, the client's domain (with lookup_host, as hal_service.c)
+new	-	Device.DynamicDNS.Client.{i}.Hostname.{i}.Status	A	T7 S4d: device_ddns_mtk.c, the client's domain (with lookup_host, as hal_service.c)
+new	-	Device.DynamicDNS.Client.{i}.Hostname.{i}.Name	A	T7 S4d: device_ddns_mtk.c, the client's domain (with lookup_host, as hal_service.c)
+new	-	Device.DynamicDNS.Client.{i}.Hostname.{i}.LastUpdate	A	T7 S4d: device_ddns_mtk.c, the client's domain (with lookup_host, as hal_service.c)

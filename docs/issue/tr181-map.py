@@ -39,6 +39,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 RULES = os.path.join(HERE, "tr181_mapping.tsv")
 MATRIX = os.path.join(HERE, "tr098_coverage_matrix.tsv")
 GRAFT = "InternetGatewayDevice.Device."  # the TR-181 branch inside the product's TR-098 tree
+# TR-181 "secured" parameters (BBF syntax secured="true"): read empty in
+# TR-181 whatever their value, while the product's TR-098 leaf reads it back;
+# an A pair of them is "secured" when the TR-181 side is empty
+SECURED = [r"\.Security\.KeyPassphrase$", r"^Device\.DynamicDNS\.Client\.\d+\.Password$",
+           r"\.TC\.Authentication\.Password$"]
 DYNAMIC = [r"\.Stats\.", r"\.(Bytes|Packets)(Sent|Received)$", r"\.UpTime$", r"\.Uptime$", r"\.LastChange$",
            r"\.CurrentLocalTime$", r"MemoryStatus\.Free$", r"ProcessStatus\.CPUUsage$", r"TemperatureSensor\.\d+\.Value$",
            r"\.LeaseTimeRemaining$", r"ManagementServer\.UDPConnectionRequestAddress$", r"\.UsedSpace$",
@@ -264,6 +269,8 @@ def main():
                 cls["B present"] = cls.get("B present", 0) + 1
             elif d181[t]["value"] == d98[name]["value"]:
                 cls["equal"] = cls.get("equal", 0) + 1
+            elif d181[t]["value"] == "" and any(re.search(x, t) for x in SECURED):
+                cls["secured"] = cls.get("secured", 0) + 1
             elif d98[name]["value"].startswith(GRAFT) and d181[t]["value"] == "Device." + d98[name]["value"][len(GRAFT):]:
                 cls["equal ref"] = cls.get("equal ref", 0) + 1
             elif any(re.search(x, name) or re.search(x, t) for x in DYNAMIC):

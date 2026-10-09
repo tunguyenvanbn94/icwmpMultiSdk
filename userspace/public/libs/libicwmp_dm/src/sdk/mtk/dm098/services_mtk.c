@@ -1006,8 +1006,88 @@ static DMLEAF tLv181Params[] = {
 {0}
 };
 
+/* T7 S4d: the TR-140 enumerations.  SupportedNetworkProtocols lists SMB,
+ * NFS and AFP only (FTP, SFTP and HTTP have their own *Capable leaves):
+ * SMB when smbd is installed, else empty -- not "None".
+ * SupportedFileSystemTypes in the TR-140 names of the kernel's block
+ * filesystems (/proc/filesystems without nodev); the others (squashfs...)
+ * are not storage formats.  fuseblk is NTFS when ntfs-3g is there. */
+static int get_ss181_protocols(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = ss_file("/usr/sbin/smbd") ? "SMB" : "";
+	return 0;
+}
+
+static int get_ss181_filesystems(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	static const struct { const char *kernel, *tr140; } map[] = {
+		{ "msdos", "FAT16" }, { "vfat", "FAT16,FAT32" }, { "ntfs", "NTFS" }, { "ntfs3", "NTFS" },
+		{ "hfs", "HFS" }, { "hfsplus", "HFS+" }, { "ext2", "ext2" }, { "ext3", "ext3" },
+		{ "ext4", "ext4" }, { "xfs", "XFS" }, { "reiserfs", "REISER" }, { "btrfs", "btrfs" },
+		{ "exfat", "exFAT" },
+	};
+	static const char *const order[] = {
+		"FAT16", "FAT32", "NTFS", "HFS", "HFS+", "ext2", "ext3", "ext4", "XFS", "REISER", "btrfs", "exFAT",
+	};
+	char kernel[1024] = "", out[256] = "", have[256] = ",";
+	FILE *f = fopen("/proc/filesystems", "r");
+	char line[128], word[64], *tok, *save = NULL;
+	size_t i;
+
+	if (f) {
+		while (fgets(line, sizeof(line), f)) {
+			if (strstr(line, "nodev") || sscanf(line, "%63s", word) != 1)
+				continue;
+			strncat(kernel, word, sizeof(kernel) - strlen(kernel) - 2);
+			strcat(kernel, ",");
+		}
+		fclose(f);
+	} else {
+		snprintf(kernel, sizeof(kernel), "ext4,ext3,ext2,vfat,ntfs,exfat");
+	}
+	for (tok = strtok_r(kernel, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+		const char *t = NULL;
+
+		if (strcmp(tok, "fuseblk") == 0 && ss_file("/usr/bin/ntfs-3g"))
+			t = "NTFS";
+		for (i = 0; !t && i < sizeof(map) / sizeof(map[0]); i++) {
+			if (strcmp(tok, map[i].kernel) == 0)
+				t = map[i].tr140;
+		}
+		if (t && strlen(have) + strlen(t) + 2 < sizeof(have)) {
+			strcat(have, t);
+			strcat(have, ",");
+		}
+	}
+	for (i = 0; i < sizeof(order) / sizeof(order[0]); i++) {
+		char key[16];
+
+		snprintf(key, sizeof(key), ",%s,", order[i]);
+		if (!strstr(have, key))
+			continue;
+		if (*out)
+			strcat(out, ",");
+		strcat(out, order[i]);
+	}
+	*value = dmstrdup(out);
+	return 0;
+}
+
+/* copy of tSsCapParams, keep in step */
+static DMLEAF tSsCap181Params[] = {
+{"FTPCapable", &DMREAD, DMT_BOOL, get_ss_ftp, NULL, NULL, NULL},
+{"SFTPCapable", &DMREAD, DMT_BOOL, get_ss_sftp, NULL, NULL, NULL},
+{"HTTPCapable", &DMREAD, DMT_BOOL, get_ss_http, NULL, NULL, NULL},
+{"HTTPSCapable", &DMREAD, DMT_BOOL, get_ss_http, NULL, NULL, NULL},
+{"HTTPWritable", &DMREAD, DMT_BOOL, get_stb_false, NULL, NULL, NULL},
+{"SupportedNetworkProtocols", &DMREAD, DMT_STRING, get_ss181_protocols, NULL, NULL, NULL},
+{"SupportedFileSystemTypes", &DMREAD, DMT_STRING, get_ss181_filesystems, NULL, NULL, NULL},
+{"VolumeEncryptionCapable", &DMREAD, DMT_BOOL, get_ss_encryption, NULL, NULL, NULL},
+{0}
+};
+
 static DMOBJ tSsChild181Obj[] = {
-{"Capabilities", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tSsCapParams, NULL},
+{"Capabilities", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tSsCap181Params, NULL},
 {"LogicalVolume", &DMWRITE, add_ss_none, del_ss_none, NULL, browse_lv, NULL, NULL, NULL, tLv181Params, NULL},
 {0}
 };

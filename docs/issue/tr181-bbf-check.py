@@ -22,8 +22,14 @@ and for the std ones the differences are listed:
   access     writable here, readOnly in the standard, or the other way
   type       the value type differs (xsd type of the dump vs the BBF syntax)
   status     the standard marks it deprecated / obsoleted / deleted
-Exit 1 when there is an unknown name, an access difference or a deleted /
-obsoleted name; types and deprecated names are reported, not judged.
+  enum       a value (each item of a list) outside the enumeration of the
+             parameter or of its dataType (with <values.json>)
+  secured    a secured / hidden parameter (passwords, keys) that does not
+             read empty (with <values.json>)
+Exit 1 when there is an unknown name, an access difference, a deleted /
+obsoleted name, a value outside its enumeration or a secured parameter read
+back; types and deprecated
+names are reported, not judged.
 --list prints every name of each class, not only the counts.
 
 --profile checks the requirements of TR-181 profiles (base / extends
@@ -68,14 +74,38 @@ def syntax_type(param, datatypes):
     return ""
 
 
+# name -> (enumeration values, is a list) of the parameters that have one
+ENUMS = {}
+
+
+# names of the secured / hidden parameters
+SECURED = set()
+
+
+def syntax_enum(param, dtenums):
+    for s in param:
+        if strip_ns(s.tag) != "syntax":
+            continue
+        is_list = any(strip_ns(t.tag) == "list" for t in s)
+        ev = [e.get("value") for e in s.iter() if strip_ns(e.tag) == "enumeration"]
+        for t in s:
+            if not ev and strip_ns(t.tag) == "dataType" and t.get("ref") in dtenums:
+                ev = dtenums[t.get("ref")]
+        return (ev, is_list) if ev else None
+    return None
+
+
 def load_model(path, mount):
     """name -> (type, access, status) of the first <model> of path; service
     models (isService) mounted under mount"""
     tree = ET.parse(path)
     root = tree.getroot()
-    datatypes = {}
+    datatypes, dtenums = {}, {}
     for d in root.iter():
         if strip_ns(d.tag) == "dataType" and d.get("name"):
+            ev = [e.get("value") for e in d.iter() if strip_ns(e.tag) == "enumeration"]
+            if ev:
+                dtenums[d.get("name")] = ev
             base = d.get("base", "")
             for t in d:
                 if strip_ns(t.tag) in TYPES:
@@ -97,6 +127,7 @@ def load_model(path, mount):
             if strip_ns(obj.tag) == "parameter":
                 out[prefix + obj.get("name", "")] = (syntax_type(obj, datatypes), obj.get("access", "readOnly"),
                                                      obj.get("status", "current"))
+                ENUMS[prefix + obj.get("name", "")] = syntax_enum(obj, dtenums)
                 continue
             if strip_ns(obj.tag) != "object":
                 continue
@@ -110,6 +141,9 @@ def load_model(path, mount):
                 if ostatus != "current" and st == "current":
                     st = ostatus
                 out[oname + p.get("name", "")] = (syntax_type(p, datatypes), p.get("access", "readOnly"), st)
+                ENUMS[oname + p.get("name", "")] = syntax_enum(p, dtenums)
+                if any(strip_ns(x.tag) == "syntax" and "true" in (x.get("secured"), x.get("hidden")) for x in p):
+                    SECURED.add(oname + p.get("name", ""))
         break
     return out
 
@@ -244,11 +278,24 @@ def main():
         if f:
             std.update(load_model(f[-1], "Device.Services."))
     names = json.load(open(a[1]))["parameters"]
-    types = {}
+    types, values = {}, {}
     if len(a) > 2:
-        types = {p["parameter"]: p.get("type", "") for p in json.load(open(a[2]))["parameters"]}
+        for p in json.load(open(a[2]))["parameters"]:
+            types[p["parameter"]] = p.get("type", "")
+            values[p["parameter"]] = p.get("value", "")
     seen, cls = {}, {"std": [], "vendor": [], "unknown": []}
-    diff = {"access": [], "type": [], "status": []}
+    diff = {"access": [], "type": [], "status": [], "enum": [], "secured": []}
+    diff["secured"] = sorted(set(norm(n) for n, v in values.items() if v != "" and norm(n) in SECURED))
+    outside = {}
+    for n, v in values.items():
+        e = ENUMS.get(norm(n))
+        if not e or v == "":
+            continue
+        for item in (v.split(",") if e[1] else [v]):
+            if item not in e[0]:
+                outside.setdefault(norm(n), set()).add(item)
+    for k in sorted(outside):
+        diff["enum"].append("%s  %s" % (k, ",".join(sorted(outside[k]))))
     for p in names:
         n = p["parameter"]
         if n.endswith("."):
@@ -287,19 +334,20 @@ def main():
           len(glob.glob(os.path.join(a[0], "tr-1[34]*-cwmp-full.xml")))))
     print("parameters %d: std %d, vendor %d, unknown %d" % (len(seen), len(cls["std"]), len(cls["vendor"]),
                                                             len(cls["unknown"])))
-    print("std differences: access %d, type %d, status %d" % (len(diff["access"]), len(diff["type"]),
-                                                              len(diff["status"])))
+    print("std differences: access %d, type %d, status %d, enum %d, secured %d" %
+          (len(diff["access"]), len(diff["type"]), len(diff["status"]), len(diff["enum"]), len(diff["secured"])))
     for c in ("unknown",) + (("vendor",) if listing else ()):
         if cls[c]:
             print("== %s" % c)
             for k in sorted(cls[c]):
                 print("  " + k)
-    for d in ("access", "status", "type"):
+    for d in ("access", "status", "type", "enum", "secured"):
         if diff[d]:
             print("== %s" % d)
             for x in sorted(diff[d]):
                 print("  " + x)
-    bad = cls["unknown"] or diff["access"] or [x for x in diff["status"] if not x.endswith("deprecated")]
+    bad = cls["unknown"] or diff["access"] or diff["enum"] or diff["secured"] or \
+        [x for x in diff["status"] if not x.endswith("deprecated")]
     print("RESULT: %s" % ("FAIL" if bad else "PASS"))
     return 1 if bad else 0
 

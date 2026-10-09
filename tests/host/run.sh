@@ -1533,7 +1533,7 @@ PY
 # must be one of them.
 # T2 (LAN) fixtures: a LAN, a WAN, four switch ports, a DHCP pool and two
 # hosts, one on Wi-Fi and one on a LAN port.  Saved and put back like p8's.
-TR181_CONFIGS="network dhcp lanhost wireless wan firewall_clay hmxwslbackend pon system clay"
+TR181_CONFIGS="network dhcp lanhost wireless wan firewall_clay hmxwslbackend pon system clay ddns"
 tr181_fixtures() {
 	for c in $TR181_CONFIGS; do
 		if [ -f "/etc/config/$c" ]; then cp "/etc/config/$c" "$RUN/$c.t181saved"; else rm -f "${RUN:?}/${c:?}.t181saved"; fi
@@ -1551,6 +1551,12 @@ tr181_fixtures() {
 	uci -q commit system
 	# the WAN uplink (T7 S4: Ethernet.Link.2 on Optical.Interface.1)
 	printf "config opermode 'opermode'\n\toption uplink 'pon'\n" > /etc/config/clay
+	# a DDNS client and the two services of the product (T7 S4d), with
+	# their update URLs in a ddns-scripts 2.7 services file
+	printf "config ddns 'global'\n\toption ddns_rundir '/var/run/ddns'\n\nconfig service 'myddns'\n\toption enabled '1'\n\toption service_name 'no-ip.com'\n\toption domain 'home.example.org'\n\toption lookup_host 'home.example.org'\n\toption username 'ddnsuser'\n\toption password 'pw-ddns'\n\toption ip_source 'network'\n\toption ip_network 'if0'\n\toption interface 'if0'\n" > /etc/config/ddns
+	mkdir -p /etc/ddns /var/run/ddns
+	printf '"dyndns.org"\t"http://[USERNAME]:[PASSWORD]@members.dyndns.org/nic/update?hostname=[DOMAIN]&myip=[IP]"\n"no-ip.com"\t"https://dynupdate.no-ip.com:8443/nic/update?hostname=[DOMAIN]&myip=[IP]"\n' > /etc/ddns/services
+	rm -f /var/run/ddns/myddns.pid /var/run/ddns/myddns.update /var/run/ddns/myddns.result
 	# the G-PON ONU (T7: Device.XPON)
 	printf "config xpon_auth 'xpon_auth'\n\toption pon_mode 'GPON'\n\toption sn 'HMXA0000ABCD'\n\toption sn_ascii_password 'pw-1234'\n" > /etc/config/pon
 	cat > /etc/config/network <<'EOF2'
@@ -1775,6 +1781,7 @@ tr181_fixtures_restore() {
 		if [ -f "$RUN/$c.t181saved" ]; then cp "$RUN/$c.t181saved" "/etc/config/$c"; else rm -f "/etc/config/${c:?}"; fi
 	done
 	if [ -f "$RUN/dhcp.leases.t181saved" ]; then mv "$RUN/dhcp.leases.t181saved" /tmp/dhcp.leases; else rm -f /tmp/dhcp.leases; fi
+	rm -f /etc/ddns/services /var/run/ddns/myddns.pid /var/run/ddns/myddns.update
 }
 
 # fault of one "dm set" over ubus, 0 when it was taken
@@ -2038,6 +2045,27 @@ PY
 		"2001:db8:10:1::1 AutoConfigured $LP6 2001:db8:10:1::/64 Child $P6 true true"
 	expect "S4c lifetimes are dateTime" "$(dm_value $LA6.PreferredLifetime | grep -c '^20[0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]Z$')" "1"
 	expect "S4c set-same: IPAddress, Anycast, Prefix" "$(dm_set_fault $A6.IPAddress 2001:db8:ff::10 "$key") $(dm_set_fault $A6.IPAddress 2001:db8:ff::11 "$key") $(dm_set_fault $A6.Anycast true "$key") $(dm_set_fault $LP6.Prefix 2001:db8:10:2::/64 "$key")" "0 9007 9007 9007"
+	# T7 S4d: DynamicDNS.Server rows from SupportedServices, Client.Server a
+	# reference, Status/LastError in the TR-181 enums, Hostname.1 the domain
+	DD=Device.DynamicDNS DC=Device.DynamicDNS.Client.1
+	expect "S4d servers" "$(dm_value $DD.ServerNumberOfEntries) $(dm_value $DD.SupportedServices) $(dm_value $DD.Server.1.ServerAddress) $(dm_value $DD.Server.1.ServerPort) $(dm_value $DD.Server.1.Protocol) $(dm_value $DD.Server.2.ServiceName) $(dm_value $DD.Server.2.ServerAddress) $(dm_value $DD.Server.2.ServerPort) $(dm_value $DD.Server.2.Protocol)" \
+		"2 dyndns.org,no-ip.com members.dyndns.org 80 HTTP no-ip.com dynupdate.no-ip.com 8443 HTTPS"
+	expect "S4d client" "$(dm_value $DC.Server) $(dm_value $DC.Status) $(dm_value $DC.LastError) $(dm_value $DC.Alias) $(dm_value $DC.Interface) $(dm_value $DC.HostnameNumberOfEntries) $(dm_value $DC.Hostname.1.Name) $(dm_value $DC.Hostname.1.Status) $(dm_value $DC.Hostname.1.LastUpdate)" \
+		"$DD.Server.2 Error NO_ERROR cpe-ddns-1 $I.$w0 1 home.example.org Error 0001-01-01T00:00:00Z"
+	sleep 300 & ddpid=$!
+	echo $ddpid > /var/run/ddns/myddns.pid
+	expect "S4d client running, no update yet" "$(dm_value $DC.Status) $(dm_value $DC.Hostname.1.Status)" "Connecting Updating"
+	awk '{print $1 - 60}' /proc/uptime > /var/run/ddns/myddns.update
+	expect "S4d updated a minute ago" "$(dm_value $DC.Status) $(dm_value $DC.Hostname.1.Status) $(dm_value $DC.Hostname.1.LastUpdate | grep -c '^20[0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]Z$')" "Updated Registered 1"
+	kill $ddpid 2>/dev/null; wait $ddpid 2>/dev/null
+	rm -f /var/run/ddns/myddns.pid /var/run/ddns/myddns.update
+	expect "S4d set Server.1, Server.3, back" "$(dm_set_fault $DC.Server $DD.Server.1 "$key") $(uci -q get ddns.myddns.service_name) $(dm_set_fault $DC.Server $DD.Server.3 "$key") $(dm_set_fault $DC.Server no-ip.com "$key") $(dm_set_fault $DC.Server $DD.Server.2 "$key") $(uci -q get ddns.myddns.service_name)" \
+		"0 dyndns.org 9007 9007 0 no-ip.com"
+	expect "S4d set Hostname.1.Name, empty" "$(dm_set_fault $DC.Hostname.1.Name new.example.org "$key") $(uci -q get ddns.myddns.domain) $(uci -q get ddns.myddns.lookup_host) $(dm_set_fault $DC.Hostname.1.Name '' "$key") $(dm_set_fault $DC.Hostname.1.Name home.example.org "$key")" \
+		"0 new.example.org new.example.org 9007 0"
+	expect "S4d secured: DDNS Password, KeyPassphrase read empty" "[$(dm_value $DC.Password)] [$(dm_value Device.WiFi.AccessPoint.1.Security.KeyPassphrase)] $(uci -q get ddns.myddns.password)" "[] [] pw-ddns"
+	expect "S4d server set-same" "$(dm_set_fault $DD.Server.1.ServerPort 80 "$key") $(dm_set_fault $DD.Server.1.ServerPort 81 "$key") $(dm_set_fault $DD.Server.2.MaxRetries 3 "$key")" "0 9007 9007"
+	expect "S4d storage capabilities in TR-140 names" "[$(dm_value Device.Services.StorageService.1.Capabilities.SupportedNetworkProtocols)] $(dm_value Device.Services.StorageService.1.Capabilities.SupportedFileSystemTypes | grep -c 'vfat\|squashfs\|None')" "[] 0"
 	expect "S4b: no UserAccount/PhysicalMedium/Folder counts, PhysicalReference empty" "$(dm_value Device.Services.StorageService.1.UserAccountNumberOfEntries) $(dm_value Device.Services.StorageService.1.PhysicalMediumNumberOfEntries) $(dm_value Device.Services.StorageService.1.LogicalVolume.1.FolderNumberOfEntries) [$(dm_value Device.Services.StorageService.1.LogicalVolume.1.PhysicalReference)]" \
 		"<none> <none> <none> []"
 	# T7: Time.Client.1 for the NTPServer1..5 TR-181 2.19 deleted; Status from
@@ -2056,7 +2084,8 @@ PY
 	# (no ponmgr here: ONUState empty, ANI Status Unknown)
 	X=Device.XPON.ONU.1.ANI.1
 	expect "XPON counts, PONMode, Status" "$(dm_value Device.XPON.ONUNumberOfEntries) $(dm_value Device.XPON.ONU.1.ANINumberOfEntries) $(dm_value $X.PONMode) $(dm_value $X.Status)" "1 1 G-PON Unknown"
-	expect "XPON VendorID, SerialNumber, Password" "$(dm_value $X.TC.ONUActivation.VendorID) $(dm_value $X.TC.ONUActivation.SerialNumber) $(dm_value $X.TC.Authentication.Password) $(dm_value $X.TC.Authentication.HexadecimalPassword)" "HMXA HMXA0000ABCD pw-1234 false"
+	# T7 S4d: Password is secured, it reads empty (the write still lands)
+	expect "XPON VendorID, SerialNumber, Password" "$(dm_value $X.TC.ONUActivation.VendorID) $(dm_value $X.TC.ONUActivation.SerialNumber) $(dm_value $X.TC.Authentication.Password) $(dm_value $X.TC.Authentication.HexadecimalPassword)" "HMXA HMXA0000ABCD  false"
 	expect "set XPON Password" "$(dm_set_fault $X.TC.Authentication.Password pw-5678 "$key") $(uci -q get pon.xpon_auth.sn_ascii_password)" "0 pw-5678"
 	expect "set HexadecimalPassword true, ONU Enable false" "$(dm_set_fault $X.TC.Authentication.HexadecimalPassword true "$key") $(dm_set_fault Device.XPON.ONU.1.Enable false "$key")" "9007 9007"
 	expect "SupportedConnReqMethods, Firewall.Config" "$(dm_value Device.ManagementServer.SupportedConnReqMethods) $(dm_value Device.Firewall.Config)" "HTTP,STUN High"
@@ -2104,8 +2133,7 @@ PY
 	expect "set PeriodicInformInterval -5 (xsd:unsignedInt)" "$(dm_set_fault Device.ManagementServer.PeriodicInformInterval -5 "$key")" "9007"
 	$UBUS -t 120 call tr069 dm '{"cmd":"get","path":"Device."}' > "$RUN/tr181.gpv" 2>/dev/null
 	# T7 S4b: every NumberOfEntries reads the number of rows its table has in
-	# the same dump.  DynamicDNS.ServerNumberOfEntries counts the provider
-	# list, there is no Server table yet (analysis section 83)
+	# the same dump (DynamicDNS.Server since S4d)
 	expect "every NumberOfEntries = the rows of its table" "$(python3 - "$RUN/tr181.gpv" <<'PY2'
 import json, re, sys
 vals = {x["parameter"]: x.get("value", "") for x in json.load(open(sys.argv[1]))["parameters"]}
@@ -2113,7 +2141,7 @@ rows = {}
 for k in vals:
     for m in re.finditer(r"\.(\d+)\.", k):
         rows.setdefault(k[:m.start()] + ".", set()).add(m.group(1))
-skip = {"Device.DynamicDNS.ServerNumberOfEntries"}
+skip = set()
 bad = ["%s=%s rows %d" % (k, v, len(rows.get(k[:-15] + ".", ())))
        for k, v in sorted(vals.items()) if k.endswith("NumberOfEntries") and k not in skip
        and str(len(rows.get(k[:-15] + ".", ()))) != v]
