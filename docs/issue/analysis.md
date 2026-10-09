@@ -5561,3 +5561,49 @@ Trên dump S4d: thiếu 166 lá, 26 yêu cầu create/delete. Chia lô:
   (PPP Stats) = 83, dồn sang S5b.
 - Giá trị bộ đếm thật chỉ kiểm được trên board.
 - `run.sh all` 25/25 (`ALL_RC=0`, 15:17). Commit code `08042b8`.
+
+## 88. Board: image S4c+S4d+S5a (`47c97d5`) (09/10 15:18–15:31)
+
+**Build:**
+- `sdkbuild3.sh` tăng dần ở `2_src` (HEAD `47c97d5`), `ICWMP_IMAGE_RC=0`.
+- `libtr098.so.3.0.0` md5 `591c34b1…`, có `mtk-ipv6-181`, `PortState`, `cpe-ddns-server`, `OpticalSignalLevel`.
+- `tclinux.bin` `27518362…` → `.icwmp-images/tclinux_t7s5a_47c97d5_devaccess.bin`.
+
+**G9 image cũ `a302687`** (`logs/20261009_g9_soak_image_a302687.csv`): 25 mẫu 11:24→15:24, pid 26150 không đổi, VmRSS
+5828–5832 kB, fd 12, 11 thread, success 1 (Inform 12 giờ, không có phiên mới), failure 2 / starts 4 từ cửa sổ.
+
+**Nạp** (đường WebUI): md5 trùng hai đầu, `Model validation successful`, `"valid": true`, `sysupgrade -T` rc 0;
+`sysupgrade` 15:25:05; ping lại lúc kiểm 15:28:08. `libtr098` trên board trùng bản build, agent `up`, 3 phiên success.
+
+**TR-098 parity: PASS** (1735 chung: 1577 bằng, 110 động, 16 đã biết, 32 nháy).
+
+**`tr181_window.sh`** (15:29; log `logs/20261009_t7s5a_board_tr181_window.log`):
+- Dump TR-181 có 2167 giá trị trong 1 s, tên trong 2 s, nên Stats/LastChange không làm chậm GPV.
+- So cặp: **PASS**. 1078 bằng + 2 tham chiếu, B 227, `secured` 12 (KeyPassphrase các AP), động 102, D 332.
+- **`tr181-bbf-check`: RESULT PASS** — 652 tham số; unknown/access/type/status/enum/secured đều 0. Board không có rule
+  NAT `tcp/udp` nên lỗi enum NAT (§86) không lộ ở đây.
+- Kiểm chung lá đếm: 0 lệch. `/etc/config` trước và sau giống hệt.
+- Profile trên dump board: EthernetLink:1, VLANTermination:1, Bridge:1, Optical:1 **0 lá thiếu** (chỉ còn create/delete,
+  S5c); PPPInterface:2 còn 8 (S5b).
+
+**Giá trị thật (Verified trên board):**
+- Bộ đếm:
+  - `Link.1` (br-lan): 94326 B nhận, 105424 B gửi, 841 gói;
+  - `Link.2` (pon): 347310 / 473944 B;
+  - `VLANTermination.1` (pon.10): 230387 B gửi;
+  - `PPP.Interface.1`: 51783 B nhận;
+  - `Optical.Interface.1`: 347374 B nhận;
+  - `Radio.2`: 3200 B gửi.
+  Kernel Airoha không có `rx_broadcast`/`tx_broadcast` trong sysfs, nên Broadcast* là 0 và Unicast* = Packets*.
+- `LastChange`: Link.1 và port quản lý 185 s, VLAN.1 và PPP 184 s (≈ uptime 3 phút); Link.2, Port.2, Port.6 là 0.
+- `PortState`: port quản lý `Forwarding`, `eth0.1` `Disabled` (brport state 0, không cắm cáp), `ra0` `Forwarding`.
+- `OpticalSignalLevel` -22006, `TransmitOpticalLevel` 2456, khớp `X_AIS_GPON` -22.0 dBm / 2.5 dBm; bước 2 đúng.
+- DDNS: client của sản phẩm đang tắt, nên `Status`/`Hostname.Status` `Disabled`, `LastError` `MISCONFIGURATION_ERROR`
+  (cách sản phẩm báo client tắt), `Server` = `Server.1` (dyndns.org), `Interface` rỗng (`notused`), `Password` rỗng.
+  - **Lỗi tìm được:** `Server.2.ServerAddress` = `dynupdate6.noip.com`. Script `update_no-ip_com.sh` khai `__UPDURL6`
+    (IPv6) trước `__UPDURL`, mà S4d lấy URL đầu tiên. Đã sửa: ưu tiên dòng `__UPDURL=` (cùng commit S5b).
+- Capabilities: `FAT16,FAT32,NTFS,ext2,ext3,ext4,exFAT`, `SMB` (board có smbd).
+- Secured: `KeyPassphrase`, XPON `Password`, DDNS `Password` đọc rỗng.
+- IPv6: không có IPv6 global trên lab; bảng IPv6 rỗng, lá đếm 0 = 0 dòng.
+
+G9 image mới từ 15:30:54 (pid 26004, VmRSS 5788 kB). Đã dọn file test và image tải lên trên board.
