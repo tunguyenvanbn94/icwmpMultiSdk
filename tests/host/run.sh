@@ -1927,6 +1927,11 @@ for x in json.load(open(sys.argv[1]))["parameters"]:
 	for d in traceroute downloadDiag uploadDiag nslookup; do
 		uci -q -P /var/state/$d set easycwmp.@local[0].Interface=
 	done
+	# T7 S2: TR-181 IPPing DSCP is unsignedInt[0:63] ("" reads 0), the
+	# product's unknown time 0000-00-00T00:00:00.000000 reads 0001-01-01T00:00:00Z
+	expect "IPPing DSCP" "$(dm_value Device.IP.Diagnostics.IPPing.DSCP) $(dm_set_fault Device.IP.Diagnostics.IPPing.DSCP 64 "$key") $(dm_set_fault Device.IP.Diagnostics.IPPing.DSCP 10 "$key") $(dm_value Device.IP.Diagnostics.IPPing.DSCP)" "0 9007 0 10"
+	uci -q -P /var/state set easycwmp.@local[0].DSCP=
+	expect "Download ROMTime unknown" "$(dm_value Device.IP.Diagnostics.DownloadDiagnostics.ROMTime)" "0001-01-01T00:00:00Z"
 	# T7 S1: the product's placeholders (XMPP, LTE, STBService) and the names
 	# the standard does not have are not in the TR-181 tree, or take their
 	# standard / vendor form (docs/plan/tr181_mtk_design.md T7)
@@ -1997,6 +2002,17 @@ for x in json.load(open(sys.argv[1]))["parameters"]:
 	expect "set Time.Enable maybe (xsd:boolean)" "$(dm_set_fault Device.Time.Enable maybe "$key")" "9007"
 	expect "set PeriodicInformInterval -5 (xsd:unsignedInt)" "$(dm_set_fault Device.ManagementServer.PeriodicInformInterval -5 "$key")" "9007"
 	$UBUS -t 120 call tr069 dm '{"cmd":"get","path":"Device."}' > "$RUN/tr181.gpv" 2>/dev/null
+	# T7 S2: the standard types on the wire (counters unsignedLong, times
+	# dateTime, keys hexBinary, TransmitPower int, IPPing DSCP unsignedInt)
+	expect "TR-181 types (T7 S2)" "$(python3 - "$RUN/tr181.gpv" <<'PY2'
+import json, sys
+t = {p["parameter"]: p.get("type", "") for p in json.load(open(sys.argv[1]))["parameters"]}
+print(" ".join(t.get(n, "-") for n in ("Device.Ethernet.Interface.1.Stats.BytesSent", "Device.WiFi.SSID.1.Stats.PacketsReceived",
+      "Device.IP.Interface.1.Stats.BytesReceived", "Device.IP.Diagnostics.DownloadDiagnostics.ROMTime",
+      "Device.WiFi.Radio.1.TransmitPower", "Device.WiFi.AccessPoint.1.Security.PreSharedKey",
+      "Device.IP.Diagnostics.IPPing.DSCP", "Device.DHCPv6.Server.Pool.1.DUID")))
+PY2
+)" "xsd:unsignedLong xsd:unsignedLong xsd:unsignedLong xsd:dateTime xsd:int xsd:hexBinary xsd:unsignedInt xsd:hexBinary"
 	# back to TR-098 the way an ACS does it, over ubus: reload right away.
 	# Same ParameterKey as before, so that the pair comparison below does not
 	# see the key this very set would write

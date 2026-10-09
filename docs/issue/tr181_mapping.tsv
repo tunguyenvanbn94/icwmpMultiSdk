@@ -306,12 +306,23 @@ new	-	Device.Optical.InterfaceNumberOfEntries	A	wan_mtk.c, 1
 new	-	Device.Optical.Interface.{i}.Enable	A	wan_mtk.c
 new	-	Device.Optical.Interface.{i}.Name	A	wan_mtk.c, pon
 prefix	InternetGatewayDevice.IPPingDiagnostics.	Device.IP.Diagnostics.IPPing.	A	ipping_mtk.c, same store and launcher
+leaf	InternetGatewayDevice.IPPingDiagnostics.DSCP	Device.IP.Diagnostics.IPPing.DSCP	B	T7 S2: unsignedInt[0:63] in TR-181 ("" reads 0, out of range is 9007), an unchecked string in the product's TR-098
 leaf	InternetGatewayDevice.IPPingDiagnostics.Interface	Device.IP.Diagnostics.IPPing.Interface	B	Device.IP.Interface reference instead of the TR-098 path (translated both ways)
 prefix	InternetGatewayDevice.TraceRouteDiagnostics.	Device.IP.Diagnostics.TraceRoute.	A	the product's two views of one test (same store and launcher), Device.IP.Diagnostics.TraceRoute since T1
 leaf	InternetGatewayDevice.TraceRouteDiagnostics.Interface	Device.IP.Diagnostics.TraceRoute.Interface	B	TR-098 a device name, unset reads "default"; TR-181 a Device.IP.Interface reference of the device name the product stores (IFREF181, device_ip_mtk.h), a device name still taken
 prefix	InternetGatewayDevice.DownloadDiagnostics.	Device.IP.Diagnostics.DownloadDiagnostics.	A	tr143diag_mtk.c, same store and launcher
+leaf	InternetGatewayDevice.DownloadDiagnostics.ROMTime	Device.IP.Diagnostics.DownloadDiagnostics.ROMTime	B	T7 S2: xsd:dateTime in TR-181, the product's unknown time 0000-00-00T00:00:00.000000 reads 0001-01-01T00:00:00Z
+leaf	InternetGatewayDevice.DownloadDiagnostics.BOMTime	Device.IP.Diagnostics.DownloadDiagnostics.BOMTime	B	T7 S2: xsd:dateTime in TR-181, the product's unknown time 0000-00-00T00:00:00.000000 reads 0001-01-01T00:00:00Z
+leaf	InternetGatewayDevice.DownloadDiagnostics.EOMTime	Device.IP.Diagnostics.DownloadDiagnostics.EOMTime	B	T7 S2: xsd:dateTime in TR-181, the product's unknown time 0000-00-00T00:00:00.000000 reads 0001-01-01T00:00:00Z
+leaf	InternetGatewayDevice.DownloadDiagnostics.TCPOpenRequestTime	Device.IP.Diagnostics.DownloadDiagnostics.TCPOpenRequestTime	B	T7 S2: xsd:dateTime in TR-181, the product's unknown time 0000-00-00T00:00:00.000000 reads 0001-01-01T00:00:00Z
+leaf	InternetGatewayDevice.DownloadDiagnostics.TCPOpenResponseTime	Device.IP.Diagnostics.DownloadDiagnostics.TCPOpenResponseTime	B	T7 S2: xsd:dateTime in TR-181, the product's unknown time 0000-00-00T00:00:00.000000 reads 0001-01-01T00:00:00Z
 leaf	InternetGatewayDevice.DownloadDiagnostics.Interface	Device.IP.Diagnostics.DownloadDiagnostics.Interface	B	TR-181 a Device.IP.Interface reference of the device name the product stores (IFREF181, device_ip_mtk.h), a device name still taken
 prefix	InternetGatewayDevice.UploadDiagnostics.	Device.IP.Diagnostics.UploadDiagnostics.	A	tr143diag_mtk.c, same store and launcher
+leaf	InternetGatewayDevice.UploadDiagnostics.ROMTime	Device.IP.Diagnostics.UploadDiagnostics.ROMTime	B	T7 S2: xsd:dateTime in TR-181, the product's unknown time 0000-00-00T00:00:00.000000 reads 0001-01-01T00:00:00Z
+leaf	InternetGatewayDevice.UploadDiagnostics.BOMTime	Device.IP.Diagnostics.UploadDiagnostics.BOMTime	B	T7 S2: xsd:dateTime in TR-181, the product's unknown time 0000-00-00T00:00:00.000000 reads 0001-01-01T00:00:00Z
+leaf	InternetGatewayDevice.UploadDiagnostics.EOMTime	Device.IP.Diagnostics.UploadDiagnostics.EOMTime	B	T7 S2: xsd:dateTime in TR-181, the product's unknown time 0000-00-00T00:00:00.000000 reads 0001-01-01T00:00:00Z
+leaf	InternetGatewayDevice.UploadDiagnostics.TCPOpenRequestTime	Device.IP.Diagnostics.UploadDiagnostics.TCPOpenRequestTime	B	T7 S2: xsd:dateTime in TR-181, the product's unknown time 0000-00-00T00:00:00.000000 reads 0001-01-01T00:00:00Z
+leaf	InternetGatewayDevice.UploadDiagnostics.TCPOpenResponseTime	Device.IP.Diagnostics.UploadDiagnostics.TCPOpenResponseTime	B	T7 S2: xsd:dateTime in TR-181, the product's unknown time 0000-00-00T00:00:00.000000 reads 0001-01-01T00:00:00Z
 leaf	InternetGatewayDevice.UploadDiagnostics.Interface	Device.IP.Diagnostics.UploadDiagnostics.Interface	B	TR-181 a Device.IP.Interface reference of the device name the product stores (IFREF181, device_ip_mtk.h), a device name still taken
 prefix	InternetGatewayDevice.NSLookupDiagnostics.	Device.DNS.Diagnostics.NSLookupDiagnostics.	A	lookupdiag_mtk.c, same store and launcher
 leaf	InternetGatewayDevice.NSLookupDiagnostics.Interface	Device.DNS.Diagnostics.NSLookupDiagnostics.Interface	B	TR-181 a Device.IP.Interface reference of the device name the product stores (IFREF181, device_ip_mtk.h), a device name still taken

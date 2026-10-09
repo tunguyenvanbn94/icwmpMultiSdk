@@ -254,7 +254,8 @@ static char *proxy_xsd_type(const char *t)
 	if (strcasecmp(t, "boolean") == 0) return DMT_TYPE[DMT_BOOL];
 	if (strcasecmp(t, "unsignedInt") == 0) return DMT_TYPE[DMT_UNINT];
 	if (strcasecmp(t, "int") == 0) return DMT_TYPE[DMT_INT];
-	if (strcasecmp(t, "long") == 0 || strcasecmp(t, "unsignedLong") == 0) return DMT_TYPE[DMT_LONG];
+	if (strcasecmp(t, "long") == 0) return DMT_TYPE[DMT_LONG];
+	if (strcasecmp(t, "unsignedLong") == 0) return DMT_TYPE[DMT_UNLONG];
 	if (strcasecmp(t, "dateTime") == 0) return DMT_TYPE[DMT_TIME];
 	if (strcasecmp(t, "base64") == 0) return DMT_TYPE[DMT_BASE64];
 	if (strcasecmp(t, "hexBinary") == 0) return DMT_TYPE[DMT_HEXBIN];

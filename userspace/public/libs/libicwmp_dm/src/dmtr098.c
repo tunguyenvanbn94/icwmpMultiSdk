@@ -156,8 +156,9 @@ char *DMT_TYPE[] = {
 [DMT_LONG] = "xsd:long",
 [DMT_BOOL] = "xsd:boolean",
 [DMT_TIME] = "xsd:dateTime",
-[DMT_HEXBIN] = "xsd:hexbin",
+[DMT_HEXBIN] = "xsd:hexBinary",	/* was "xsd:hexbin", no XML Schema type */
 [DMT_BASE64] = "xsd:base64",
+[DMT_UNLONG] = "xsd:unsignedLong",
 };
 
 #ifdef UPNP_TR064
@@ -170,6 +171,7 @@ unsigned int UPNP_DMT_TYPE[] = {
 [DMT_TIME] = NODE_DATA_ATTRIBUTE_TYPEDATETIME,
 [DMT_HEXBIN] = NODE_DATA_ATTRIBUTE_TYPEBIN,
 [DMT_BASE64] = NODE_DATA_ATTRIBUTE_TYPEBASE64,
+[DMT_UNLONG] = NODE_DATA_ATTRIBUTE_TYPELONG,
 };
 #endif
 

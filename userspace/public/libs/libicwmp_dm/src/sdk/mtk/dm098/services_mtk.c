@@ -978,8 +978,29 @@ DM_MODULE_REGISTER(services_mtk_module);
  * tables under Device. (type A of docs/plan/tr181_mtk_design.md).  The
  * STBService.1 placeholder (fixed values, no set-top box on the product) is
  * not in the TR-181 tree (T7). */
+/* TR-140 Capacity and UsedSpace are xsd:unsignedInt (MB); copies of
+ * tLvParams and tSsChildObj, keep in step (T7 S2) */
+static DMLEAF tLv181Params[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_lv_enable, set_lv_enable, NULL, NULL},
+{"Name", &DMWRITE, DMT_STRING, get_lv_name, set_lv_name, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_lv_status, NULL, NULL, NULL},
+{"FileSystem", &DMREAD, DMT_STRING, get_lv_fs, NULL, NULL, NULL},
+{"Capacity", &DMREAD, DMT_UNINT, get_lv_capacity, NULL, NULL, NULL},
+{"UsedSpace", &DMREAD, DMT_UNINT, get_lv_used, NULL, NULL, NULL},
+{"Encrypted", &DMREAD, DMT_BOOL, get_lv_encrypted, NULL, NULL, NULL},
+{"PhysicalReference", &DMREAD, DMT_STRING, get_lv_physref, NULL, NULL, NULL},
+{"FolderNumberOfEntries", &DMREAD, DMT_UNINT, get_lv_folders, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tSsChild181Obj[] = {
+{"Capabilities", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tSsCapParams, NULL},
+{"LogicalVolume", &DMWRITE, add_ss_none, del_ss_none, NULL, browse_lv, NULL, NULL, NULL, tLv181Params, NULL},
+{0}
+};
+
 static DMOBJ tServices181Obj[] = {
-{"StorageService", &DMWRITE, add_ss_none, del_ss_none, NULL, browse_ss, NULL, NULL, tSsChildObj, tSsParams, NULL},
+{"StorageService", &DMWRITE, add_ss_none, del_ss_none, NULL, browse_ss, NULL, NULL, tSsChild181Obj, tSsParams, NULL},
 {0}
 };
 

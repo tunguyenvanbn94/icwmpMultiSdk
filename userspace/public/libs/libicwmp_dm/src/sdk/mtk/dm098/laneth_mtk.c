@@ -633,21 +633,21 @@ static int browseEth181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev
 
 static DMLEAF tEth181StatsParam[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
-{"BytesSent", &DMREAD, DMT_UNINT, get_eth181_bytes_sent, NULL, NULL, NULL},
-{"BytesReceived", &DMREAD, DMT_UNINT, get_eth181_bytes_recv, NULL, NULL, NULL},
-{"PacketsSent", &DMREAD, DMT_UNINT, get_eth181_packets_sent, NULL, NULL, NULL},
-{"PacketsReceived", &DMREAD, DMT_UNINT, get_eth181_packets_recv, NULL, NULL, NULL},
+{"BytesSent", &DMREAD, DMT_UNLONG, get_eth181_bytes_sent, NULL, NULL, NULL},
+{"BytesReceived", &DMREAD, DMT_UNLONG, get_eth181_bytes_recv, NULL, NULL, NULL},
+{"PacketsSent", &DMREAD, DMT_UNLONG, get_eth181_packets_sent, NULL, NULL, NULL},
+{"PacketsReceived", &DMREAD, DMT_UNLONG, get_eth181_packets_recv, NULL, NULL, NULL},
 {"ErrorsSent", &DMREAD, DMT_UNINT, get_eth181_errors_sent, NULL, NULL, NULL},
 {"ErrorsReceived", &DMREAD, DMT_UNINT, get_eth181_errors_recv, NULL, NULL, NULL},
 {"DiscardPacketsSent", &DMREAD, DMT_UNINT, get_eth181_discard_sent, NULL, NULL, NULL},
 {"DiscardPacketsReceived", &DMREAD, DMT_UNINT, get_eth181_discard_recv, NULL, NULL, NULL},
-{"MulticastPacketsSent", &DMREAD, DMT_UNINT, get_eth181_multicast_sent, NULL, NULL, NULL},
-{"MulticastPacketsReceived", &DMREAD, DMT_UNINT, get_eth181_multicast_recv, NULL, NULL, NULL},
-{"BroadcastPacketsSent", &DMREAD, DMT_UNINT, get_eth181_broadcast_sent, NULL, NULL, NULL},
-{"BroadcastPacketsReceived", &DMREAD, DMT_UNINT, get_eth181_broadcast_recv, NULL, NULL, NULL},
+{"MulticastPacketsSent", &DMREAD, DMT_UNLONG, get_eth181_multicast_sent, NULL, NULL, NULL},
+{"MulticastPacketsReceived", &DMREAD, DMT_UNLONG, get_eth181_multicast_recv, NULL, NULL, NULL},
+{"BroadcastPacketsSent", &DMREAD, DMT_UNLONG, get_eth181_broadcast_sent, NULL, NULL, NULL},
+{"BroadcastPacketsReceived", &DMREAD, DMT_UNLONG, get_eth181_broadcast_recv, NULL, NULL, NULL},
 {"UnknownProtoPacketsReceived", &DMREAD, DMT_UNINT, get_eth181_unknown_recv, NULL, NULL, NULL},
-{"UnicastPacketsSent", &DMREAD, DMT_UNINT, get_eth181_unicast_sent, NULL, NULL, NULL},
-{"UnicastPacketsReceived", &DMREAD, DMT_UNINT, get_eth181_unicast_recv, NULL, NULL, NULL},
+{"UnicastPacketsSent", &DMREAD, DMT_UNLONG, get_eth181_unicast_sent, NULL, NULL, NULL},
+{"UnicastPacketsReceived", &DMREAD, DMT_UNLONG, get_eth181_unicast_recv, NULL, NULL, NULL},
 {0}
 };
 

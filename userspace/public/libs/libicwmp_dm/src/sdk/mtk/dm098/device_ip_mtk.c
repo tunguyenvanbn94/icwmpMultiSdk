@@ -885,6 +885,35 @@ static int set_dip181_mtu(char *refparam, struct dmctx *ctx, void *data, char *i
 	return e ? wan181_set(e, "MaxMTUSize", value, action) : FAULT_9008;
 }
 
+/* TR-181 Stats: the counters are xsd:unsignedLong there (the product's
+ * grafted branch says xsd:string); copies of tDipStatsParams and
+ * tDipInterfaceChildObj, keep in step (T7 S2) */
+static DMLEAF tDip181StatsParams[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"BytesSent", &DMREAD, DMT_UNLONG, get_dip_bytes_sent, NULL, NULL, NULL},
+{"BytesReceived", &DMREAD, DMT_UNLONG, get_dip_bytes_received, NULL, NULL, NULL},
+{"PacketsSent", &DMREAD, DMT_UNLONG, get_dip_packets_sent, NULL, NULL, NULL},
+{"PacketsReceived", &DMREAD, DMT_UNLONG, get_dip_packets_received, NULL, NULL, NULL},
+{"ErrorsSent", &DMREAD, DMT_UNINT, get_dip_errors_sent, NULL, NULL, NULL},
+{"ErrorsReceived", &DMREAD, DMT_UNINT, get_dip_errors_received, NULL, NULL, NULL},
+{"DiscardPacketsSent", &DMREAD, DMT_UNINT, get_dip_discard_sent, NULL, NULL, NULL},
+{"DiscardPacketsReceived", &DMREAD, DMT_UNINT, get_dip_discard_received, NULL, NULL, NULL},
+{"MulticastPacketsSent", &DMREAD, DMT_UNLONG, get_dip_multicast_sent, NULL, NULL, NULL},
+{"MulticastPacketsReceived", &DMREAD, DMT_UNLONG, get_dip_multicast_received, NULL, NULL, NULL},
+{"BroadcastPacketsSent", &DMREAD, DMT_UNLONG, get_dip_broadcast_sent, NULL, NULL, NULL},
+{"BroadcastPacketsReceived", &DMREAD, DMT_UNLONG, get_dip_broadcast_received, NULL, NULL, NULL},
+{"UnicastPacketsSent", &DMREAD, DMT_UNLONG, get_dip_unicast_sent, NULL, NULL, NULL},
+{"UnicastPacketsReceived", &DMREAD, DMT_UNLONG, get_dip_unicast_received, NULL, NULL, NULL},
+{"UnknownProtoPacketsReceived", &DMREAD, DMT_UNINT, get_dip_unknown_proto, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tDip181InterfaceChildObj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tDip181StatsParams, NULL},
+{0}
+};
+
 static DMLEAF tDip181InterfaceParams[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Name", &DMREAD, DMT_STRING, get_dip_name, NULL, NULL, NULL},
@@ -904,7 +933,7 @@ static DMLEAF tDip181InterfaceParams[] = {
 
 static DMOBJ tDip181Obj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Interface", &DMWRITE, add_dip, del_dip, NULL, browse_dip, NULL, NULL, tDipInterfaceChildObj, tDip181InterfaceParams, NULL},
+{"Interface", &DMWRITE, add_dip, del_dip, NULL, browse_dip, NULL, NULL, tDip181InterfaceChildObj, tDip181InterfaceParams, NULL},
 {0}
 };
 

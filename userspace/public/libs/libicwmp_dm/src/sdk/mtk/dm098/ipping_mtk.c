@@ -207,6 +207,24 @@ DM_MODULE_REGISTER(ipping_mtk_module);
 PATH181_GET(ipp_interface, get_ipp_interface)
 PATH181_SET(ipp_interface, set_ipp_interface)
 
+/* TR-181 DSCP is unsignedInt[0:63]; the product's leaf is an unchecked
+ * string, "" until set (T7 S2) */
+static int get_ipp_dscp181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	int rc = get_ipp_dscp(refparam, ctx, data, instance, value);
+
+	if (!rc && (!*value || !**value))
+		*value = "0";
+	return rc;
+}
+
+static int set_ipp_dscp181(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	if (!value || !*value || strlen(value) > 2 || strspn(value, "0123456789") != strlen(value) || atoi(value) > 63)
+		return FAULT_9007;
+	return set_ipp_dscp(refparam, ctx, data, instance, value, action);
+}
+
 static DMLEAF tIPPing181Params[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"DiagnosticsState", &DMWRITE, DMT_STRING, get_ipp_state, set_ipp_state, NULL, NULL},
@@ -215,7 +233,7 @@ static DMLEAF tIPPing181Params[] = {
 {"NumberOfRepetitions", &DMWRITE, DMT_UNINT, get_ipp_repetitions, set_ipp_repetitions, NULL, NULL},
 {"Timeout", &DMWRITE, DMT_UNINT, get_ipp_timeout, set_ipp_timeout, NULL, NULL},
 {"DataBlockSize", &DMWRITE, DMT_UNINT, get_ipp_blocksize, set_ipp_blocksize, NULL, NULL},
-{"DSCP", &DMWRITE, DMT_STRING, get_ipp_dscp, set_ipp_dscp, NULL, NULL},
+{"DSCP", &DMWRITE, DMT_UNINT, get_ipp_dscp181, set_ipp_dscp181, NULL, NULL},
 {"SuccessCount", &DMREAD, DMT_UNINT, get_ipp_success, NULL, NULL, NULL},
 {"FailureCount", &DMREAD, DMT_UNINT, get_ipp_failure, NULL, NULL, NULL},
 {"AverageResponseTime", &DMREAD, DMT_UNINT, get_ipp_avg, NULL, NULL, NULL},

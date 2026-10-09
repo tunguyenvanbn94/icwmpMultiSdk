@@ -421,6 +421,7 @@ enum dmt_type_enum {
 	DMT_TIME,
 	DMT_HEXBIN,
 	DMT_BASE64,
+	DMT_UNLONG,	/* xsd:unsignedLong (TR-181 counters); last, the other values are unchanged */
 };
 
 enum amd_version_enum{

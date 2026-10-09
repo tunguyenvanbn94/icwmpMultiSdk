@@ -1131,7 +1131,7 @@ static DMLEAF tRadio181Param[] = {
 {"Channel", &DMWRITE, DMT_UNINT, get_radio181_channel, set_channel, NULL, NULL},
 {"AutoChannelEnable", &DMWRITE, DMT_BOOL, get_auto_channel, set_radio181_auto_channel, NULL, NULL},
 {"TransmitPowerSupported", &DMREAD, DMT_STRING, get_power_supported, NULL, NULL, NULL},
-{"TransmitPower", &DMWRITE, DMT_UNINT, get_transmit_power, set_transmit_power, NULL, NULL},
+{"TransmitPower", &DMWRITE, DMT_INT, get_transmit_power, set_transmit_power, NULL, NULL},
 {"RegulatoryDomain", &DMWRITE, DMT_STRING, get_regulatory_domain, set_regulatory_domain, NULL, NULL},
 {"BasicDataTransmitRates", &DMREAD, DMT_STRING, get_transmit_rates, NULL, NULL, NULL},
 {"OperationalDataTransmitRates", &DMREAD, DMT_STRING, get_transmit_rates, NULL, NULL, NULL},
@@ -1139,10 +1139,10 @@ static DMLEAF tRadio181Param[] = {
 };
 
 static DMLEAF tSsid181StatsParam[] = {
-{"BytesSent", &DMREAD, DMT_UNINT, get_total_bytes_sent, NULL, NULL, NULL},
-{"BytesReceived", &DMREAD, DMT_UNINT, get_total_bytes_received, NULL, NULL, NULL},
-{"PacketsSent", &DMREAD, DMT_UNINT, get_total_packets_sent, NULL, NULL, NULL},
-{"PacketsReceived", &DMREAD, DMT_UNINT, get_total_packets_received, NULL, NULL, NULL},
+{"BytesSent", &DMREAD, DMT_UNLONG, get_total_bytes_sent, NULL, NULL, NULL},
+{"BytesReceived", &DMREAD, DMT_UNLONG, get_total_bytes_received, NULL, NULL, NULL},
+{"PacketsSent", &DMREAD, DMT_UNLONG, get_total_packets_sent, NULL, NULL, NULL},
+{"PacketsReceived", &DMREAD, DMT_UNLONG, get_total_packets_received, NULL, NULL, NULL},
 {"ErrorsSent", &DMREAD, DMT_UNINT, get_zero, NULL, NULL, NULL},
 {"ErrorsReceived", &DMREAD, DMT_UNINT, get_zero, NULL, NULL, NULL},
 {0}

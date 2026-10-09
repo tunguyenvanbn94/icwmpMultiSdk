@@ -682,8 +682,8 @@ static DMLEAF tSec181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"ModesSupported", &DMREAD, DMT_STRING, get_modes_supported181, NULL, NULL, NULL},
 {"ModeEnabled", &DMWRITE, DMT_STRING, get_mode_enabled181, set_mode_enabled181, NULL, NULL},
-{"WEPKey", &DMWRITE, DMT_STRING, get_empty, set_wepkey181, NULL, NULL},
-{"PreSharedKey", &DMWRITE, DMT_STRING, get_empty, set_presharedkey, NULL, NULL},
+{"WEPKey", &DMWRITE, DMT_HEXBIN, get_empty, set_wepkey181, NULL, NULL},
+{"PreSharedKey", &DMWRITE, DMT_HEXBIN, get_empty, set_presharedkey, NULL, NULL},
 {"KeyPassphrase", &DMWRITE, DMT_STRING, get_key_passphrase, set_key_passphrase, NULL, NULL},
 {0}
 };

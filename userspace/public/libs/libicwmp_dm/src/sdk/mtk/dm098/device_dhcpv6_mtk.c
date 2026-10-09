@@ -367,9 +367,36 @@ static const struct dm_module device_dhcpv6_mtk_module = {
 DM_MODULE_REGISTER(device_dhcpv6_mtk_module);
 
 /* TR-181 (cwmp.cpe.datamodel=tr181): this branch is TR-181 already, the
- * product grafted it under InternetGatewayDevice.Device.; the same tables at
+ * product grafted it under InternetGatewayDevice.Device.; the same leaves at
  * the root (type A of docs/plan/tr181_mtk_design.md).  References to
- * IP.Interface follow the root (mtk_ipif_prefix()). */
+ * IP.Interface follow the root (mtk_ipif_prefix()).  DUID is xsd:hexBinary
+ * there (the DUID-LL is hex digits already): tD6Pool181Params is a copy of
+ * tD6PoolParams, keep in step (T7 S2). */
+static DMLEAF tD6Pool181Params[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMWRITE, DMT_BOOL, get_d6_enable, set_d6_enable, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_d6_status, NULL, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_d6_interface, set_d6_interface, NULL, NULL},
+{"DUID", &DMREAD, DMT_HEXBIN, get_d6_duid, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tD6Server181Obj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Pool", &DMREAD, NULL, NULL, NULL, browse_d6, NULL, NULL, NULL, tD6Pool181Params, NULL},
+{0}
+};
+
+static DMOBJ tD6181Obj[] = {
+{"Server", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tD6Server181Obj, NULL, NULL},
+{0}
+};
+
+static DMOBJ tD6Device181Obj[] = {
+{"DHCPv6", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tD6181Obj, NULL, NULL},
+{0}
+};
+
 static const char *const device_dhcpv6_mtk_paths181[] = {
 	"Device.DHCPv6.",
 	NULL
@@ -379,7 +406,7 @@ static const struct dm_module device_dhcpv6_mtk_module181 = {
 	.name  = "mtk-device-dhcpv6-181",
 	.model = DM_MODEL_TR181,
 	.order = DM_ORDER_SDK,
-	.objs  = tD6DeviceObj,
+	.objs  = tD6Device181Obj,
 	.paths = device_dhcpv6_mtk_paths181,
 };
 DM_MODULE_REGISTER(device_dhcpv6_mtk_module181);

@@ -142,7 +142,7 @@ static char *mtk_xsd_type(const char *t)
 
 	if (!t || !t[0])
 		return DMT_TYPE[DMT_STRING];
-	for (i = DMT_STRING; i <= DMT_BASE64; i++)
+	for (i = DMT_STRING; i <= DMT_UNLONG; i++)
 		if (strcasecmp(t, DMT_TYPE[i]) == 0)
 			return DMT_TYPE[i];
 	/* xsd:IPv4Address, xsd:IPv6Address, ... are strings on the wire */
