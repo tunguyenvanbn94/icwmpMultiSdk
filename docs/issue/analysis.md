@@ -5735,3 +5735,52 @@ G9 image S5b từ 16:06:24 (pid 25850, VmRSS 5736 kB). Đã dọn file test và 
   2. AddObject/DeleteObject của 13 bảng (§89) và RIP — chỉ khi nhà mạng cần;
   3. tạo kết nối IPoE qua TR-181 — user để sau;
   4. danh sách tham số nhà mạng dùng thật — chưa có dữ liệu.
+
+## 91. NAT `PortMapping.Protocol`: rule `tcp/udp` thành hai dòng (`tr181-0022`, image `c3be28a`) (09/10 20:01–20:36)
+
+**Vì sao:** TR-181 2.19.1 `Device.NAT.PortMapping.{i}.Protocol` là `readWrite`, enum chỉ `TCP`, `UDP` (đọc lại từ
+`tr-181-2-19-1-cwmp-full.xml`). Sản phẩm lưu thêm `tcp/udp` trong `firewall_clay.@port_forwarding[i].protocol` (WebUI và
+`pm_add()` mặc định tạo như vậy), nên trước đây cây TR-181 đọc ra `TCP/UDP` — lệch enum duy nhất còn lại (§86). Chatlog 97: tham
+số không đúng chuẩn thì làm tương đương theo chuẩn; chatlog 99: làm theo đề xuất tách dòng.
+
+**Cách làm** (`portmapping_mtk.c`, phần TR-181; TR-098 không đổi):
+- Dòng của bảng là cặp (section, nửa). Rule `tcp/udp` (cả `udp/tcp`, `both` như `pm_protocol_of()`) là hai dòng liền nhau:
+  TCP rồi UDP. `PortMappingNumberOfEntries` đếm dòng bằng chính hàm dựng danh sách của browse (`pm181_rows()`).
+- Ghi bất kỳ lá nào của một trong hai dòng: VALUECHECK kiểm giá trị bằng setter cũ và còn chỗ cho thêm một rule
+  (`PM_MAX_RULES` 32 của HAL, quá thì 9004); VALUESET tách trước: section gốc thành `tcp`, bản sao (mọi option) thành `udp` và
+  được `uci_reorder_section()` đặt ngay sau gốc, rồi mới ghi vào section của dòng được ghi. Thứ tự và giao thức của mọi dòng
+  giữ nguyên trong phiên, nên SetParameterValues có cả dòng TCP và dòng UDP của cùng rule vẫn ghi đúng chỗ.
+  - [Verified] HAL áp rule theo vị trí `firewall_clay.@port_forwarding[%d]` (`hal_service.c` `HalService_applyPortForwarding`,
+    `hal_params.h` `NODE_PORT_FORWARDING_INDEX`, tối đa 32) nên bản sao chèn giữa vẫn được áp như một rule thường.
+- Xoá một trong hai dòng: rule còn lại giao thức kia (không xoá cả rule).
+- AddObject: tạo một dòng `tcp` (mặc định `tcp/udp` của sản phẩm sẽ thêm 2 dòng cho một lệnh add), số trả về = số dòng + 1.
+- Ghi `Protocol` = `TCP/UDP` → 9007; `TCP`/`UDP` nhận mọi kiểu chữ.
+- Hệ quả thấy được: sau khi ACS sửa một dòng, WebUI thấy hai rule (TCP, UDP) thay cho một.
+- `tr181-map.py equiv`: rule TR-098 thứ J của một kết nối ghép với dòng TCP của nó (rule `tcp/udp` đứng trước chiếm 2 dòng).
+
+**Host:** `run.sh tr181` thêm: 4 dòng từ fixture 3 rule, ghi `ExternalPort` dòng UDP → `firewall_clay` thành `tcp 3074`, `udp
+3075` ngay sau, rule `ssh` lùi một vị trí, số dòng giữ; add → dòng 5 TCP; rule thành `tcp/udp` → dòng 5, 6; xoá dòng TCP → rule
+`udp`. `run.sh all` 25/25 (valgrind sạch). `check-c-sanity` thêm `uci_reorder_section` vào danh sách hàm thư viện; cross-gcc
+SDK không cảnh báo ở file này.
+
+**Build:** `make -j16 MSDK=1` không `V=s` gãy 2 lần ở `target/linux` (log `t7s5d_c3be28a{,_2}.log`, không in lỗi; riêng
+`make target/linux/compile -j1 V=s` đạt); `make -j16 MSDK=1 V=s` đạt `ICWMP_IMAGE_RC=0` (`t7s5d_c3be28a_3.log`) — nguyên nhân
+**Not established**, build sau đây dùng `V=s` như lệnh `apply` in ra. `libtr098.so.3.0.0` `1cb57242…`, `tclinux.bin`
+`0c09aa26…` → `.icwmp-images/tclinux_t7s5d_c3be28a_devaccess.bin`.
+
+**Board** (nạp 20:29:30 qua đường WebUI: md5 khớp, `HP-2236B`, `valid: true`, `sysupgrade -T` rc 0; lên lại 20:32):
+- TR-098 parity **PASS** (1724 chung: 1636 bằng, 43 động, 16 đã biết, 29 nháy).
+- `tr181_window.sh` (bước NAT mới, rule thử `enabled=0`, `firewall_clay` trả lại):
+  - 0 → 2 dòng `TCP/40001`, `UDP/40001`; ghi `ExternalPort` dòng 2 = 40002: fault 0, rule thành `tcp/40001` + `udp/40002`,
+    dòng giữ số, đếm 2; `Protocol=TCP/UDP` 9007; xoá dòng 2 rồi 1: 0 0, đếm 0.
+  - `firewall_clay` md5 trước/sau trùng; `/etc/config` trước/sau giống hệt; ACS mở lại.
+- So cặp **PASS** (TR-098 1742, TR-181 3059: bằng 1077 + 2 tham chiếu, B 262, D 326, động 63, secured 12).
+- `tr181-bbf-check` (XML 2.19.1 tải lại) **PASS**: 734 tham số, unknown/access/type/status/enum/secured 0.
+- 31 lá `NumberOfEntries` có bảng: 0 lệch.
+
+**Reboot ngoài ý muốn 16:47 (image `e87c65f`):** soak G9 từ 16:06 mất cùng `/tmp`. Máy host bị `sudo reboot` 16:42:57 (user
+nvtu, pts/7 — không phải phiên agent); board lên lại 16:46:4x, sự kiện `1 BOOT` không có `M Reboot` (không phải lệnh ACS/agent),
+lịch reboot sản phẩm tắt, `/backup/log` mới nhất 04/10, không pstore. Nguyên nhân board reboot: **Not established** (khả năng
+cao cùng đợt tắt/mở của user). Sau boot 3h17: một pid, RSS 5820 kB, fd 12, 11 thread, failure 0
+(`logs/20261009_g9_soak_image_e87c65f.csv`). G9 image `c3be28a` từ 20:35:29, máy host kéo csv mỗi 30 phút vào
+`logs/20261009_g9_soak_image_c3be28a.csv` để reboot không làm mất dữ liệu.
