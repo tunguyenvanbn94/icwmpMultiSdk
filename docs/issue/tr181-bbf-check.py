@@ -2,6 +2,8 @@
 """The TR-181 tree of a "tr069 dm" dump against the Broadband Forum data model:
 
     tr181-bbf-check.py <bbf-dir> <names.json> [<values.json>] [--list]
+    tr181-bbf-check.py <bbf-dir> <names.json> --profile <P:v>[,<P:v>...] [--list]
+    tr181-bbf-check.py <bbf-dir> <names.json> --profiles
 
 <bbf-dir> holds the BBF CWMP "full" XML files, read at run time and never
 copied into this repository: tr-181-2-<v>-cwmp-full.xml (Device:2) and the
@@ -23,6 +25,13 @@ and for the std ones the differences are listed:
 Exit 1 when there is an unknown name, an access difference or a deleted /
 obsoleted name; types and deprecated names are reported, not judged.
 --list prints every name of each class, not only the counts.
+
+--profile checks the requirements of TR-181 profiles (base / extends
+followed) against the dump: a required parameter missing, a readWrite one
+read-only here, a table the profile wants created/deleted that cannot be;
+a table with no instance in the dump is listed as not checked.  Exit 1 when
+something is missing or read-only.  --profiles prints one line per profile
+of the Device:2 model (summary, to choose which ones to claim).
 """
 import glob, json, os, re, sys
 import xml.etree.ElementTree as ET
@@ -83,6 +92,12 @@ def load_model(path, mount):
             continue
         prefix = mount if model.get("isService") == "true" else ""
         for obj in model:
+            # a service model's own parameters (StorageServiceNumberOfEntries
+            # of TR-140) sit on the object it is mounted under
+            if strip_ns(obj.tag) == "parameter":
+                out[prefix + obj.get("name", "")] = (syntax_type(obj, datatypes), obj.get("access", "readOnly"),
+                                                     obj.get("status", "current"))
+                continue
             if strip_ns(obj.tag) != "object":
                 continue
             oname = prefix + obj.get("name", "")
@@ -99,11 +114,126 @@ def load_model(path, mount):
     return out
 
 
+def load_profiles(path):
+    """name -> (status, [inherited names], [(object, requirement, [(param, requirement)])])
+    of the first <model> of path"""
+    root = ET.parse(path).getroot()
+    out = {}
+    for model in root.iter():
+        if strip_ns(model.tag) != "model":
+            continue
+        for pr in model:
+            if strip_ns(pr.tag) != "profile":
+                continue
+            inh = (pr.get("base", "") + " " + pr.get("extends", "")).split()
+            items = []
+            for o in pr:
+                if strip_ns(o.tag) != "object":
+                    continue
+                ps = [(x.get("ref"), x.get("requirement", "")) for x in o if strip_ns(x.tag) == "parameter"]
+                items.append((o.get("ref"), o.get("requirement", ""), ps))
+            out[pr.get("name")] = (pr.get("status", "current"), inh, items)
+        break
+    return out
+
+
+def profile_items(profiles, name, seen=None):
+    seen = set() if seen is None else seen
+    if name in seen or name not in profiles:
+        return []
+    seen.add(name)
+    st, inh, items = profiles[name]
+    out = list(items)
+    for b in inh:
+        out += profile_items(profiles, b, seen)
+    return out
+
+
+def check_profile(profiles, name, writable, objects):
+    """missing, read-only, no create/delete, unchecked tables, required count"""
+    missing, ro, nocd, unchecked, req = [], [], [], set(), 0
+    for oref, oreq, ps in profile_items(profiles, name):
+        present = oref in objects
+        if not present and "{i}" in oref:
+            # inside a table without an instance in the dump: nothing to read
+            # (an object missing under an instance that exists is missing)
+            tbl = oref[:oref.rfind("{i}.") + 4]
+            if tbl not in objects:
+                unchecked.add(tbl)
+                continue
+        # GPN: a table X. is writable when AddObject works, an instance X.{i}.
+        # when DeleteObject does
+        if present and oref.endswith("{i}."):
+            parent = oref[:-4]
+            if oreq in ("create", "createDelete") and not objects.get(parent, False):
+                nocd.append("%s (create)" % oref)
+            if oreq in ("delete", "createDelete") and not objects[oref]:
+                nocd.append("%s (delete)" % oref)
+        for pname, preq in ps:
+            req += 1
+            n = oref + pname
+            if n not in writable:
+                missing.append(n)
+            elif preq == "readWrite" and not writable[n]:
+                ro.append(n)
+    return missing, ro, nocd, sorted(unchecked), req
+
+
+def profiles_main(a, listing):
+    files = sorted(glob.glob(os.path.join(a[0], "tr-181-*-cwmp-full.xml")))
+    if not files:
+        sys.exit("no tr-181-*-cwmp-full.xml in %s" % a[0])
+    profiles = load_profiles(files[-1])
+    writable, objects = {}, {}
+    for p in json.load(open(a[1]))["parameters"]:
+        k = norm(p["parameter"])
+        w = p.get("writable") in ("1", True)
+        if k.endswith("."):
+            # a table object (X.{i}.) is writable when instances can be added
+            objects[k] = objects.get(k, False) or w
+        else:
+            writable[k] = writable.get(k, False) or w
+    # the table objects of the dump appear as X.{i}. ; their parents as X.
+    for k in list(writable) + list(objects):
+        segs = k.split(".")
+        for i in range(1, len(segs) - 1):
+            objects.setdefault(".".join(segs[:i]) + ".", False)
+    if "--profiles" in sys.argv:
+        for name in sorted(profiles):
+            if name.startswith("_") or profiles[name][0] != "current":
+                continue
+            m, ro, nocd, un, req = check_profile(profiles, name, writable, objects)
+            print("%-28s required %3d  missing %3d  read-only %2d  no create/delete %d  tables not checked %d" %
+                  (name, req, len(m), len(ro), len(nocd), len(un)))
+        return 0
+    want = sys.argv[sys.argv.index("--profile") + 1].split(",")
+    bad = 0
+    for name in want:
+        if name not in profiles:
+            sys.exit("no profile %s in %s" % (name, os.path.basename(files[-1])))
+        m, ro, nocd, un, req = check_profile(profiles, name, writable, objects)
+        print("%s: required %d, missing %d, read-only %d, no create/delete %d, tables not checked %d" %
+              (name, req, len(m), len(ro), len(nocd), len(un)))
+        for title, lst in (("missing", m), ("read-only", ro), ("no create/delete", nocd),
+                           ("not checked (no instance)", un)):
+            if lst and (listing or title != "not checked (no instance)"):
+                print("  == %s" % title)
+                for x in lst:
+                    print("    " + x)
+        bad += len(m) + len(ro)
+    print("RESULT: %s" % ("FAIL" if bad else "PASS"))
+    return 1 if bad else 0
+
+
 def main():
     a = [x for x in sys.argv[1:] if not x.startswith("--")]
     if len(a) < 2:
         sys.exit(__doc__)
     listing = "--list" in sys.argv
+    if "--profile" in sys.argv or "--profiles" in sys.argv:
+        if "--profile" in sys.argv:
+            a = [x for x in a if x != sys.argv[sys.argv.index("--profile") + 1]]
+        return profiles_main(a, listing)
     std = {}
     files = sorted(glob.glob(os.path.join(a[0], "tr-181-*-cwmp-full.xml")))
     if not files:

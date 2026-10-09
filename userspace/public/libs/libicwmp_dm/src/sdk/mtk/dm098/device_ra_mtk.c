@@ -129,17 +129,15 @@ static int ra_cmp(const void *a, const void *b)
 
 #define RA_MAX	32
 
-static int browse_ra(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+/* the interface settings, numbered and in instance order: what browse_ra
+ * links, and what InterfaceSettingNumberOfEntries counts */
+static int ra_list(struct ra_if *list, int max)
 {
 	struct uci_package *p = ra_pkg();
 	struct uci_element *e;
-	struct ra_if *list;
-	int n = 0, anon = 0, i;
+	int n = 0, anon = 0;
 
 	if (!p)
-		return 0;
-	list = dmcalloc(RA_MAX, sizeof(*list));
-	if (!list)
 		return 0;
 	uci_foreach_element(&p->sections, e) {
 		struct uci_section *s = uci_to_section(e);
@@ -152,7 +150,7 @@ static int browse_ra(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, 
 		else
 			sec = dmstrdup(section_name(s));
 		anon++;
-		if (!sec || n >= RA_MAX)
+		if (!sec || n >= max)
 			continue;
 		/* ra_is_valid_section */
 		ifn = mtk_uci(RA_PKG, sec, "interface");
@@ -172,6 +170,17 @@ static int browse_ra(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, 
 		n++;
 	}
 	qsort(list, n, sizeof(*list), ra_cmp);
+	return n;
+}
+
+static int browse_ra(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	struct ra_if *list = dmcalloc(RA_MAX, sizeof(*list));
+	int n, i;
+
+	if (!list)
+		return 0;
+	n = ra_list(list, RA_MAX);
 	for (i = 0; i < n; i++) {
 		/* ra_autofix_alias */
 		if (!*mtk_uci(RA_PKG, list[i].sec, "ra_alias")) {
@@ -588,11 +597,31 @@ static const char *const device_ra_mtk_paths181[] = {
 	NULL
 };
 
+/* T7 S4b: the count of the table, standard in TR-181 (the TR-098 graft
+ * keeps the product's leaves) */
+static int get_ra181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct ra_if *list = dmcalloc(RA_MAX, sizeof(*list));
+
+	dmasprintf(value, "%d", list ? ra_list(list, RA_MAX) : 0);
+	return 0;
+}
+
+static DMLEAF tRa181Params[] = {
+{"InterfaceSettingNumberOfEntries", &DMREAD, DMT_UNINT, get_ra181_count, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tRaDevice181Obj[] = {
+{"RouterAdvertisement", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tRaObj, tRa181Params, NULL},
+{0}
+};
+
 static const struct dm_module device_ra_mtk_module181 = {
 	.name  = "mtk-device-routeradvertisement-181",
 	.model = DM_MODEL_TR181,
 	.order = DM_ORDER_SDK,
-	.objs  = tRaDeviceObj,
+	.objs  = tRaDevice181Obj,
 	.paths = device_ra_mtk_paths181,
 };
 DM_MODULE_REGISTER(device_ra_mtk_module181);

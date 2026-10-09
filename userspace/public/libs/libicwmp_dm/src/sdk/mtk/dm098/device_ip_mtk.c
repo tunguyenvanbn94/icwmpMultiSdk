@@ -961,6 +961,20 @@ static int get_dip181_lowerlayers(char *refparam, struct dmctx *ctx, void *data,
 
 MTK_SET_SAME(dip181_lowerlayers, get_dip181_lowerlayers)
 
+/* T7 S4b: the IPv4Address rows lan_mtk.c (browseLanIpv4Inst) gives the
+ * interface -- one on the LAN and on a routed connection, configured even
+ * while down -- not the addresses netifd reports up right now */
+static int get_dip181_v4_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct wan_entry e;
+
+	if (strcmp(DIP_SEC(data), "lan") == 0)
+		*value = "1";
+	else
+		*value = (wan_entry_of_sec(DIP_SEC(data), &e) && !e.bridge) ? "1" : "0";
+	return 0;
+}
+
 static DMLEAF tDip181InterfaceParams[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Name", &DMREAD, DMT_STRING, get_dip_name, NULL, NULL, NULL},
@@ -972,7 +986,7 @@ static DMLEAF tDip181InterfaceParams[] = {
 {"LastChange", &DMREAD, DMT_UNINT, get_dip_lastchange, NULL, NULL, NULL},
 {"LowerLayers", &DMWRITE, DMT_STRING, get_dip181_lowerlayers, set_same_dip181_lowerlayers, NULL, NULL},
 {"MaxMTUSize", &DMWRITE, DMT_UNINT, get_dip181_mtu, set_dip181_mtu, NULL, NULL},
-{"IPv4AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip_v4_count, NULL, NULL, NULL},
+{"IPv4AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip181_v4_count, NULL, NULL, NULL},
 {"IPv6AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip_v6_count, NULL, NULL, NULL},
 {"IPv6PrefixNumberOfEntries", &DMREAD, DMT_UNINT, get_dip_prefix_count, NULL, NULL, NULL},
 {0}

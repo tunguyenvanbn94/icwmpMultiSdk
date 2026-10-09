@@ -982,7 +982,17 @@ DM_MODULE_REGISTER(services_mtk_module);
  * tLvParams and tSsChildObj, keep in step (T7 S2) */
 /* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
 MTK_SET_SAME(lv_capacity, get_lv_capacity)
-MTK_SET_SAME(lv_physref, get_lv_physref)
+
+/* T7 S4b: PhysicalReference is a reference to a PhysicalMedium.{i} row
+ * (TR-140); the tree has no PhysicalMedium table (the product reads the
+ * disk's device name), so the only value it can hold is the empty one */
+static int get_lv181_physref(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "";
+	return 0;
+}
+
+MTK_SET_SAME(lv181_physref, get_lv181_physref)
 
 static DMLEAF tLv181Params[] = {
 {"Enable", &DMWRITE, DMT_BOOL, get_lv_enable, set_lv_enable, NULL, NULL},
@@ -992,8 +1002,7 @@ static DMLEAF tLv181Params[] = {
 {"Capacity", &DMWRITE, DMT_UNINT, get_lv_capacity, set_same_lv_capacity, NULL, NULL},
 {"UsedSpace", &DMREAD, DMT_UNINT, get_lv_used, NULL, NULL, NULL},
 {"Encrypted", &DMREAD, DMT_BOOL, get_lv_encrypted, NULL, NULL, NULL},
-{"PhysicalReference", &DMWRITE, DMT_STRING, get_lv_physref, set_same_lv_physref, NULL, NULL},
-{"FolderNumberOfEntries", &DMREAD, DMT_UNINT, get_lv_folders, NULL, NULL, NULL},
+{"PhysicalReference", &DMWRITE, DMT_STRING, get_lv181_physref, set_same_lv181_physref, NULL, NULL},
 {0}
 };
 
@@ -1003,13 +1012,40 @@ static DMOBJ tSsChild181Obj[] = {
 {0}
 };
 
+/* T7 S4b: copy of tSsParams without the counts of the PhysicalMedium and
+ * UserAccount tables, which the tree does not have (the product counts
+ * disks and /etc/passwd users there): a count is of the rows of its table.
+ * FolderNumberOfEntries is left out of tLv181Params for the same reason. */
+static DMLEAF tSs181Params[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_ss_enable, set_ss_enable, NULL, NULL},
+{"LogicalVolumeNumberOfEntries", &DMREAD, DMT_UNINT, get_ss_volume_count, NULL, NULL, NULL},
+{0}
+};
+
 static DMOBJ tServices181Obj[] = {
-{"StorageService", &DMWRITE, add_ss_none, del_ss_none, NULL, browse_ss, NULL, NULL, tSsChild181Obj, tSsParams, NULL},
+{"StorageService", &DMWRITE, add_ss_none, del_ss_none, NULL, browse_ss, NULL, NULL, tSsChild181Obj, tSs181Params, NULL},
+{0}
+};
+
+/* T7 S4b: StorageServiceNumberOfEntries of TR-140, on Device.Services.
+ * where the service model is mounted: what browse_ss links, the disks or
+ * the one empty service when there is none */
+static int get_ss181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	int n = 0;
+
+	ss_disks(&n);
+	dmasprintf(value, "%d", n == 0 ? 1 : (n < SS_MAX ? n : SS_MAX));
+	return 0;
+}
+
+static DMLEAF tServices181Params[] = {
+{"StorageServiceNumberOfEntries", &DMREAD, DMT_UNINT, get_ss181_count, NULL, NULL, NULL},
 {0}
 };
 
 static DMOBJ tServices181Root[] = {
-{"Services", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tServices181Obj, NULL, NULL},
+{"Services", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tServices181Obj, tServices181Params, NULL},
 {0}
 };
 

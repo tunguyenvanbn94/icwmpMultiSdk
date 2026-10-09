@@ -613,11 +613,23 @@ DM_MODULE_REGISTER(deviceinfo_mtk_module);
  * X_AIS_DSL (constants, no DSL here), X_AIS_reuseCPE_cycles/_status (always
  * empty) and X_AIS. (an object named X_AIS, not X_<id>_<name>), whose PON
  * password and state are the standard Device.XPON leaves below. */
+/* T7 S4b: the count of the sensor table, standard in TR-181 (one sensor) */
+static int get_temp181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "1";
+	return 0;
+}
+
+static DMLEAF tTemperatureStatus181Param[] = {
+{"TemperatureSensorNumberOfEntries", &DMREAD, DMT_UNINT, get_temp181_count, NULL, NULL, NULL},
+{0}
+};
+
 static DMOBJ tDeviceInfoMtk181Obj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
 {"ProcessStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tProcessStatusObj, tProcessStatusParam, NULL},
 {"MemoryStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tMemoryStatusParam, NULL},
-{"TemperatureStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tTemperatureStatusObj, NULL, NULL},
+{"TemperatureStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tTemperatureStatusObj, tTemperatureStatus181Param, NULL},
 {"X_AIS_GPON", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, NULL, tXAisGponParam, NULL},
 {0}
 };

@@ -116,17 +116,15 @@ static int ppp_entry_count(void)
 
 #define PPP_MAX	32
 
-static int browse_ppp(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+/* the PPP interfaces, numbered: what browse_ppp links, and what
+ * PPP.InterfaceNumberOfEntries counts (TR-181) */
+static int ppp_list(struct ppp_if *list, int max)
 {
 	struct uci_package *p = ppp_pkg();
 	struct uci_element *e;
-	struct ppp_if *list;
-	int n = 0, idx = 0, i;
+	int n = 0, idx = 0;
 
 	if (!p)
-		return 0;
-	list = dmcalloc(PPP_MAX, sizeof(*list));
-	if (!list)
 		return 0;
 	/* "wan.@entry[<n>]=entry" lines of "uci show wan": the anonymous ones */
 	uci_foreach_element(&p->sections, e) {
@@ -136,7 +134,7 @@ static int browse_ppp(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data,
 		if (strcmp(s->type, "entry") != 0)
 			continue;
 		dmasprintf(&sec, "@entry[%d]", idx++);
-		if (!s->anonymous || !sec || n >= PPP_MAX)
+		if (!s->anonymous || !sec || n >= max)
 			continue;
 		if (strcmp(mtk_uci(WAN_PKG, sec, "conn_type"), "2") != 0)
 			continue;
@@ -150,6 +148,17 @@ static int browse_ppp(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data,
 		list[n].inst = inst;
 		n++;
 	}
+	return n;
+}
+
+static int browse_ppp(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	struct ppp_if *list = dmcalloc(PPP_MAX, sizeof(*list));
+	int n, i;
+
+	if (!list)
+		return 0;
+	n = ppp_list(list, PPP_MAX);
 	for (i = 0; i < n; i++) {
 		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)&list[i], list[i].inst) == DM_STOP)
 			break;
@@ -601,8 +610,31 @@ static DMOBJ tPpp181Obj[] = {
 {0}
 };
 
+/* T7 S4b: the root leaves of Device.PPP.  The product's pppoe interfaces
+ * (hal_unify hal_network.c) run IPCP, and IPv6CP when the connection has
+ * IPv6 (option ipv6 1; "noip" without IPv4) */
+static int get_ppp181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct ppp_if *list = dmcalloc(PPP_MAX, sizeof(*list));
+
+	dmasprintf(value, "%d", list ? ppp_list(list, PPP_MAX) : 0);
+	return 0;
+}
+
+static int get_ppp181_ncps(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "IPCP,IPv6CP";
+	return 0;
+}
+
+static DMLEAF tPpp181Params[] = {
+{"InterfaceNumberOfEntries", &DMREAD, DMT_UNINT, get_ppp181_count, NULL, NULL, NULL},
+{"SupportedNCPs", &DMREAD, DMT_STRING, get_ppp181_ncps, NULL, NULL, NULL},
+{0}
+};
+
 static DMOBJ tPpp181DeviceObj[] = {
-{"PPP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tPpp181Obj, NULL, NULL},
+{"PPP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tPpp181Obj, tPpp181Params, NULL},
 {0}
 };
 

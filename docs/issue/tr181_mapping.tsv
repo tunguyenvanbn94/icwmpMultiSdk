@@ -7,6 +7,11 @@ leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.HopRTT
 leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.Interface	Device.IP.Diagnostics.TraceRoute.Interface	B	the product's grafted branch reads the device name; TR-181 a Device.IP.Interface reference of the device name the product stores (IFREF181, device_ip_mtk.h), a device name still taken
 leaf	InternetGatewayDevice.Device.IP.Interface.{i}.LowerLayers	Device.IP.Interface.{i}.LowerLayers	B	T7 S4: the product's grafted branch reads the device name (br-lan, pon.10, dev_wanbr2); TR-181 the reference of the layer under the interface (Ethernet.Link, Ethernet.VLANTermination, PPP.Interface), stack181_mtk.c
 leaf	InternetGatewayDevice.Device.PPP.Interface.{i}.LowerLayers	Device.PPP.Interface.{i}.LowerLayers	B	T7 S4: the product's pon / pon.<vid>; TR-181 Ethernet.Link.2 (the uplink) or the connection's Ethernet.VLANTermination, written back as the product's value (stack181_mtk.c)
+leaf	InternetGatewayDevice.Device.IP.Interface.{i}.IPv4AddressNumberOfEntries	Device.IP.Interface.{i}.IPv4AddressNumberOfEntries	B	T7 S4b: TR-181 counts the IPv4Address rows of the table (LAN and routed connection: 1, configured even while down); the product's branch the addresses netifd reports up
+leaf	InternetGatewayDevice.Services.StorageService.{i}.PhysicalMediumNumberOfEntries	-	D	T7 S4b: no PhysicalMedium table in the tree, a count of its rows has nothing to count
+leaf	InternetGatewayDevice.Services.StorageService.{i}.UserAccountNumberOfEntries	-	D	T7 S4b: no UserAccount table in the tree (the product counts /etc/passwd users)
+leaf	InternetGatewayDevice.Services.StorageService.{i}.LogicalVolume.{i}.FolderNumberOfEntries	-	D	T7 S4b: no Folder table in the tree
+leaf	InternetGatewayDevice.Services.StorageService.{i}.LogicalVolume.{i}.PhysicalReference	Device.Services.StorageService.{i}.LogicalVolume.{i}.PhysicalReference	B	T7 S4b: a reference to a PhysicalMedium row in TR-140, empty without that table; the product's TR-098 leaf the disk's device name
 prefix	InternetGatewayDevice.DeviceInfo.	Device.DeviceInfo.	A	same getters, deviceinfo_mtk.c
 leaf	InternetGatewayDevice.DeviceInfo.X_AIS.PonPassword	Device.XPON.ONU.1.ANI.1.TC.Authentication.Password	B	T7 standard: the standard leaf for the PLOAM password (same getter/setter); X_AIS. is no X_<id>_<name>
 leaf	InternetGatewayDevice.DeviceInfo.X_AIS.PonPasswordState	Device.XPON.ONU.1.ANI.1.TC.ONUActivation.ONUState	B	T7 standard: the ONU state itself (O1..O9), the product reports 0 in O5 and 2 otherwise
@@ -412,3 +417,9 @@ new	-	Device.InterfaceStackNumberOfEntries	A	T7 S4 interface stack, stack181_mtk
 new	-	Device.InterfaceStack.{i}.Alias	A	T7 S4 interface stack, stack181_mtk.c: one row per LowerLayers item, generated
 new	-	Device.InterfaceStack.{i}.HigherLayer	A	T7 S4 interface stack, stack181_mtk.c: one row per LowerLayers item, generated
 new	-	Device.InterfaceStack.{i}.LowerLayer	A	T7 S4 interface stack, stack181_mtk.c: one row per LowerLayers item, generated
+new	-	Device.DHCPv6.Server.PoolNumberOfEntries	A	T7 S4b: count of a standard table, device_dhcpv6_mtk.c: the pools browse_d6 links (d6_list)
+new	-	Device.DeviceInfo.TemperatureStatus.TemperatureSensorNumberOfEntries	A	T7 S4b: count of a standard table, deviceinfo_mtk.c: the one sensor (TemperatureSensor.1)
+new	-	Device.PPP.InterfaceNumberOfEntries	A	T7 S4b: count of a standard table, device_ppp_mtk.c: the PPP interfaces browse_ppp links (ppp_list)
+new	-	Device.PPP.SupportedNCPs	A	T7 S4b: count of a standard table, device_ppp_mtk.c: IPCP,IPv6CP (hal_network.c pppoe interfaces, option ipv6)
+new	-	Device.RouterAdvertisement.InterfaceSettingNumberOfEntries	A	T7 S4b: count of a standard table, device_ra_mtk.c: the settings browse_ra links (ra_list)
+new	-	Device.Services.StorageServiceNumberOfEntries	A	T7 S4b: count of a standard table, services_mtk.c: what browse_ss links (TR-140 model parameter mounted on Device.Services.)

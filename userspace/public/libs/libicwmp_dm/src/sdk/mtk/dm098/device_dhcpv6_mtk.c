@@ -123,17 +123,15 @@ static int d6_cmp(const void *a, const void *b)
 
 #define D6_MAX	32
 
-static int browse_d6(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+/* the pools, numbered and in instance order: what browse_d6 links, and
+ * what Server.PoolNumberOfEntries counts */
+static int d6_list(struct d6_pool *list, int max)
 {
 	struct uci_package *p = d6_pkg();
 	struct uci_element *e;
-	struct d6_pool *list;
-	int n = 0, anon = 0, i;
+	int n = 0, anon = 0;
 
 	if (!p)
-		return 0;
-	list = dmcalloc(D6_MAX, sizeof(*list));
-	if (!list)
 		return 0;
 	uci_foreach_element(&p->sections, e) {
 		struct uci_section *s = uci_to_section(e);
@@ -146,7 +144,7 @@ static int browse_d6(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, 
 		else
 			sec = dmstrdup(section_name(s));
 		anon++;
-		if (!sec || n >= D6_MAX || !d6_valid(sec))
+		if (!sec || n >= max || !d6_valid(sec))
 			continue;
 		inst = mtk_uci(D6_PKG, sec, "dhcpv6_int_instance");
 		if (!*inst) {
@@ -159,6 +157,17 @@ static int browse_d6(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, 
 		n++;
 	}
 	qsort(list, n, sizeof(*list), d6_cmp);
+	return n;
+}
+
+static int browse_d6(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	struct d6_pool *list = dmcalloc(D6_MAX, sizeof(*list));
+	int n, i;
+
+	if (!list)
+		return 0;
+	n = d6_list(list, D6_MAX);
 	for (i = 0; i < n; i++) {
 		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)&list[i], list[i].inst) == DM_STOP)
 			break;
@@ -390,8 +399,22 @@ static DMOBJ tD6Server181Obj[] = {
 {0}
 };
 
+/* T7 S4b: the count of the table, standard in TR-181 */
+static int get_d6181_pool_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct d6_pool *list = dmcalloc(D6_MAX, sizeof(*list));
+
+	dmasprintf(value, "%d", list ? d6_list(list, D6_MAX) : 0);
+	return 0;
+}
+
+static DMLEAF tD6Server181Params[] = {
+{"PoolNumberOfEntries", &DMREAD, DMT_UNINT, get_d6181_pool_count, NULL, NULL, NULL},
+{0}
+};
+
 static DMOBJ tD6181Obj[] = {
-{"Server", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tD6Server181Obj, NULL, NULL},
+{"Server", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tD6Server181Obj, tD6Server181Params, NULL},
 {0}
 };
 

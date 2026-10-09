@@ -2016,6 +2016,13 @@ PY
 	expect "PPP LowerLayers on its VLANTermination.2" "$(dm_value $V.2.Enable) $(dm_set_fault $P1.LowerLayers $V.2 "$key") $(uci -q get wan.@entry[1].vlan_active) $(uci -q get network.if1.device) $(dm_value $P1.LowerLayers) $(dm_value $V.2.Enable)" \
 		"false 0 1 pon.30 $V.2 true"
 	expect "PPP LowerLayers back on Link.2" "$(dm_set_fault $P1.LowerLayers $L.2 "$key") $(uci -q get wan.@entry[1].vlan_active) $(uci -q get network.if1.device) $(dm_value $V.2.Name)" "0 0 pon <none>"
+	# T7 S4b: the counts of standard tables the tree had without them, and
+	# no count of a table the tree does not have (StorageService)
+	expect "S4b counts, SupportedNCPs" "$(dm_value Device.PPP.InterfaceNumberOfEntries) $(dm_value Device.PPP.SupportedNCPs) $(dm_value Device.DeviceInfo.TemperatureStatus.TemperatureSensorNumberOfEntries) $(dm_value Device.Services.StorageServiceNumberOfEntries | grep -c '^[1-9]')" \
+		"1 IPCP,IPv6CP 1 1"
+	expect "S4b: IPv4Address count = rows (LAN, IPoE, PPP, bridge)" "$(dm_value $I.$lan.IPv4AddressNumberOfEntries) $(dm_value $I.$w0.IPv4AddressNumberOfEntries) $(dm_value $I.$w1.IPv4AddressNumberOfEntries) $(dm_value $I.$w2.IPv4AddressNumberOfEntries)" "1 1 1 0"
+	expect "S4b: no UserAccount/PhysicalMedium/Folder counts, PhysicalReference empty" "$(dm_value Device.Services.StorageService.1.UserAccountNumberOfEntries) $(dm_value Device.Services.StorageService.1.PhysicalMediumNumberOfEntries) $(dm_value Device.Services.StorageService.1.LogicalVolume.1.FolderNumberOfEntries) [$(dm_value Device.Services.StorageService.1.LogicalVolume.1.PhysicalReference)]" \
+		"<none> <none> <none> []"
 	# T7: Time.Client.1 for the NTPServer1..5 TR-181 2.19 deleted; Status from
 	# the file the ntp hotplug writes at ntpd's first stratum
 	T=Device.Time
@@ -2079,6 +2086,23 @@ PY
 	expect "set Time.Enable maybe (xsd:boolean)" "$(dm_set_fault Device.Time.Enable maybe "$key")" "9007"
 	expect "set PeriodicInformInterval -5 (xsd:unsignedInt)" "$(dm_set_fault Device.ManagementServer.PeriodicInformInterval -5 "$key")" "9007"
 	$UBUS -t 120 call tr069 dm '{"cmd":"get","path":"Device."}' > "$RUN/tr181.gpv" 2>/dev/null
+	# T7 S4b: every NumberOfEntries reads the number of rows its table has in
+	# the same dump.  DynamicDNS.ServerNumberOfEntries counts the provider
+	# list, there is no Server table yet (analysis section 83)
+	expect "every NumberOfEntries = the rows of its table" "$(python3 - "$RUN/tr181.gpv" <<'PY2'
+import json, re, sys
+vals = {x["parameter"]: x.get("value", "") for x in json.load(open(sys.argv[1]))["parameters"]}
+rows = {}
+for k in vals:
+    for m in re.finditer(r"\.(\d+)\.", k):
+        rows.setdefault(k[:m.start()] + ".", set()).add(m.group(1))
+skip = {"Device.DynamicDNS.ServerNumberOfEntries"}
+bad = ["%s=%s rows %d" % (k, v, len(rows.get(k[:-15] + ".", ())))
+       for k, v in sorted(vals.items()) if k.endswith("NumberOfEntries") and k not in skip
+       and str(len(rows.get(k[:-15] + ".", ()))) != v]
+print(len(bad), bad[:3])
+PY2
+)" "0 []"
 	# T7 S2: the standard types on the wire (counters unsignedLong, times
 	# dateTime, keys hexBinary, TransmitPower int, IPPing DSCP unsignedInt)
 	expect "TR-181 types (T7 S2)" "$(python3 - "$RUN/tr181.gpv" <<'PY2'
