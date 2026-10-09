@@ -1027,6 +1027,59 @@ static int get_dip181_v4_count(char *refparam, struct dmctx *ctx, void *data, ch
 	return 0;
 }
 
+/* T7 S5b: IPInterface:2 / IPv6Interface:1 leaves.
+ *   ULAPrefix        network.globals.ula_prefix (odhcpd/netifd), its value
+ *                    only: the product's WebUI does not change it either
+ *   Interface.Type   "Normal" (no loopback or tunnel interface is listed)
+ *   Interface.Reset  a write of true restarts the interface (ubus ...
+ *                    network.interface.<sec> down, then up) at the end of
+ *                    the session; reads false
+ *   Interface.ULAEnable  the LAN gets an address of the ULA prefix when one
+ *                    is set (netifd assigns it on its ip6assign interfaces),
+ *                    no other interface does; its value only */
+static int get_dip181_ula(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = mtk_uci(IP_PKG, "globals", "ula_prefix");
+	return 0;
+}
+
+static int get_dip181_type(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "Normal";
+	return 0;
+}
+
+static int get_dip181_false(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "false";
+	return 0;
+}
+
+static int set_dip181_reset(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	char cmd[160];
+	int b = mtk_parse_bool(value);
+
+	if (b < 0)
+		return FAULT_9007;
+	if (action == VALUECHECK || !b)
+		return 0;
+	snprintf(cmd, sizeof(cmd), "ubus call network.interface.%s down; ubus call network.interface.%s up",
+		 DIP_SEC(data), DIP_SEC(data));
+	mtk_apply_service_once(cmd);
+	return 0;
+}
+
+static int get_dip181_ula_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = (*mtk_uci(IP_PKG, DIP_SEC(data), "ip6assign") && *mtk_uci(IP_PKG, "globals", "ula_prefix")) ?
+		 "true" : "false";
+	return 0;
+}
+
+MTK_SET_SAME(dip181_ula, get_dip181_ula)
+MTK_SET_SAME_BOOL(dip181_ula_enable, get_dip181_ula_enable)
+
 static DMLEAF tDip181InterfaceParams[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Name", &DMREAD, DMT_STRING, get_dip_name, NULL, NULL, NULL},
@@ -1037,6 +1090,9 @@ static DMLEAF tDip181InterfaceParams[] = {
 {"Status", &DMREAD, DMT_STRING, get_dip_status, NULL, NULL, NULL},
 {"LastChange", &DMREAD, DMT_UNINT, get_dip_lastchange, NULL, NULL, NULL},
 {"LowerLayers", &DMWRITE, DMT_STRING, get_dip181_lowerlayers, set_same_dip181_lowerlayers, NULL, NULL},
+{"Type", &DMREAD, DMT_STRING, get_dip181_type, NULL, NULL, NULL},
+{"Reset", &DMWRITE, DMT_BOOL, get_dip181_false, set_dip181_reset, NULL, NULL},
+{"ULAEnable", &DMWRITE, DMT_BOOL, get_dip181_ula_enable, set_same_dip181_ula_enable, NULL, NULL},
 {"MaxMTUSize", &DMWRITE, DMT_UNINT, get_dip181_mtu, set_dip181_mtu, NULL, NULL},
 {"IPv4AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip181_v4_count, NULL, NULL, NULL},
 {"IPv6AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip181_v6_count, NULL, NULL, NULL},
@@ -1062,6 +1118,7 @@ static DMLEAF tDip181Params[] = {
 {"IPv6Capable", &DMREAD, DMT_BOOL, get_dip_v6_capable, NULL, NULL, NULL},
 {"IPv6Enable", &DMWRITE, DMT_BOOL, get_dip_v6_enable, set_dip_v6_enable, NULL, NULL},
 {"IPv6Status", &DMREAD, DMT_STRING, get_dip_v6_status, NULL, NULL, NULL},
+{"ULAPrefix", &DMWRITE, DMT_STRING, get_dip181_ula, set_same_dip181_ula, NULL, NULL},
 {0}
 };
 

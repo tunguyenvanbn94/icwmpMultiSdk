@@ -677,6 +677,51 @@ static int set_eth181_alias(char *refparam, struct dmctx *ctx, void *data, char 
 	return mtk_alias181_set(refparam, dflt, value, action);
 }
 
+/* T7 S5b: EthernetInterface:2 leaves.
+ *   CurrentBitRate  Mbps of the link now, 0 when down: port 1 from the
+ *                   EN8811 line ("PHY[eth0.1]: 2.5Gbps/Full"), ports 2..4
+ *                   from switchmgr's link_speed code, decoded as
+ *                   hal_network.c valSpeedDuplex[] does (1 1000, 2/3 100,
+ *                   4/5 10, 6 1000); the WAN port (5) reports none: 0
+ *   LastChange      the kernel and the switch keep no time of a port's last
+ *                   link change: 0 */
+static int get_eth181_current_bitrate(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	static const int code_mbps[] = { 0, 1000, 100, 100, 10, 10, 1000 };
+	int inst = eth_inst(data), phy = inst - 1;
+
+	*value = "0";
+	if (eth181_is_wan(data))
+		return 0;
+	if (phy == 0) {
+		char *line = mtk_file_line("/proc/tc3162/en8811_link_st"), *p, unit = 0;
+		float sp = 0;
+
+		p = line ? strstr(line, "]: ") : NULL;
+		if (p && !strstr(line, ": Down") && sscanf(p + 3, "%f%cbps", &sp, &unit) == 2)
+			dmasprintf(value, "%d", (int)(unit == 'G' ? sp * 1000 : sp));
+	} else {
+		char port[8], *out, *p;
+		char *argv[] = { "/userfs/bin/switchmgr", "port", "linkstate", port, NULL };
+		int code;
+
+		snprintf(port, sizeof(port), "%d", phy);
+		out = mtk_exec(argv);
+		p = out ? strstr(out, "link_speed") : NULL;
+		if (p && (p = strchr(p, ':')) && sscanf(p + 1, "%d", &code) == 1 &&
+		    code >= 0 && code < (int)(sizeof(code_mbps) / sizeof(code_mbps[0])) &&
+		    out && strstr(out, "link_sate") && !strstr(strstr(out, "link_sate"), "down"))
+			dmasprintf(value, "%d", code_mbps[code]);
+	}
+	return 0;
+}
+
+static int get_eth181_lastchange(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "0";
+	return 0;
+}
+
 static DMLEAF tEth181InstParam[] = {
 {"Alias", &DMWRITE, DMT_STRING, get_eth181_alias, set_eth181_alias, NULL, NULL},
 {"Enable", &DMWRITE, DMT_BOOL, get_eth181_enable, set_eth181_enable, NULL, NULL},
@@ -684,7 +729,9 @@ static DMLEAF tEth181InstParam[] = {
 {"Name", &DMREAD, DMT_STRING, get_eth181_name, NULL, NULL, NULL},
 {"Upstream", &DMREAD, DMT_BOOL, get_eth_upstream181, NULL, NULL, NULL},
 {"MACAddress", &DMREAD, DMT_STRING, get_eth181_mac, NULL, NULL, NULL},
+{"LastChange", &DMREAD, DMT_UNINT, get_eth181_lastchange, NULL, NULL, NULL},
 {"MaxBitRate", &DMWRITE, DMT_INT, get_eth_maxbitrate181, set_eth_maxbitrate181, NULL, NULL},
+{"CurrentBitRate", &DMREAD, DMT_UNINT, get_eth181_current_bitrate, NULL, NULL, NULL},
 {"DuplexMode", &DMWRITE, DMT_STRING, get_eth181_duplex, set_eth181_duplex, NULL, NULL},
 {0}
 };

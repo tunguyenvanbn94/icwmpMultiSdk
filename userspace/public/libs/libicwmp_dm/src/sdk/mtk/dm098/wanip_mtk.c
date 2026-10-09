@@ -2075,6 +2075,70 @@ static int get_c181_enabled(char *refparam, struct dmctx *ctx, void *data, char 
 /* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
 MTK_SET_SAME(dhcpc181_interface, get_c181_interface)
 
+/* T7 S5b: DHCPv4Client:1 leaves the product's branch did not have.
+ *   DHCPServer          netifd keeps no server identifier (dhcp.script
+ *                       stores only the lease time): empty
+ *   LeaseTimeRemaining  data.leasetime of netifd's status less the time
+ *                       since udhcpc last renewed -- taken as the uptime
+ *                       modulo T1 = lease/2 (RFC 2131), the time udhcpc
+ *                       renews at; netifd's uptime is not reset by a renew
+ *   Renew               a write of true renews (netifd "renew": SIGUSR1 to
+ *                       udhcpc) at the end of the session; reads false
+ *   Req/SentOptionNumberOfEntries  no option tables: 0 */
+static int get_dhcpc181_server(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "";
+	return 0;
+}
+
+static int get_dhcpc181_remaining(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	json_object *res = wan_iface_status(((struct wan_entry *)data)->if4), *d, *l, *u;
+	long long lease, up, t1;
+
+	*value = "0";
+	if (!res || !json_object_object_get_ex(res, "data", &d) || !json_object_object_get_ex(d, "leasetime", &l) ||
+	    !json_object_object_get_ex(res, "uptime", &u))
+		return 0;
+	lease = json_object_get_int64(l);
+	up = json_object_get_int64(u);
+	if (lease <= 0 || up < 0)
+		return 0;
+	if (lease == 0xffffffffLL) {
+		*value = "-1";
+		return 0;
+	}
+	t1 = lease / 2 > 0 ? lease / 2 : lease;
+	dmasprintf(value, "%lld", lease - up % t1);
+	return 0;
+}
+
+static int get_dhcpc181_false(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "false";
+	return 0;
+}
+
+static int set_dhcpc181_renew(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	char cmd[128];
+	int b = mtk_parse_bool(value);
+
+	if (b < 0)
+		return FAULT_9007;
+	if (action == VALUECHECK || !b)
+		return 0;
+	snprintf(cmd, sizeof(cmd), "ubus call network.interface.%s renew", ((struct wan_entry *)data)->if4);
+	mtk_apply_service_once(cmd);
+	return 0;
+}
+
+static int get_dhcpc181_zero(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "0";
+	return 0;
+}
+
 static DMLEAF tDhcpc181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Enable", &DMWRITE, DMT_BOOL, get_dhcpc181_enable, set_dhcpc181_enable, NULL, NULL},
@@ -2084,6 +2148,11 @@ static DMLEAF tDhcpc181Param[] = {
 {"SubnetMask", &DMREAD, DMT_STRING, get_c181_mask, NULL, NULL, NULL},
 {"IPRouters", &DMREAD, DMT_STRING, get_c181_routers, NULL, NULL, NULL},
 {"DNSServers", &DMREAD, DMT_STRING, get_c181_dns, NULL, NULL, NULL},
+{"DHCPServer", &DMREAD, DMT_STRING, get_dhcpc181_server, NULL, NULL, NULL},
+{"LeaseTimeRemaining", &DMREAD, DMT_INT, get_dhcpc181_remaining, NULL, NULL, NULL},
+{"Renew", &DMWRITE, DMT_BOOL, get_dhcpc181_false, set_dhcpc181_renew, NULL, NULL},
+{"ReqOptionNumberOfEntries", &DMREAD, DMT_UNINT, get_dhcpc181_zero, NULL, NULL, NULL},
+{"SentOptionNumberOfEntries", &DMREAD, DMT_UNINT, get_dhcpc181_zero, NULL, NULL, NULL},
 {0}
 };
 
@@ -2120,8 +2189,37 @@ static DMLEAF tNat181CountParam[] = {
 {0}
 };
 
+/* T7 S5b: the DNS client (musl's resolver through dnsmasq) is always on;
+ * the record types it resolves are the four of the TR-181 enumeration */
+static int get_dns181_true(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "true";
+	return 0;
+}
+
+static int get_dns181_enabled(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "Enabled";
+	return 0;
+}
+
+static int get_dns181_types(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "A,AAAA,SRV,PTR";
+	return 0;
+}
+
+MTK_SET_SAME_BOOL(dns181_client_enable, get_dns181_true)
+
 static DMLEAF tDnsClient181Param[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_dns181_true, set_same_dns181_client_enable, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_dns181_enabled, NULL, NULL, NULL},
 {"ServerNumberOfEntries", &DMREAD, DMT_UNINT, get_dns181_count, NULL, NULL, NULL},
+{0}
+};
+
+static DMLEAF tDns181RootParam[] = {
+{"SupportedRecordTypes", &DMREAD, DMT_STRING, get_dns181_types, NULL, NULL, NULL},
 {0}
 };
 
@@ -2149,7 +2247,7 @@ static DMOBJ tDns181Obj[] = {
 static DMOBJ tWanIp181Root[] = {
 {"DHCPv4", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDhcp4181WanObj, tDhcp4181CountParam, NULL},
 {"NAT", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tNat181Obj, tNat181CountParam, NULL},
-{"DNS", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDns181Obj, NULL, NULL},
+{"DNS", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDns181Obj, tDns181RootParam, NULL},
 {0}
 };
 

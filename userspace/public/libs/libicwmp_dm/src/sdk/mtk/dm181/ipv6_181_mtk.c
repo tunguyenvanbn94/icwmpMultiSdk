@@ -135,6 +135,24 @@ int ipv6181_count(const char *sec, int prefixes)
 	return r ? v6_rows(sec, prefixes, r, V6_MAX) : 0;
 }
 
+char *ipv6181_child_refs(const char *sec, const char *ipif_inst)
+{
+	struct v6row *r = dmcalloc(V6_MAX, sizeof(*r));
+	char out[512] = "", one[96];
+	int n, i;
+
+	if (!r || !ipif_inst || !*ipif_inst)
+		return "";
+	n = v6_rows(sec, 1, r, V6_MAX);
+	for (i = 0; i < n; i++) {
+		if (!r[i].assign)
+			continue;
+		snprintf(one, sizeof(one), "%sDevice.IP.Interface.%s.IPv6Prefix.%d", *out ? "," : "", ipif_inst, i + 1);
+		strncat(out, one, sizeof(out) - strlen(out) - 1);
+	}
+	return dmstrdup(out);
+}
+
 /* <addr> lies in <pfx>/<len> */
 static int v6_in(const char *addr, const char *pfx, int len)
 {

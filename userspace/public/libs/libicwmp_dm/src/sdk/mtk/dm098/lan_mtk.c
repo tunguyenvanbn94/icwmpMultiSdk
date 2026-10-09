@@ -847,9 +847,22 @@ static int get_ipv4_addressing181(char *refparam, struct dmctx *ctx, void *data,
 	return get_ipif_addressing(refparam, ctx, data, instance, value);
 }
 
+/* T7 S5b: the address is configured and used: Enabled */
+static int get_ipv4_status181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "Enabled";
+	return 0;
+}
+
+/* T7 S5b: writes that used to be dropped take the current value only: the
+ * address is always enabled (no switch for it), and dnsmasq has no list of
+ * reserved addresses here */
+MTK_SET_SAME_BOOL(ipv4_enable181, get_ipv4_enable181)
+
 static DMLEAF tLanIpv4181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
-{"Enable", &DMWRITE, DMT_BOOL, get_ipv4_enable181, set_accept_and_drop, NULL, NULL},
+{"Enable", &DMWRITE, DMT_BOOL, get_ipv4_enable181, set_same_ipv4_enable181, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_ipv4_status181, NULL, NULL, NULL},
 {"Alias", &DMWRITE, DMT_STRING, get_ipv4_alias181, set_ipv4_alias181, NULL, NULL},
 {"IPAddress", &DMWRITE, DMT_STRING, get_ipv4_ipaddr181, set_ipv4_ipaddr181, NULL, NULL},
 {"SubnetMask", &DMWRITE, DMT_STRING, get_ipv4_mask181, set_ipv4_mask181, NULL, NULL},
@@ -871,13 +884,15 @@ static DMOBJ tLanIp181Obj[] = {
 
 /* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
 MTK_SET_SAME(pool_interface181, get_pool_interface181)
+MTK_SET_SAME(dhcp4_pool181_order, get_one)
+MTK_SET_SAME(pool181_reserved, get_empty_string)
 
 static DMLEAF tDhcp4Pool181Param[] = {
 {"Enable", &DMWRITE, DMT_BOOL, get_dhcp_enable, set_dhcp_enable, NULL, NULL},
 {"Interface", &DMWRITE, DMT_STRING, get_pool_interface181, set_same_pool_interface181, NULL, NULL},
 {"MinAddress", &DMWRITE, DMT_STRING, get_min_address, set_min_address, NULL, NULL},
 {"MaxAddress", &DMWRITE, DMT_STRING, get_max_address, set_max_address, NULL, NULL},
-{"ReservedAddresses", &DMWRITE, DMT_STRING, get_empty_string, set_accept_and_drop, NULL, NULL},
+{"ReservedAddresses", &DMWRITE, DMT_STRING, get_empty_string, set_same_pool181_reserved, NULL, NULL},
 {"SubnetMask", &DMWRITE, DMT_STRING, get_subnet_mask, set_subnet_mask, NULL, NULL},
 {"DNSServers", &DMWRITE, DMT_STRING, get_dns_servers, set_dns_servers, NULL, NULL},
 {"DomainName", &DMWRITE, DMT_STRING, get_domain_name, set_domain_name, NULL, NULL},
@@ -885,6 +900,7 @@ static DMLEAF tDhcp4Pool181Param[] = {
 {"LeaseTime", &DMWRITE, DMT_INT, get_lease_time, set_lease_time, NULL, NULL},
 {"StaticAddressNumberOfEntries", &DMREAD, DMT_UNINT, get_zero, NULL, NULL, NULL},
 {"OptionNumberOfEntries", &DMREAD, DMT_UNINT, get_zero, NULL, NULL, NULL},
+{"Order", &DMWRITE, DMT_UNINT, get_one, set_same_dhcp4_pool181_order, NULL, NULL},
 {0}
 };
 
@@ -894,7 +910,20 @@ static DMOBJ tDhcp4Pool181Obj[] = {
 {0}
 };
 
+/* T7 S5b: DHCPv4.Server.Enable -- dnsmasq serves DHCP on the LAN unless
+ * dhcp.lan.ignore is set; the product has no switch of its own for the
+ * whole server (Pool.1.Enable is dynamicdhcp), so it takes its value only.
+ * Pool.1.Order 1: the one pool. */
+static int get_dhcp4_server181_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = mtk_bool(mtk_uci("dhcp", "lan", "ignore")) ? "false" : "true";
+	return 0;
+}
+
+MTK_SET_SAME_BOOL(dhcp4_server181_enable, get_dhcp4_server181_enable)
+
 static DMLEAF tDhcp4Server181Param[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_dhcp4_server181_enable, set_same_dhcp4_server181_enable, NULL, NULL},
 {"PoolNumberOfEntries", &DMREAD, DMT_UNINT, get_one, NULL, NULL, NULL},
 {0}
 };

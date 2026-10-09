@@ -36,6 +36,8 @@
 #include <ctype.h>
 #include <math.h>
 #include <unistd.h>
+#include <dirent.h>
+#include <time.h>
 
 #include "dmtr098.h"
 #include "dmmem.h"
@@ -613,6 +615,369 @@ DM_MODULE_REGISTER(deviceinfo_mtk_module);
  * X_AIS_DSL (constants, no DSL here), X_AIS_reuseCPE_cycles/_status (always
  * empty) and X_AIS. (an object named X_AIS, not X_<id>_<name>), whose PON
  * password and state are the standard Device.XPON leaves below. */
+/* T7 S5b: ProcessStatus.Process.{i}, the processes of /proc in PID order
+ * (the product's branch kept the table empty): PID, Command (cmdline,
+ * "[comm]" for a kernel thread), Size (VmRSS, KiB), Priority (the stat
+ * priority field, 0..99), CPUTime (utime + stime, ms), State (stat state). */
+#define PROC181_MAX	512
+
+static int proc181_cmp(const void *a, const void *b)
+{
+	return *(const int *)a - *(const int *)b;
+}
+
+static int proc181_list(int *pids, int max)
+{
+	DIR *d = opendir("/proc");
+	struct dirent *e;
+	int n = 0;
+
+	if (!d)
+		return 0;
+	while ((e = readdir(d)) && n < max) {
+		if (e->d_name[0] >= '1' && e->d_name[0] <= '9' && strspn(e->d_name, "0123456789") == strlen(e->d_name))
+			pids[n++] = atoi(e->d_name);
+	}
+	closedir(d);
+	qsort(pids, n, sizeof(*pids), proc181_cmp);
+	return n;
+}
+
+static int browse_proc181(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
+{
+	int *pids = dmcalloc(PROC181_MAX, sizeof(*pids)), n, i;
+	char *inst;
+
+	if (!pids)
+		return 0;
+	n = proc181_list(pids, PROC181_MAX);
+	for (i = 0; i < n; i++) {
+		dmasprintf(&inst, "%d", i + 1);
+		if (DM_LINK_INST_OBJ(dmctx, parent_node, &pids[i], inst) == DM_STOP)
+			break;
+	}
+	return 0;
+}
+
+#define PROC181_PID(data)	(*(int *)(data))
+
+/* the fields of /proc/<pid>/stat after "(comm)": state is field 3, utime
+ * 14, stime 15, priority 18; 0 when the process is gone */
+static int proc181_stat(int pid, char *state, unsigned long long *ticks, long *prio, char *comm, size_t clen)
+{
+	char path[64], buf[1024], *l, *r;
+	unsigned long long ut = 0, st = 0;
+	FILE *f;
+	size_t n;
+
+	snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+	f = fopen(path, "r");
+	if (!f)
+		return 0;
+	n = fread(buf, 1, sizeof(buf) - 1, f);
+	fclose(f);
+	buf[n] = '\0';
+	l = strchr(buf, '(');
+	r = strrchr(buf, ')');
+	if (!l || !r || r < l)
+		return 0;
+	if (comm)
+		snprintf(comm, clen, "%.*s", (int)(r - l - 1), l + 1);
+	if (sscanf(r + 2, "%c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %llu %llu %*d %*d %ld",
+		   state, &ut, &st, prio) != 4)
+		return 0;
+	*ticks = ut + st;
+	return 1;
+}
+
+static int get_proc181_pid(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	dmasprintf(value, "%d", PROC181_PID(data));
+	return 0;
+}
+
+static int get_proc181_command(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char path[64], buf[257], comm[64], st;
+	unsigned long long t;
+	long pr;
+	size_t n, i;
+	FILE *f;
+
+	snprintf(path, sizeof(path), "/proc/%d/cmdline", PROC181_PID(data));
+	f = fopen(path, "r");
+	n = f ? fread(buf, 1, sizeof(buf) - 1, f) : 0;
+	if (f)
+		fclose(f);
+	while (n && buf[n - 1] == '\0')
+		n--;
+	for (i = 0; i < n; i++) {
+		if (buf[i] == '\0')
+			buf[i] = ' ';
+	}
+	buf[n] = '\0';
+	if (n) {
+		*value = dmstrdup(buf);
+		return 0;
+	}
+	if (proc181_stat(PROC181_PID(data), &st, &t, &pr, comm, sizeof(comm)))
+		dmasprintf(value, "[%s]", comm);
+	else
+		*value = "";
+	return 0;
+}
+
+static int get_proc181_size(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char path[64], line[128];
+	long kb = 0;
+	FILE *f;
+
+	snprintf(path, sizeof(path), "/proc/%d/status", PROC181_PID(data));
+	f = fopen(path, "r");
+	while (f && fgets(line, sizeof(line), f)) {
+		if (sscanf(line, "VmRSS: %ld", &kb) == 1)
+			break;
+	}
+	if (f)
+		fclose(f);
+	dmasprintf(value, "%ld", kb);
+	return 0;
+}
+
+static int get_proc181_priority(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char st;
+	unsigned long long t;
+	long pr = 0;
+
+	if (!proc181_stat(PROC181_PID(data), &st, &t, &pr, NULL, 0))
+		pr = 0;
+	dmasprintf(value, "%ld", pr < 0 ? 0 : pr > 99 ? 99 : pr);
+	return 0;
+}
+
+static int get_proc181_cputime(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char st;
+	unsigned long long t = 0;
+	long pr, hz = sysconf(_SC_CLK_TCK);
+
+	if (!proc181_stat(PROC181_PID(data), &st, &t, &pr, NULL, 0))
+		t = 0;
+	dmasprintf(value, "%llu", hz > 0 ? t * 1000ULL / (unsigned long long)hz : 0ULL);
+	return 0;
+}
+
+static int get_proc181_state(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char st = 'S';
+	unsigned long long t;
+	long pr;
+
+	proc181_stat(PROC181_PID(data), &st, &t, &pr, NULL, 0);
+	switch (st) {
+	case 'R': *value = "Running"; break;
+	case 'D': *value = "Uninterruptible"; break;
+	case 'T': case 't': *value = "Stopped"; break;
+	case 'Z': case 'X': *value = "Zombie"; break;
+	case 'I': *value = "Idle"; break;
+	default: *value = "Sleeping"; break;
+	}
+	return 0;
+}
+
+static int get_proc181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	int *pids = dmcalloc(PROC181_MAX, sizeof(*pids));
+
+	dmasprintf(value, "%d", pids ? proc181_list(pids, PROC181_MAX) : 0);
+	return 0;
+}
+
+static DMLEAF tProcess181Param[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"PID", &DMREAD, DMT_UNINT, get_proc181_pid, NULL, NULL, NULL},
+{"Command", &DMREAD, DMT_STRING, get_proc181_command, NULL, NULL, NULL},
+{"Size", &DMREAD, DMT_UNINT, get_proc181_size, NULL, NULL, NULL},
+{"Priority", &DMREAD, DMT_UNINT, get_proc181_priority, NULL, NULL, NULL},
+{"CPUTime", &DMREAD, DMT_UNINT, get_proc181_cputime, NULL, NULL, NULL},
+{"State", &DMREAD, DMT_STRING, get_proc181_state, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tProcessStatus181Obj[] = {
+{"Process", &DMREAD, NULL, NULL, NULL, browse_proc181, NULL, NULL, NULL, tProcess181Param, NULL},
+{0}
+};
+
+static DMLEAF tProcessStatus181Param[] = {
+{"CPUUsage", &DMREAD, DMT_UNINT, get_cpu_usage, NULL, NULL, NULL},
+{"ProcessNumberOfEntries", &DMREAD, DMT_UNINT, get_proc181_count, NULL, NULL, NULL},
+{0}
+};
+
+/* T7 S5b: TemperatureSensor.1 (thermal_zone0), with the minimum and maximum
+ * kept in /tmp/icwmp_temp181 ("reset min mintime max maxtime", epochs) from
+ * the readings this agent makes -- the product samples the sensor only when
+ * asked, so they are those of the reads since the last reset (or boot).
+ * Reset (true) starts them again from the current reading. */
+#define TEMP181_FILE	"/tmp/icwmp_temp181"
+
+struct temp181 {
+	long long reset, mintime, maxtime, now;
+	long min, max, cur;
+	int ok;
+};
+
+static void temp181_save(struct temp181 *t)
+{
+	FILE *f = fopen(TEMP181_FILE, "w");
+
+	if (!f)
+		return;
+	fprintf(f, "%lld %ld %lld %ld %lld\n", t->reset, t->min, t->mintime, t->max, t->maxtime);
+	fclose(f);
+}
+
+/* one reading, folded into the kept minimum and maximum */
+static void temp181_sample(struct temp181 *t, int reset)
+{
+	char *v = NULL;
+	FILE *f;
+
+	memset(t, 0, sizeof(*t));
+	t->now = (long long)time(NULL);
+	get_temperature(NULL, NULL, NULL, NULL, &v);
+	t->ok = *mtk_file_line("/sys/devices/virtual/thermal/thermal_zone0/temp") != '\0';
+	t->cur = v ? atol(v) : 0;
+	f = reset ? NULL : fopen(TEMP181_FILE, "r");
+	if (!f || fscanf(f, "%lld %ld %lld %ld %lld", &t->reset, &t->min, &t->mintime, &t->max, &t->maxtime) != 5) {
+		t->reset = t->mintime = t->maxtime = t->now;
+		t->min = t->max = t->cur;
+	}
+	if (f)
+		fclose(f);
+	if (t->ok && t->cur < t->min) {
+		t->min = t->cur;
+		t->mintime = t->now;
+	}
+	if (t->ok && t->cur > t->max) {
+		t->max = t->cur;
+		t->maxtime = t->now;
+	}
+	temp181_save(t);
+}
+
+static char *temp181_time(long long epoch)
+{
+	char buf[32];
+	time_t tt = (time_t)epoch;
+	struct tm tm;
+
+	if (!gmtime_r(&tt, &tm) || !strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm))
+		return "0001-01-01T00:00:00Z";
+	return dmstrdup(buf);
+}
+
+#define TEMP181_GET(name, expr)							\
+static int get_temp181_##name(char *refparam, struct dmctx *ctx, void *data,	\
+			      char *instance, char **value)			\
+{										\
+	struct temp181 t;							\
+										\
+	temp181_sample(&t, 0);							\
+	*value = (expr);							\
+	return 0;								\
+}
+
+static char *temp181_num(long v)
+{
+	char *s = NULL;
+
+	dmasprintf(&s, "%ld", v);
+	return s ? s : "0";
+}
+
+TEMP181_GET(status, t.ok ? "Enabled" : "Error")
+TEMP181_GET(resettime, temp181_time(t.reset))
+TEMP181_GET(lastupdate, temp181_time(t.now))
+TEMP181_GET(minvalue, temp181_num(t.min))
+TEMP181_GET(mintime, temp181_time(t.mintime))
+TEMP181_GET(maxvalue, temp181_num(t.max))
+TEMP181_GET(maxtime, temp181_time(t.maxtime))
+
+static int get_temp181_name(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = mtk_file_line("/sys/devices/virtual/thermal/thermal_zone0/type");
+	return 0;
+}
+
+static int get_temp181_true(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "true";
+	return 0;
+}
+
+static int get_temp181_false(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "false";
+	return 0;
+}
+
+static int set_temp181_reset(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	struct temp181 t;
+	int b = mtk_parse_bool(value);
+
+	if (b < 0)
+		return FAULT_9007;
+	if (action == VALUECHECK || !b)
+		return 0;
+	temp181_sample(&t, 1);
+	return 0;
+}
+
+static int get_temp181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = mtk_alias181_get(refparam, "cpe-TemperatureSensor-1");
+	return 0;
+}
+
+static int set_temp181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	return mtk_alias181_set(refparam, "cpe-TemperatureSensor-1", value, action);
+}
+
+MTK_SET_SAME_BOOL(temp181_enable, get_temp181_true)
+
+static DMLEAF tTempSensor181Param[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Alias", &DMWRITE, DMT_STRING, get_temp181_alias, set_temp181_alias, NULL, NULL},
+{"Enable", &DMWRITE, DMT_BOOL, get_temp181_true, set_same_temp181_enable, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_temp181_status, NULL, NULL, NULL},
+{"Reset", &DMWRITE, DMT_BOOL, get_temp181_false, set_temp181_reset, NULL, NULL},
+{"ResetTime", &DMREAD, DMT_TIME, get_temp181_resettime, NULL, NULL, NULL},
+{"Name", &DMREAD, DMT_STRING, get_temp181_name, NULL, NULL, NULL},
+{"Value", &DMREAD, DMT_INT, get_temperature, NULL, NULL, NULL},
+{"LastUpdate", &DMREAD, DMT_TIME, get_temp181_lastupdate, NULL, NULL, NULL},
+{"MinValue", &DMREAD, DMT_INT, get_temp181_minvalue, NULL, NULL, NULL},
+{"MinTime", &DMREAD, DMT_TIME, get_temp181_mintime, NULL, NULL, NULL},
+{"MaxValue", &DMREAD, DMT_INT, get_temp181_maxvalue, NULL, NULL, NULL},
+{"MaxTime", &DMREAD, DMT_TIME, get_temp181_maxtime, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tTempSensor181Obj[] = {
+{"1", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tTempSensor181Param, NULL},
+{0}
+};
+
+static DMOBJ tTemperatureStatus181Obj[] = {
+{"TemperatureSensor", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tTempSensor181Obj, NULL, NULL},
+{0}
+};
+
 /* T7 S4b: the count of the sensor table, standard in TR-181 (one sensor) */
 static int get_temp181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
@@ -627,9 +992,9 @@ static DMLEAF tTemperatureStatus181Param[] = {
 
 static DMOBJ tDeviceInfoMtk181Obj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"ProcessStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tProcessStatusObj, tProcessStatusParam, NULL},
+{"ProcessStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tProcessStatus181Obj, tProcessStatus181Param, NULL},
 {"MemoryStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tMemoryStatusParam, NULL},
-{"TemperatureStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tTemperatureStatusObj, tTemperatureStatus181Param, NULL},
+{"TemperatureStatus", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tTemperatureStatus181Obj, tTemperatureStatus181Param, NULL},
 {"X_AIS_GPON", &DMREAD, NULL, NULL, NULL, NULL, &DMFINFRM, NULL, NULL, tXAisGponParam, NULL},
 {0}
 };

@@ -1735,7 +1735,7 @@ case "$a" in
 *"call network.interface.if0 status"*)
 	# T7 S4c: an address and a delegated /56 (odhcp6c), no lifetime on the
 	# prefix's valid side is infinite
-	echo '{"up":true,"uptime":120,"proto":"dhcp","l3_device":"pon.10","ipv4-address":[{"address":"100.64.1.10","mask":24}],"ipv6-address":[{"address":"fe80::10","mask":64},{"address":"2001:db8:ff::10","mask":128,"preferred":3600,"valid":7200}],"ipv6-prefix":[{"address":"2001:db8:10::","mask":56,"preferred":0,"class":"if0"}],"route":[{"target":"0.0.0.0","mask":0,"nexthop":"100.64.1.1"}],"dns-server":["8.8.4.4","9.9.9.9"]}'
+	echo '{"up":true,"uptime":120,"proto":"dhcp","l3_device":"pon.10","ipv4-address":[{"address":"100.64.1.10","mask":24}],"ipv6-address":[{"address":"fe80::10","mask":64},{"address":"2001:db8:ff::10","mask":128,"preferred":3600,"valid":7200}],"ipv6-prefix":[{"address":"2001:db8:10::","mask":56,"preferred":0,"class":"if0"}],"data":{"leasetime":3600},"route":[{"target":"0.0.0.0","mask":0,"nexthop":"100.64.1.1"}],"dns-server":["8.8.4.4","9.9.9.9"]}'
 	exit 0 ;;
 *"call network.interface.lan status"*)
 	# T7 S4c: the /64 odhcpd gives out on the LAN and the CPE's address in it
@@ -1961,8 +1961,8 @@ for x in json.load(open(sys.argv[1]))["parameters"]:
 	# standard / vendor form (docs/plan/tr181_mtk_design.md T7)
 	expect "placeholders and non-standard names gone" "$(dm_value Device.LTE.RSSI) $(dm_value Device.XMPP.Connection.1.Enable) $(dm_value Device.DNSDiagnostics.DiagnosticsState) $(dm_value Device.Account.Web.SessionMaxTime) $(dm_value Device.WiFi.X-AIS_5GHzTransmitPower) $(dm_value Device.Services.STBService.1.ServiceMonitoring.Enable) $(dm_value Device.ManagementServer.ConnReqXMPPConnection) $(dm_value Device.Hosts.Host.1.AddressSource) $(dm_value Device.UserInterface.CarrierLocking.X_AIS_LockingEnable)" \
 		"<none> <none> <none> <none> <none> <none> <none> <none> <none>"
-	expect "placeholders gone (2)" "$(dm_value Device.CaptivePortal.Enable) $(dm_value Device.SelfTestDiagnostics.DiagnosticsState) $(dm_value Device.FAP.GPS.Latitude) $(dm_value Device.BulkData.Enable) $(dm_value Device.WiFi.AccessPoint.1.WPS.Enable) $(dm_value Device.DeviceInfo.X_AIS_DSL.SNR) $(dm_value Device.DeviceInfo.X_AIS_reuseCPE_status) $(dm_value Device.DeviceInfo.X_AIS.PonPassword)" \
-		"<none> <none> <none> <none> <none> <none> <none> <none>"
+	expect "placeholders gone (2)" "$(dm_value Device.CaptivePortal.Enable) $(dm_value Device.SelfTestDiagnostics.DiagnosticsState) $(dm_value Device.FAP.GPS.Latitude) $(dm_value Device.BulkData.Enable) $(dm_value Device.WiFi.AccessPoint.1.WPS.ConfigMethodsEnabled | grep -c PIN) $(dm_value Device.DeviceInfo.X_AIS_DSL.SNR) $(dm_value Device.DeviceInfo.X_AIS_reuseCPE_status) $(dm_value Device.DeviceInfo.X_AIS.PonPassword)" \
+		"<none> <none> <none> <none> 1 <none> <none> <none>"
 	# T7 S3: Alias writable and kept (cwmp.tr181_alias), leaves the product
 	# cannot change take their current value only, Radio.Enable writes
 	E1=Device.Ethernet.Interface.1
@@ -2076,6 +2076,20 @@ PY
 	expect "S5a PPP Stats (no pppoe-if1 netdev here)" "$(dm_value Device.PPP.Interface.$p.Stats.BytesSent) $(dm_value Device.PPP.Interface.$p.Stats.UnknownProtoPacketsReceived)" "0 0"
 	O=Device.Optical.Interface.1
 	expect "S5a Optical" "$(dm_value $O.Upstream) $(dm_value $O.Alias) $(dm_value $O.LastChange) $(dm_value $O.OpticalSignalLevel) $(dm_value $O.TransmitOpticalLevel) $(dm_value $O.Stats.BytesReceived)" "true cpe-Optical-1 0 -65536 -65536 0"
+	# T7 S5b: the remaining leaves the profiles want (analysis section 89)
+	expect "S5b PPP" "$(dm_value $P1.ConnectionTrigger) $(dm_value $P1.IPv6CPEnable) $(dm_value $P1.PPPoE.SessionID) [$(dm_value $P1.PPPoE.ACName)] $(dm_value $P1.Alias) $(dm_set_fault $P1.ConnectionTrigger OnDemand "$key")" "AlwaysOn false 0 [] cpe-ppp-$p 9007"
+	expect "S5b DHCPv4 client (lease 3600, up 120 s: renewed at T1 1800)" "$(dm_value $C.LeaseTimeRemaining) [$(dm_value $C.DHCPServer)] $(dm_value $C.Renew) $(dm_set_fault $C.Renew true "$key") $(dm_value $C.ReqOptionNumberOfEntries)" "3480 [] false 0 0"
+	expect "S5b DHCPv4 server" "$(dm_value Device.DHCPv4.Server.Enable) $(dm_value $P.Order) [$(dm_value $P.ReservedAddresses)] $(dm_set_fault $P.ReservedAddresses 192.168.1.50 "$key") $(dm_set_fault $I.$lan.IPv4Address.1.Enable false "$key") $(dm_value $I.$lan.IPv4Address.1.Status)" "true 1 [] 9007 9007 Enabled"
+	expect "S5b DNS, IP" "$(dm_value Device.DNS.SupportedRecordTypes) $(dm_value Device.DNS.Client.Enable) $(dm_value Device.DNS.Client.Status) $(dm_value $I.$w0.Type) $(dm_value $I.$w0.Reset) $(dm_set_fault $I.$w0.Reset true "$key") $(dm_value $I.$lan.ULAEnable)" "A,AAAA,SRV,PTR true Enabled Normal false 0 false"
+	expect "S5b diagnostics, NAT, routing" "$(dm_value Device.IP.Diagnostics.IPv4DownloadDiagnosticsSupported) $(dm_value Device.IP.Diagnostics.IPv6UploadDiagnosticsSupported) $(dm_value Device.NAT.PortMapping.1.AllInterfaces) $(dm_value Device.Routing.Router.1.Status)" "true false false Enabled"
+	expect "S5b processes, temperature sensor (the host machine's, if any)" "$(dm_value Device.DeviceInfo.ProcessStatus.ProcessNumberOfEntries | grep -c '^[1-9]') $(dm_value Device.DeviceInfo.ProcessStatus.Process.1.PID | grep -c '^[0-9][0-9]*$') $(dm_value Device.DeviceInfo.TemperatureStatus.TemperatureSensor.1.Status) $(dm_value Device.DeviceInfo.TemperatureStatus.TemperatureSensor.1.MaxTime | grep -c 'T.*Z$')" \
+		"1 1 $([ -r /sys/devices/virtual/thermal/thermal_zone0/temp ] && echo Enabled || echo Error) 1"
+	expect "S5b Radio 1 (EHT40, ch 6), Radio 2 (EHT160, auto)" "$(dm_value Device.WiFi.Radio.1.MaxBitRate) $(dm_value Device.WiFi.Radio.1.ExtensionChannel) $(dm_value Device.WiFi.Radio.1.IEEE80211hSupported) $(dm_value Device.WiFi.Radio.2.MaxBitRate) $(dm_value Device.WiFi.Radio.2.ExtensionChannel) $(dm_value Device.WiFi.Radio.2.IEEE80211hEnabled) $(dm_value Device.WiFi.Radio.2.MCS) $(dm_value Device.WiFi.Radio.2.GuardInterval) $(dm_value Device.WiFi.Radio.2.SupportedFrequencyBands)" \
+		"344 BelowControlChannel false 1441 Auto true -1 Auto 5GHz"
+	expect "S5b SSID MLDUnit (1, 10 backhaul, 11 fronthaul), AP" "$(dm_value Device.WiFi.SSID.1.MLDUnit) $(dm_value Device.WiFi.SSID.10.MLDUnit) $(dm_value Device.WiFi.SSID.11.MLDUnit) $(dm_value Device.WiFi.AccessPoint.2.Status) $(dm_value Device.WiFi.AccessPoint.1.WMMEnable) $(dm_value Device.WiFi.AccessPoint.1.UAPSDEnable) $(dm_value Device.WiFi.AccessPoint.1.MACAddressControlEnabled) [$(dm_value Device.WiFi.AccessPoint.1.AllowedMACAddress)]" \
+		"-1 1 0 Disabled true false false []"
+	expect "S5b Security rekey, RADIUS, WPS" "$(dm_value Device.WiFi.AccessPoint.1.Security.RekeyingInterval) $(dm_set_fault Device.WiFi.AccessPoint.1.Security.RekeyingInterval 600 "$key") $(uci -q get wireless.ra0.rekey_meth)/$(uci -q get wireless.ra0.rekey_interval) $(dm_value Device.WiFi.AccessPoint.1.Security.RadiusServerPort) $(dm_set_fault Device.WiFi.AccessPoint.1.Security.RadiusServerPort 70000 "$key") $(dm_value Device.WiFi.AccessPoint.1.WPS.Enable) $(dm_set_fault Device.WiFi.AccessPoint.1.WPS.Enable true "$key") $(uci -q get wireless.ra0.wps_state) $(dm_value Device.WiFi.AccessPoint.1.WPS.ConfigMethodsSupported)" \
+		"0 0 TIME/600 1812 9007 false 0 2 PushButton,PIN"
 	expect "S4b: no UserAccount/PhysicalMedium/Folder counts, PhysicalReference empty" "$(dm_value Device.Services.StorageService.1.UserAccountNumberOfEntries) $(dm_value Device.Services.StorageService.1.PhysicalMediumNumberOfEntries) $(dm_value Device.Services.StorageService.1.LogicalVolume.1.FolderNumberOfEntries) [$(dm_value Device.Services.StorageService.1.LogicalVolume.1.PhysicalReference)]" \
 		"<none> <none> <none> []"
 	# T7: Time.Client.1 for the NTPServer1..5 TR-181 2.19 deleted; Status from

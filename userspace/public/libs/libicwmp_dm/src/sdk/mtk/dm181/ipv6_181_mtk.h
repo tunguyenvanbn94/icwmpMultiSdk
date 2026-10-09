@@ -12,5 +12,8 @@
 /* how many IPv6Address (prefixes 0) or IPv6Prefix (1) rows the interface on
  * network section <sec> has: what its NumberOfEntries leaves read */
 int ipv6181_count(const char *sec, int prefixes);
+/* the IPv6Prefix rows the interface gives out (ipv6-prefix-assignment) as
+ * Device.IP.Interface.<ipif_inst>.IPv6Prefix.<n>, comma separated */
+char *ipv6181_child_refs(const char *sec, const char *ipif_inst);
 
 #endif

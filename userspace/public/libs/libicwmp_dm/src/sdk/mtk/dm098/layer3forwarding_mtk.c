@@ -897,8 +897,19 @@ static DMLEAF tIpv4Fwd181Params[] = {
 {0}
 };
 
+/* T7 S5b: Router.Status follows its Enable */
+static int get_router181_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *en = NULL;
+
+	get_l3f_enable(refparam, ctx, data, instance, &en);
+	*value = mtk_parse_bool(en) == 1 ? "Enabled" : "Disabled";
+	return 0;
+}
+
 static DMLEAF tRouter181Params[] = {
 {"Enable", &DMWRITE, DMT_BOOL, get_l3f_enable, set_l3f_enable, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_router181_status, NULL, NULL, NULL},
 {"IPv4ForwardingNumberOfEntries", &DMREAD, DMT_UNINT, get_fwd181_count, NULL, NULL, NULL},
 {0}
 };

@@ -86,13 +86,13 @@ leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.SupportedStandard
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.MaxBitRate	-	D	"Auto" placeholder; TR-181 Radio.MaxBitRate is a number in Mbps
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.RadioEnabled	Device.WiFi.AccessPoint.{i2}.Enable	A	the interface's own disabled flag on this product (not the radio)
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.SSIDAdvertisementEnabled	Device.WiFi.AccessPoint.{i2}.SSIDAdvertisementEnabled	A	AccessPoint leaf in TR-181
-leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WMMEnable	Device.WiFi.AccessPoint.{i2}.WMMEnable	A	AccessPoint leaf in TR-181
-leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.UAPSDEnable	Device.WiFi.AccessPoint.{i2}.UAPSDEnable	A	AccessPoint leaf in TR-181
-leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.MACAddressControlEnabled	Device.WiFi.AccessPoint.{i2}.MACAddressControlEnabled	A	AccessPoint leaf in TR-181
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WMMEnable	Device.WiFi.AccessPoint.{i2}.WMMEnable	B	T7 S5b: TR-181 reads wireless.<iface>.wmm (default on) (set-same); the product's TR-098 leaf reads false and drops writes
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.UAPSDEnable	Device.WiFi.AccessPoint.{i2}.UAPSDEnable	B	T7 S5b: TR-181 reads apsd_capable (set-same); the product's TR-098 leaf reads false and drops writes
+leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.MACAddressControlEnabled	Device.WiFi.AccessPoint.{i2}.MACAddressControlEnabled	B	T7 S5b: TR-181 reads access_policy 1 (allow list) (set-same); the product's TR-098 leaf reads false and drops writes
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.TotalAssociations	Device.WiFi.AccessPoint.{i2}.AssociatedDeviceNumberOfEntries	A	TR-181 leaf name
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BeaconAdvertisementEnabled	-	D	no TR-181 counterpart
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.MruEnable	-	D	product name without a vendor prefix: a standard TR-181 object cannot carry it (name to agree with the operator, T7)
-prefix	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.	-	D	T7 standard: WPS leaves are constants (a fixed PIN) and writes are dropped: no AccessPoint.{i}.WPS in the TR-181 tree
+prefix	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.WPS.	-	D	T7: the product's WPS leaves are constants (a fixed PIN) and writes are dropped; TR-181 AccessPoint.{i}.WPS (S5b) is built on wps_state instead (new rows)
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.BeaconType	Device.WiFi.AccessPoint.{i2}.Security.ModeEnabled	B	TR-181 enumeration (None, WEP-64, WPA2-Personal, WPA3-Personal ...) of the same wireless encryption option
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.KeyPassphrase	Device.WiFi.AccessPoint.{i2}.Security.KeyPassphrase	A	wlansec_mtk.c, same setter (MLO pair sync); secured in TR-181: reads empty (T7 S4d, tr181-map.py SECURED)
 leaf	InternetGatewayDevice.LANDevice.{i}.WLANConfiguration.{i}.PreSharedKey.{i}.PreSharedKey	Device.WiFi.AccessPoint.{i2}.Security.PreSharedKey	A	same setter (8..63, key1 digest)
@@ -558,3 +558,91 @@ new	-	Device.PPP.Interface.{i}.Stats.MulticastPacketsReceived	A	T7 S5a: device_p
 new	-	Device.PPP.Interface.{i}.Stats.BroadcastPacketsSent	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
 new	-	Device.PPP.Interface.{i}.Stats.BroadcastPacketsReceived	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
 new	-	Device.PPP.Interface.{i}.Stats.UnknownProtoPacketsReceived	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Alias	A	T7 S5b: device_ppp_mtk.c
+new	-	Device.PPP.Interface.{i}.ConnectionTrigger	A	T7 S5b: device_ppp_mtk.c
+new	-	Device.PPP.Interface.{i}.IPv6CPEnable	A	T7 S5b: device_ppp_mtk.c
+new	-	Device.PPP.Interface.{i}.IPv6CP.LocalInterfaceIdentifier	A	T7 S5b: device_ppp_mtk.c, /proc/net/if_inet6 and ipv6_route
+new	-	Device.PPP.Interface.{i}.IPv6CP.RemoteInterfaceIdentifier	A	T7 S5b: device_ppp_mtk.c, /proc/net/if_inet6 and ipv6_route
+new	-	Device.PPP.Interface.{i}.PPPoE.SessionID	A	T7 S5b: device_ppp_mtk.c, /proc/net/pppoe, network.<if>.ac/service
+new	-	Device.PPP.Interface.{i}.PPPoE.ACName	A	T7 S5b: device_ppp_mtk.c, /proc/net/pppoe, network.<if>.ac/service
+new	-	Device.PPP.Interface.{i}.PPPoE.ServiceName	A	T7 S5b: device_ppp_mtk.c, /proc/net/pppoe, network.<if>.ac/service
+new	-	Device.DHCPv4.Server.Enable	A	T7 S5b: lan_mtk.c, dhcp.lan.ignore
+new	-	Device.DHCPv4.Server.Pool.{i}.Order	A	T7 S5b: lan_mtk.c, one pool
+new	-	Device.DHCPv4.Client.{i}.DHCPServer	A	T7 S5b: wanip_mtk.c
+new	-	Device.DHCPv4.Client.{i}.LeaseTimeRemaining	A	T7 S5b: wanip_mtk.c
+new	-	Device.DHCPv4.Client.{i}.Renew	A	T7 S5b: wanip_mtk.c
+new	-	Device.DHCPv4.Client.{i}.ReqOptionNumberOfEntries	A	T7 S5b: wanip_mtk.c
+new	-	Device.DHCPv4.Client.{i}.SentOptionNumberOfEntries	A	T7 S5b: wanip_mtk.c
+new	-	Device.DHCPv6.Server.Enable	A	T7 S5b: device_dhcpv6_mtk.c
+new	-	Device.DHCPv6.Server.Pool.{i}.Order	A	T7 S5b: device_dhcpv6_mtk.c, odhcpd options
+new	-	Device.DHCPv6.Server.Pool.{i}.IANAEnable	A	T7 S5b: device_dhcpv6_mtk.c, odhcpd options
+new	-	Device.DHCPv6.Server.Pool.{i}.IANAPrefixes	A	T7 S5b: device_dhcpv6_mtk.c, odhcpd options
+new	-	Device.DHCPv6.Server.Pool.{i}.IAPDEnable	A	T7 S5b: device_dhcpv6_mtk.c, odhcpd options
+new	-	Device.DHCPv6.Server.Pool.{i}.IAPDAddLength	A	T7 S5b: device_dhcpv6_mtk.c, odhcpd options
+new	-	Device.DHCPv6.Server.Pool.{i}.OptionNumberOfEntries	A	T7 S5b: device_dhcpv6_mtk.c, odhcpd options
+new	-	Device.RouterAdvertisement.Enable	A	T7 S5b: device_ra_mtk.c
+new	-	Device.RouterAdvertisement.InterfaceSetting.{i}.AdvMobileAgentFlag	A	T7 S5b: device_ra_mtk.c, odhcpd ra_* options
+new	-	Device.RouterAdvertisement.InterfaceSetting.{i}.AdvPreferredRouterFlag	A	T7 S5b: device_ra_mtk.c, odhcpd ra_* options
+new	-	Device.RouterAdvertisement.InterfaceSetting.{i}.AdvNDProxyFlag	A	T7 S5b: device_ra_mtk.c, odhcpd ra_* options
+new	-	Device.RouterAdvertisement.InterfaceSetting.{i}.AdvLinkMTU	A	T7 S5b: device_ra_mtk.c, odhcpd ra_* options
+new	-	Device.RouterAdvertisement.InterfaceSetting.{i}.AdvReachableTime	A	T7 S5b: device_ra_mtk.c, odhcpd ra_* options
+new	-	Device.RouterAdvertisement.InterfaceSetting.{i}.AdvRetransTimer	A	T7 S5b: device_ra_mtk.c, odhcpd ra_* options
+new	-	Device.RouterAdvertisement.InterfaceSetting.{i}.AdvCurHopLimit	A	T7 S5b: device_ra_mtk.c, odhcpd ra_* options
+new	-	Device.RouterAdvertisement.InterfaceSetting.{i}.OptionNumberOfEntries	A	T7 S5b: device_ra_mtk.c, odhcpd ra_* options
+new	-	Device.DNS.SupportedRecordTypes	A	T7 S5b: wanip_mtk.c
+new	-	Device.DNS.Client.Enable	A	T7 S5b: wanip_mtk.c
+new	-	Device.DNS.Client.Status	A	T7 S5b: wanip_mtk.c
+new	-	Device.IP.ULAPrefix	A	T7 S5b: device_ip_mtk.c, network.globals.ula_prefix
+new	-	Device.IP.Interface.{i}.Type	A	T7 S5b: device_ip_mtk.c
+new	-	Device.IP.Interface.{i}.Reset	A	T7 S5b: device_ip_mtk.c
+new	-	Device.IP.Interface.{i}.ULAEnable	A	T7 S5b: device_ip_mtk.c
+new	-	Device.IP.Interface.{i}.IPv4Address.{i}.Status	A	T7 S5b: lan_mtk.c
+new	-	Device.IP.Diagnostics.IPv4DownloadDiagnosticsSupported	A	T7 S5b: tr143diag_mtk.c
+new	-	Device.IP.Diagnostics.IPv6DownloadDiagnosticsSupported	A	T7 S5b: tr143diag_mtk.c
+new	-	Device.IP.Diagnostics.IPv4UploadDiagnosticsSupported	A	T7 S5b: tr143diag_mtk.c
+new	-	Device.IP.Diagnostics.IPv6UploadDiagnosticsSupported	A	T7 S5b: tr143diag_mtk.c
+new	-	Device.NAT.PortMapping.{i}.AllInterfaces	A	T7 S5b: portmapping_mtk.c
+new	-	Device.Routing.Router.{i}.Status	A	T7 S5b: layer3forwarding_mtk.c
+new	-	Device.DeviceInfo.ProcessStatus.ProcessNumberOfEntries	A	T7 S5b: deviceinfo_mtk.c, /proc
+new	-	Device.DeviceInfo.ProcessStatus.Process.{i}.PID	A	T7 S5b: deviceinfo_mtk.c, /proc/<pid>
+new	-	Device.DeviceInfo.ProcessStatus.Process.{i}.Command	A	T7 S5b: deviceinfo_mtk.c, /proc/<pid>
+new	-	Device.DeviceInfo.ProcessStatus.Process.{i}.Size	A	T7 S5b: deviceinfo_mtk.c, /proc/<pid>
+new	-	Device.DeviceInfo.ProcessStatus.Process.{i}.Priority	A	T7 S5b: deviceinfo_mtk.c, /proc/<pid>
+new	-	Device.DeviceInfo.ProcessStatus.Process.{i}.CPUTime	A	T7 S5b: deviceinfo_mtk.c, /proc/<pid>
+new	-	Device.DeviceInfo.ProcessStatus.Process.{i}.State	A	T7 S5b: deviceinfo_mtk.c, /proc/<pid>
+new	-	Device.DeviceInfo.TemperatureStatus.TemperatureSensor.{i}.Alias	A	T7 S5b: deviceinfo_mtk.c, thermal_zone0, min/max of the reads
+new	-	Device.DeviceInfo.TemperatureStatus.TemperatureSensor.{i}.Enable	A	T7 S5b: deviceinfo_mtk.c, thermal_zone0, min/max of the reads
+new	-	Device.DeviceInfo.TemperatureStatus.TemperatureSensor.{i}.Status	A	T7 S5b: deviceinfo_mtk.c, thermal_zone0, min/max of the reads
+new	-	Device.DeviceInfo.TemperatureStatus.TemperatureSensor.{i}.Reset	A	T7 S5b: deviceinfo_mtk.c, thermal_zone0, min/max of the reads
+new	-	Device.DeviceInfo.TemperatureStatus.TemperatureSensor.{i}.ResetTime	A	T7 S5b: deviceinfo_mtk.c, thermal_zone0, min/max of the reads
+new	-	Device.DeviceInfo.TemperatureStatus.TemperatureSensor.{i}.Name	A	T7 S5b: deviceinfo_mtk.c, thermal_zone0, min/max of the reads
+new	-	Device.DeviceInfo.TemperatureStatus.TemperatureSensor.{i}.LastUpdate	A	T7 S5b: deviceinfo_mtk.c, thermal_zone0, min/max of the reads
+new	-	Device.DeviceInfo.TemperatureStatus.TemperatureSensor.{i}.MinValue	A	T7 S5b: deviceinfo_mtk.c, thermal_zone0, min/max of the reads
+new	-	Device.DeviceInfo.TemperatureStatus.TemperatureSensor.{i}.MinTime	A	T7 S5b: deviceinfo_mtk.c, thermal_zone0, min/max of the reads
+new	-	Device.DeviceInfo.TemperatureStatus.TemperatureSensor.{i}.MaxValue	A	T7 S5b: deviceinfo_mtk.c, thermal_zone0, min/max of the reads
+new	-	Device.DeviceInfo.TemperatureStatus.TemperatureSensor.{i}.MaxTime	A	T7 S5b: deviceinfo_mtk.c, thermal_zone0, min/max of the reads
+new	-	Device.Ethernet.Interface.{i}.LastChange	A	T7 S5b: laneth_mtk.c
+new	-	Device.Ethernet.Interface.{i}.CurrentBitRate	A	T7 S5b: laneth_mtk.c
+new	-	Device.WiFi.Radio.{i}.Alias	A	T7 S5b: wlan_mtk.c, MTK wireless options
+new	-	Device.WiFi.Radio.{i}.Upstream	A	T7 S5b: wlan_mtk.c, MTK wireless options
+new	-	Device.WiFi.Radio.{i}.MaxBitRate	A	T7 S5b: wlan_mtk.c, MTK wireless options
+new	-	Device.WiFi.Radio.{i}.SupportedFrequencyBands	A	T7 S5b: wlan_mtk.c, MTK wireless options
+new	-	Device.WiFi.Radio.{i}.AutoChannelSupported	A	T7 S5b: wlan_mtk.c, MTK wireless options
+new	-	Device.WiFi.Radio.{i}.ExtensionChannel	A	T7 S5b: wlan_mtk.c, MTK wireless options
+new	-	Device.WiFi.Radio.{i}.GuardInterval	A	T7 S5b: wlan_mtk.c, MTK wireless options
+new	-	Device.WiFi.Radio.{i}.MCS	A	T7 S5b: wlan_mtk.c, MTK wireless options
+new	-	Device.WiFi.Radio.{i}.IEEE80211hSupported	A	T7 S5b: wlan_mtk.c, MTK wireless options
+new	-	Device.WiFi.Radio.{i}.IEEE80211hEnabled	A	T7 S5b: wlan_mtk.c, MTK wireless options
+new	-	Device.WiFi.SSID.{i}.Alias	A	T7 S5b: wlan_mtk.c
+new	-	Device.WiFi.SSID.{i}.MLDUnit	A	T7 S5b: wlan_mtk.c
+new	-	Device.WiFi.AccessPoint.{i}.Status	A	T7 S5b: wlan_mtk.c
+new	-	Device.WiFi.AccessPoint.{i}.WMMCapability	A	T7 S5b: wlan_mtk.c
+new	-	Device.WiFi.AccessPoint.{i}.UAPSDCapability	A	T7 S5b: wlan_mtk.c
+new	-	Device.WiFi.AccessPoint.{i}.AllowedMACAddress	A	T7 S5b: wlan_mtk.c
+new	-	Device.WiFi.AccessPoint.{i}.Security.RekeyingInterval	A	T7 S5b: wlansec_mtk.c
+new	-	Device.WiFi.AccessPoint.{i}.Security.RadiusServerIPAddr	A	T7 S5b: wlansec_mtk.c
+new	-	Device.WiFi.AccessPoint.{i}.Security.RadiusServerPort	A	T7 S5b: wlansec_mtk.c
+new	-	Device.WiFi.AccessPoint.{i}.Security.RadiusSecret	A	T7 S5b: wlansec_mtk.c
+new	-	Device.WiFi.AccessPoint.{i}.WPS.Enable	A	T7 S5b: wlansec_mtk.c, wps_state
+new	-	Device.WiFi.AccessPoint.{i}.WPS.ConfigMethodsSupported	A	T7 S5b: wlansec_mtk.c, wps_state
+new	-	Device.WiFi.AccessPoint.{i}.WPS.ConfigMethodsEnabled	A	T7 S5b: wlansec_mtk.c, wps_state

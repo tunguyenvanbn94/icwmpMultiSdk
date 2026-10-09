@@ -40,6 +40,7 @@
 #include "dm_registry.h"
 #include "dmmtk.h"
 #include "device_ip_mtk.h"
+#include "ipv6_181_mtk.h"
 
 #define D6_PKG		"dhcp"
 #define D6_RELOAD	"/etc/init.d/odhcpd reload"
@@ -381,6 +382,78 @@ DM_MODULE_REGISTER(device_dhcpv6_mtk_module);
  * IP.Interface follow the root (mtk_ipif_prefix()).  DUID is xsd:hexBinary
  * there (the DUID-LL is hex digits already): tD6Pool181Params is a copy of
  * tD6PoolParams, keep in step (T7 S2). */
+/* T7 S5b: DHCPv6Server:1 leaves of odhcpd (its options of dhcp.<sec>):
+ *   Server.Enable   a pool serves (dhcpv6 server on any): its value only,
+ *                   each pool has its own Enable
+ *   IANAEnable      dhcpv6_na (odhcpd default on), written + odhcpd reload
+ *   IAPDEnable      dhcpv6_pd (odhcpd default on), written + odhcpd reload
+ *   IANAPrefixes    the prefixes the pool's interface gives out
+ *                   (ipv6_181_mtk.c, its IPv6Prefix rows)
+ *   IAPDAddLength   odhcpd adds no fixed length (it answers the client's
+ *                   hint): 0, its value only
+ *   Order 1 (one pool per interface), OptionNumberOfEntries 0 (no table) */
+static int get_d6181_server_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct d6_pool *list = dmcalloc(D6_MAX, sizeof(*list));
+	int n = list ? d6_list(list, D6_MAX) : 0, i;
+
+	*value = "false";
+	for (i = 0; i < n; i++) {
+		if (strcmp(mtk_uci(D6_PKG, list[i].sec, "dhcpv6"), "server") == 0)
+			*value = "true";
+	}
+	return 0;
+}
+
+#define D6_FLAG181(name, option)						\
+static int get_d6181_##name(char *refparam, struct dmctx *ctx, void *data,	\
+			    char *instance, char **value)			\
+{										\
+	*value = (strcmp(mtk_uci(D6_PKG, D6_SEC(data), "dhcpv6"), "server") == 0 && \
+		  strcmp(mtk_uci(D6_PKG, D6_SEC(data), option), "0") != 0) ? "true" : "false"; \
+	return 0;								\
+}										\
+static int set_d6181_##name(char *refparam, struct dmctx *ctx, void *data,	\
+			    char *instance, char *value, int action)		\
+{										\
+	int b = mtk_parse_bool(value);						\
+										\
+	if (b < 0)								\
+		return FAULT_9007;						\
+	if (action == VALUECHECK)						\
+		return 0;							\
+	dmuci_set_value(D6_PKG, D6_SEC(data), option, b ? "1" : "0");		\
+	mtk_apply_service_once(D6_RELOAD);					\
+	return 0;								\
+}
+
+D6_FLAG181(iana, "dhcpv6_na")
+D6_FLAG181(iapd, "dhcpv6_pd")
+
+static int get_d6181_ianaprefixes(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *ifn = mtk_uci(D6_PKG, D6_SEC(data), "interface");
+
+	*value = *ifn ? ipv6181_child_refs(ifn, dip_instance_of(ifn)) : "";
+	return 0;
+}
+
+static int get_d6181_zero(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "0";
+	return 0;
+}
+
+static int get_d6181_one(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "1";
+	return 0;
+}
+
+MTK_SET_SAME_BOOL(d6181_server_enable, get_d6181_server_enable)
+MTK_SET_SAME(d6181_addlength, get_d6181_zero)
+MTK_SET_SAME(d6181_order, get_d6181_one)
+
 /* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
 MTK_SET_SAME(d6_duid, get_d6_duid)
 
@@ -390,6 +463,12 @@ static DMLEAF tD6Pool181Params[] = {
 {"Status", &DMREAD, DMT_STRING, get_d6_status, NULL, NULL, NULL},
 {"Interface", &DMWRITE, DMT_STRING, get_d6_interface, set_d6_interface, NULL, NULL},
 {"DUID", &DMWRITE, DMT_HEXBIN, get_d6_duid, set_same_d6_duid, NULL, NULL},
+{"Order", &DMWRITE, DMT_UNINT, get_d6181_one, set_same_d6181_order, NULL, NULL},
+{"IANAEnable", &DMWRITE, DMT_BOOL, get_d6181_iana, set_d6181_iana, NULL, NULL},
+{"IANAPrefixes", &DMREAD, DMT_STRING, get_d6181_ianaprefixes, NULL, NULL, NULL},
+{"IAPDEnable", &DMWRITE, DMT_BOOL, get_d6181_iapd, set_d6181_iapd, NULL, NULL},
+{"IAPDAddLength", &DMWRITE, DMT_UNINT, get_d6181_zero, set_same_d6181_addlength, NULL, NULL},
+{"OptionNumberOfEntries", &DMREAD, DMT_UNINT, get_d6181_zero, NULL, NULL, NULL},
 {0}
 };
 
@@ -409,6 +488,7 @@ static int get_d6181_pool_count(char *refparam, struct dmctx *ctx, void *data, c
 }
 
 static DMLEAF tD6Server181Params[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_d6181_server_enable, set_same_d6181_server_enable, NULL, NULL},
 {"PoolNumberOfEntries", &DMREAD, DMT_UNINT, get_d6181_pool_count, NULL, NULL, NULL},
 {0}
 };

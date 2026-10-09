@@ -625,11 +625,26 @@ static int get_pm181_count(char *refparam, struct dmctx *ctx, void *data, char *
 	return 0;
 }
 
+/* T7 S5b: a rule of the product is on its connection (Interface); one
+ * without an interface applies on all of them.  Its value only: the
+ * product has no rule that is on every WAN */
+static int get_pm181_allif(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *ifc = NULL;
+
+	get_pm181_interface(refparam, ctx, data, instance, &ifc);
+	*value = (ifc && *ifc) ? "false" : "true";
+	return 0;
+}
+
+MTK_SET_SAME_BOOL(pm181_allif, get_pm181_allif)
+
 static DMLEAF tPm181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Enable", &DMWRITE, DMT_BOOL, get_pm_enabled, set_pm_enabled, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_pm181_status, NULL, NULL, NULL},
 {"Interface", &DMWRITE, DMT_STRING, get_pm181_interface, set_pm181_interface, NULL, NULL},
+{"AllInterfaces", &DMWRITE, DMT_BOOL, get_pm181_allif, set_same_pm181_allif, NULL, NULL},
 {"LeaseDuration", &DMWRITE, DMT_UNINT, get_pm_lease, set_pm_lease, NULL, NULL},
 {"RemoteHost", &DMWRITE, DMT_STRING, get_pm_remote_host, set_pm_remote_host, NULL, NULL},
 {"ExternalPort", &DMWRITE, DMT_UNINT, get_pm_ext_port, set_pm_ext_port, NULL, NULL},

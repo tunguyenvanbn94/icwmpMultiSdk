@@ -1185,11 +1185,228 @@ static DMOBJ tRadio181Obj[] = {
 {0}
 };
 
+/* T7 S5b: WiFiRadio:1 / WiFiSSID:2 / WiFiAccessPoint:2 leaves, from the
+ * MTK options of /etc/config/wireless that mtkdat.lua turns into the
+ * driver profile (unified_script/mtkdat.lua):
+ *   Radio  ExtensionChannel  ht_extcha 1 above / 0 below the control
+ *                            channel; Auto while the channel is automatic
+ *                            (channel 0) or the width is 20 MHz
+ *          GuardInterval     ht_gi of its first interface: 1 short GI
+ *                            allowed (Auto), 0 800nsec
+ *          IEEE80211h*       5 GHz only, doth (default 1)
+ *          MCS               ht_mcs, 33 = automatic (-1)
+ *          MaxBitRate        Mbps of the top rate of the configured mode:
+ *                            the htmode family and width, ht_txstream
+ *                            streams, 0.8 us GI (EHT MCS13, HE MCS11,
+ *                            VHT MCS9, HT MCS7) -- computed, Conditional
+ *          SupportedFrequencyBands, Upstream false, AutoChannelSupported,
+ *          Alias (store)
+ *   SSID   MLDUnit           the MLO groups of x_ais_mlo_mtk.c: apmld1
+ *                            (ra5 + rai5) 0, apmld2 (ra4 + rai4) 1 while
+ *                            enabled, else -1; Alias (store)
+ *   AP     Status            Enabled / Disabled by its disabled option
+ *          WMMEnable/Capability       wmm (default 1)
+ *          UAPSDEnable/Capability     apsd_capable
+ *          MACAddressControlEnabled   access_policy 1 (allow list)
+ *          AllowedMACAddress          access_list while that policy is on
+ * The settings the product's own WebUI/hal_unify do not change here keep
+ * the value they have (set-same); the writes that used to be dropped
+ * (WMMEnable, UAPSDEnable, MACAddressControlEnabled) are now set-same. */
+static char *radio181_opt(void *data, const char *option)
+{
+	return mtk_uci("wireless", radio_section(data), option);
+}
+
+/* the width of htmode (EHT160 -> 160), 20 when it has none */
+static int radio181_width(void *data)
+{
+	const char *h = radio181_opt(data, "htmode");
+
+	while (*h && (*h < '0' || *h > '9'))
+		h++;
+	return *h ? atoi(h) : 20;
+}
+
+static int get_radio181_extch(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	const char *ch = radio181_opt(data, "channel");
+
+	if (!*ch || strcmp(ch, "0") == 0 || strcmp(ch, "auto") == 0 || radio181_width(data) <= 20)
+		*value = "Auto";
+	else
+		*value = strcmp(radio181_opt(data, "ht_extcha"), "1") == 0 ? "AboveControlChannel" : "BelowControlChannel";
+	return 0;
+}
+
+static int get_radio181_gi(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = strcmp(wlan_opt(data, "ht_gi"), "0") == 0 ? "800nsec" : "Auto";
+	return 0;
+}
+
+static int get_radio181_h_supported(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = radio181_number(data) == 2 ? "true" : "false";
+	return 0;
+}
+
+static int get_radio181_h_enabled(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = (radio181_number(data) == 2 && strcmp(radio181_opt(data, "doth"), "0") != 0) ? "true" : "false";
+	return 0;
+}
+
+static int get_radio181_mcs(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *m = wlan_opt(data, "ht_mcs");
+
+	*value = (!*m || strcmp(m, "33") == 0) ? "-1" : m;
+	return 0;
+}
+
+static int get_radio181_maxbitrate(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	/* one stream, 0.8 us GI, Mbps x10, widths 20/40/80/160/320 */
+	static const int eht[] = { 1721, 3441, 7206, 14412, 28824 };
+	static const int he[] = { 1434, 2868, 6005, 12010, 24020 };
+	static const int vht[] = { 867, 2000, 4333, 8667, 8667 };
+	static const int ht[] = { 722, 1500, 1500, 1500, 1500 };
+	const char *h = radio181_opt(data, "htmode");
+	const int *t = strncmp(h, "EHT", 3) == 0 ? eht : strncmp(h, "HE", 2) == 0 ? he :
+		       strncmp(h, "VHT", 3) == 0 ? vht : ht;
+	int w = radio181_width(data), i = w >= 320 ? 4 : w >= 160 ? 3 : w >= 80 ? 2 : w >= 40 ? 1 : 0;
+	int ss = atoi(radio181_opt(data, "ht_txstream"));
+
+	dmasprintf(value, "%d", t[i] * (ss > 0 ? ss : 1) / 10);
+	return 0;
+}
+
+static int get_radio181_bands(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = radio181_number(data) == 2 ? "5GHz" : "2.4GHz";
+	return 0;
+}
+
+static int get_radio181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *d;
+
+	dmasprintf(&d, "cpe-Radio-%s", instance);
+	*value = mtk_alias181_get(refparam, d);
+	return 0;
+}
+
+static int set_radio181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	char *d;
+
+	dmasprintf(&d, "cpe-Radio-%s", instance);
+	return mtk_alias181_set(refparam, d, value, action);
+}
+
+static int get_wifi181_true(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "true";
+	return 0;
+}
+
+static int get_ssid181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *d;
+
+	dmasprintf(&d, "cpe-SSID-%s", instance);
+	*value = mtk_alias181_get(refparam, d);
+	return 0;
+}
+
+static int set_ssid181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	char *d;
+
+	dmasprintf(&d, "cpe-SSID-%s", instance);
+	return mtk_alias181_set(refparam, d, value, action);
+}
+
+static int get_ssid181_mldunit(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	const char *n = iface_name(data);
+
+	*value = "-1";
+	if ((strcmp(n, "ra5") == 0 || strcmp(n, "rai5") == 0) &&
+	    strcmp(mtk_uci("wireless", "apmld1", "disabled"), "0") == 0)
+		*value = "0";
+	else if ((strcmp(n, "ra4") == 0 || strcmp(n, "rai4") == 0) &&
+		 strcmp(mtk_uci("wireless", "apmld2", "disabled"), "1") != 0)	/* unset: on (x_ais_mlo_mtk.c) */
+		*value = "1";
+	return 0;
+}
+
+static int get_ap181_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = strcmp(wlan_opt(data, "disabled"), "1") == 0 ? "Disabled" : "Enabled";
+	return 0;
+}
+
+static int get_ap181_wmm(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = strcmp(wlan_opt(data, "wmm"), "0") == 0 ? "false" : "true";
+	return 0;
+}
+
+static int get_ap181_uapsd(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = strcmp(wlan_opt(data, "apsd_capable"), "1") == 0 ? "true" : "false";
+	return 0;
+}
+
+static int get_ap181_macctl(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = strcmp(wlan_opt(data, "access_policy"), "1") == 0 ? "true" : "false";
+	return 0;
+}
+
+/* access_list: "a;b" or a uci list (blank separated), as a comma list */
+static int get_ap181_allowed(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *l, *p;
+
+	*value = "";
+	if (strcmp(wlan_opt(data, "access_policy"), "1") != 0)
+		return 0;
+	l = dmstrdup(wlan_opt(data, "access_list"));
+	for (p = l; p && *p; p++) {
+		if (*p == ';' || *p == ' ')
+			*p = ',';
+	}
+	*value = l ? l : "";
+	return 0;
+}
+
+MTK_SET_SAME(radio181_extch, get_radio181_extch)
+MTK_SET_SAME(radio181_gi, get_radio181_gi)
+MTK_SET_SAME_BOOL(radio181_h_enabled, get_radio181_h_enabled)
+MTK_SET_SAME(radio181_mcs, get_radio181_mcs)
+MTK_SET_SAME(ssid181_mldunit, get_ssid181_mldunit)
+MTK_SET_SAME_BOOL(ap181_wmm, get_ap181_wmm)
+MTK_SET_SAME_BOOL(ap181_uapsd, get_ap181_uapsd)
+MTK_SET_SAME_BOOL(ap181_macctl, get_ap181_macctl)
+MTK_SET_SAME(ap181_allowed, get_ap181_allowed)
+
 static DMLEAF tRadio181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Enable", &DMWRITE, DMT_BOOL, get_radio181_enable, set_radio181_enable, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_radio181_status, NULL, NULL, NULL},
+{"Alias", &DMWRITE, DMT_STRING, get_radio181_alias, set_radio181_alias, NULL, NULL},
 {"Name", &DMREAD, DMT_STRING, get_radio181_name, NULL, NULL, NULL},
+{"Upstream", &DMREAD, DMT_BOOL, get_false, NULL, NULL, NULL},
+{"MaxBitRate", &DMREAD, DMT_UNINT, get_radio181_maxbitrate, NULL, NULL, NULL},
+{"SupportedFrequencyBands", &DMREAD, DMT_STRING, get_radio181_bands, NULL, NULL, NULL},
+{"AutoChannelSupported", &DMREAD, DMT_BOOL, get_wifi181_true, NULL, NULL, NULL},
+{"ExtensionChannel", &DMWRITE, DMT_STRING, get_radio181_extch, set_same_radio181_extch, NULL, NULL},
+{"GuardInterval", &DMWRITE, DMT_STRING, get_radio181_gi, set_same_radio181_gi, NULL, NULL},
+{"MCS", &DMWRITE, DMT_INT, get_radio181_mcs, set_same_radio181_mcs, NULL, NULL},
+{"IEEE80211hSupported", &DMREAD, DMT_BOOL, get_radio181_h_supported, NULL, NULL, NULL},
+{"IEEE80211hEnabled", &DMWRITE, DMT_BOOL, get_radio181_h_enabled, set_same_radio181_h_enabled, NULL, NULL},
 {"OperatingFrequencyBand", &DMWRITE, DMT_STRING, get_radio181_band, set_same_radio181_band, NULL, NULL},
 {"SupportedStandards", &DMREAD, DMT_STRING, get_radio181_supported, NULL, NULL, NULL},
 {"OperatingStandards", &DMWRITE, DMT_STRING, get_wlan_standard, set_wlan_standard, NULL, NULL},
@@ -1227,7 +1444,9 @@ MTK_SET_SAME(ssid181_lowerlayers, get_ssid181_lowerlayers)
 static DMLEAF tSsid181Param[] = {
 {"Enable", &DMWRITE, DMT_BOOL, get_wlan_enable, set_wlan_enable, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_ssid181_status, NULL, NULL, NULL},
+{"Alias", &DMWRITE, DMT_STRING, get_ssid181_alias, set_ssid181_alias, NULL, NULL},
 {"Name", &DMREAD, DMT_STRING, get_ssid181_name, NULL, NULL, NULL},
+{"MLDUnit", &DMWRITE, DMT_INT, get_ssid181_mldunit, set_same_ssid181_mldunit, NULL, NULL},
 {"LowerLayers", &DMWRITE, DMT_STRING, get_ssid181_lowerlayers, set_same_ssid181_lowerlayers, NULL, NULL},
 {"BSSID", &DMREAD, DMT_STRING, get_bssid, NULL, NULL, NULL},
 {"MACAddress", &DMREAD, DMT_STRING, get_bssid, NULL, NULL, NULL},
@@ -1246,11 +1465,15 @@ MTK_SET_SAME(ap181_ssidref, get_ap181_ssidref)
 
 static DMLEAF tAp181Param[] = {
 {"Enable", &DMWRITE, DMT_BOOL, get_radio_enabled, set_radio_enabled, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_ap181_status, NULL, NULL, NULL},
 {"SSIDReference", &DMWRITE, DMT_STRING, get_ap181_ssidref, set_same_ap181_ssidref, NULL, NULL},
 {"SSIDAdvertisementEnabled", &DMWRITE, DMT_BOOL, get_ssid_advertisement, set_ssid_advertisement, NULL, NULL},
-{"WMMEnable", &DMWRITE, DMT_BOOL, get_false, set_accept_and_drop, NULL, NULL},
-{"UAPSDEnable", &DMWRITE, DMT_BOOL, get_false, set_accept_and_drop, NULL, NULL},
-{"MACAddressControlEnabled", &DMWRITE, DMT_BOOL, get_false, set_accept_and_drop, NULL, NULL},
+{"WMMCapability", &DMREAD, DMT_BOOL, get_wifi181_true, NULL, NULL, NULL},
+{"UAPSDCapability", &DMREAD, DMT_BOOL, get_wifi181_true, NULL, NULL, NULL},
+{"WMMEnable", &DMWRITE, DMT_BOOL, get_ap181_wmm, set_same_ap181_wmm, NULL, NULL},
+{"UAPSDEnable", &DMWRITE, DMT_BOOL, get_ap181_uapsd, set_same_ap181_uapsd, NULL, NULL},
+{"MACAddressControlEnabled", &DMWRITE, DMT_BOOL, get_ap181_macctl, set_same_ap181_macctl, NULL, NULL},
+{"AllowedMACAddress", &DMWRITE, DMT_STRING, get_ap181_allowed, set_same_ap181_allowed, NULL, NULL},
 {"AssociatedDeviceNumberOfEntries", &DMREAD, DMT_UNINT, get_total_associations, NULL, NULL, NULL},
 {0}
 };

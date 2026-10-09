@@ -597,6 +597,129 @@ static const char *const device_ra_mtk_paths181[] = {
 	NULL
 };
 
+/* T7 S5b: RouterAdvertisement:1 leaves of odhcpd (dhcp.<sec>.ra_*, its
+ * config.c), written like the leaves above (uci + odhcpd reload):
+ *   AdvCurHopLimit      ra_hoplimit 0..255 (0: unspecified, odhcpd default)
+ *   AdvLinkMTU          ra_mtu (0: no MTU option)
+ *   AdvReachableTime    ra_reachabletime ms 0..3600000
+ *   AdvRetransTimer     ra_retranstime ms
+ *   AdvPreferredRouterFlag  ra_preference high/medium/low (default medium)
+ * odhcpd sends neither the Home Agent (mobile IPv6) nor the Proxy flag:
+ * AdvMobileAgentFlag, AdvNDProxyFlag false, their value only.
+ * RouterAdvertisement.Enable: a setting sends RAs (ra server); each one has
+ * its own Enable, so the whole takes its value only.  No option table. */
+static int ra181_get_uint(void *data, const char *option, char **value)
+{
+	char *v = mtk_uci(RA_PKG, RA_SEC(data), option);
+
+	*value = ra_digits(v) ? v : "0";
+	return 0;
+}
+
+static int ra181_set_max(void *data, const char *option, const char *value, long long max, int action)
+{
+	if (!ra_digits(value) || strtoll(value, NULL, 10) > max)
+		return FAULT_9007;
+	return ra_set_uint(data, option, value, NULL, 0, action);
+}
+
+#define RA181_UINT(name, option, max)						\
+static int get_ra181_##name(char *refparam, struct dmctx *ctx, void *data,	\
+			    char *instance, char **value)			\
+{										\
+	return ra181_get_uint(data, option, value);				\
+}										\
+static int set_ra181_##name(char *refparam, struct dmctx *ctx, void *data,	\
+			    char *instance, char *value, int action)		\
+{										\
+	return ra181_set_max(data, option, value, max, action);			\
+}
+
+RA181_UINT(hoplimit, "ra_hoplimit", 255LL)
+RA181_UINT(mtu, "ra_mtu", 4294967295LL)
+RA181_UINT(reachable, "ra_reachabletime", 3600000LL)
+RA181_UINT(retrans, "ra_retranstime", 4294967295LL)
+
+static int get_ra181_preference(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *v = mtk_uci(RA_PKG, RA_SEC(data), "ra_preference");
+
+	*value = strcmp(v, "high") == 0 ? "High" : strcmp(v, "low") == 0 ? "Low" : "Medium";
+	return 0;
+}
+
+static int set_ra181_preference(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	const char *v = strcmp(value, "High") == 0 ? "high" : strcmp(value, "Low") == 0 ? "low" :
+			strcmp(value, "Medium") == 0 ? "medium" : NULL;
+
+	if (!v)
+		return FAULT_9007;
+	if (action == VALUECHECK)
+		return 0;
+	dmuci_set_value(RA_PKG, RA_SEC(data), "ra_preference", (char *)v);
+	mtk_apply_service_once(RA_RELOAD);
+	return 0;
+}
+
+static int get_ra181_false(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "false";
+	return 0;
+}
+
+static int get_ra181_zero(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "0";
+	return 0;
+}
+
+static int get_ra181_enable_all(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	struct ra_if *list = dmcalloc(RA_MAX, sizeof(*list));
+	int n = list ? ra_list(list, RA_MAX) : 0, i;
+
+	*value = "false";
+	for (i = 0; i < n; i++) {
+		if (strcmp(mtk_uci(RA_PKG, list[i].sec, "ra"), "server") == 0)
+			*value = "true";
+	}
+	return 0;
+}
+
+MTK_SET_SAME_BOOL(ra181_false, get_ra181_false)
+MTK_SET_SAME_BOOL(ra181_enable_all, get_ra181_enable_all)
+
+/* copy of tRaIfParams, keep in step */
+static DMLEAF tRaIf181Params[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMWRITE, DMT_BOOL, get_ra_enable, set_ra_enable, NULL, NULL},
+{"Status", &DMREAD, DMT_STRING, get_ra_status, NULL, NULL, NULL},
+{"Alias", &DMWRITE, DMT_STRING, get_ra_alias, set_ra_alias, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_ra_interface, set_ra_interface, NULL, NULL},
+{"Prefixes", &DMREAD, DMT_STRING, get_ra_prefixes, NULL, NULL, NULL},
+{"MaxRtrAdvInterval", &DMWRITE, DMT_UNINT, get_ra_maxinterval, set_ra_maxinterval, NULL, NULL},
+{"MinRtrAdvInterval", &DMWRITE, DMT_UNINT, get_ra_mininterval, set_ra_mininterval, NULL, NULL},
+{"AdvDefaultLifetime", &DMWRITE, DMT_UNINT, get_ra_lifetime, set_ra_lifetime, NULL, NULL},
+{"AdvManagedFlag", &DMWRITE, DMT_BOOL, get_ra_managed, set_ra_managed, NULL, NULL},
+{"AdvOtherConfigFlag", &DMWRITE, DMT_BOOL, get_ra_other, set_ra_other, NULL, NULL},
+{"AdvMobileAgentFlag", &DMWRITE, DMT_BOOL, get_ra181_false, set_same_ra181_false, NULL, NULL},
+{"AdvPreferredRouterFlag", &DMWRITE, DMT_STRING, get_ra181_preference, set_ra181_preference, NULL, NULL},
+{"AdvNDProxyFlag", &DMWRITE, DMT_BOOL, get_ra181_false, set_same_ra181_false, NULL, NULL},
+{"AdvLinkMTU", &DMWRITE, DMT_UNINT, get_ra181_mtu, set_ra181_mtu, NULL, NULL},
+{"AdvReachableTime", &DMWRITE, DMT_UNINT, get_ra181_reachable, set_ra181_reachable, NULL, NULL},
+{"AdvRetransTimer", &DMWRITE, DMT_UNINT, get_ra181_retrans, set_ra181_retrans, NULL, NULL},
+{"AdvCurHopLimit", &DMWRITE, DMT_UNINT, get_ra181_hoplimit, set_ra181_hoplimit, NULL, NULL},
+{"OptionNumberOfEntries", &DMREAD, DMT_UNINT, get_ra181_zero, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tRa181Obj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"InterfaceSetting", &DMREAD, NULL, NULL, NULL, browse_ra, NULL, NULL, NULL, tRaIf181Params, NULL},
+{0}
+};
+
 /* T7 S4b: the count of the table, standard in TR-181 (the TR-098 graft
  * keeps the product's leaves) */
 static int get_ra181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
@@ -608,12 +731,13 @@ static int get_ra181_count(char *refparam, struct dmctx *ctx, void *data, char *
 }
 
 static DMLEAF tRa181Params[] = {
+{"Enable", &DMWRITE, DMT_BOOL, get_ra181_enable_all, set_same_ra181_enable_all, NULL, NULL},
 {"InterfaceSettingNumberOfEntries", &DMREAD, DMT_UNINT, get_ra181_count, NULL, NULL, NULL},
 {0}
 };
 
 static DMOBJ tRaDevice181Obj[] = {
-{"RouterAdvertisement", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tRaObj, tRa181Params, NULL},
+{"RouterAdvertisement", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tRa181Obj, tRa181Params, NULL},
 {0}
 };
 

@@ -558,11 +558,13 @@ static int get_dd181_supported(char *refparam, struct dmctx *ctx, void *data, ch
 	return 0;
 }
 
-/* the first http:// or https:// URL in a file (an update script) */
+/* the IPv4 update URL of an update script: the http:// or https:// URL of
+ * its __UPDURL= line (update_no-ip_com.sh sets __UPDURL6 first), else the
+ * first URL in it */
 static char *dd_url_in_file(const char *path)
 {
 	FILE *f = fopen(path, "r");
-	char line[512], *u, *v = "";
+	char line[512], *u, *first = "";
 
 	if (!f)
 		return "";
@@ -570,14 +572,18 @@ static char *dd_url_in_file(const char *path)
 		u = strstr(line, "http://");
 		if (!u)
 			u = strstr(line, "https://");
-		if (u) {
-			u[strcspn(u, "\"' \t\n")] = '\0';
-			v = dmstrdup(u);
-			break;
+		if (!u)
+			continue;
+		u[strcspn(u, "\"' \t\n")] = '\0';
+		if (strstr(line, "__UPDURL=")) {
+			fclose(f);
+			return dmstrdup(u);
 		}
+		if (!*first)
+			first = dmstrdup(u);
 	}
 	fclose(f);
-	return v;
+	return first;
 }
 
 /* the IPv4 update URL of a service, "" when none is found */

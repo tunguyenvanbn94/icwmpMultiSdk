@@ -40,6 +40,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <arpa/inet.h>
 #include <json-c/json.h>
 
 #include "dmtr098.h"
@@ -579,13 +580,195 @@ static int set_ppp181_lowerlayers(char *refparam, struct dmctx *ctx, void *data,
 	return set_ppp_lowerlayers(refparam, ctx, data, instance, v, action);
 }
 
+/* T7 S5b ---------------------------------------------------------------
+ * The leaves PPPInterface:2 wants that the product's branch did not have.
+ * hni.wan (ubusmon wan_set.c) takes none of these settings, and netifd's
+ * network.<if> is written by hal_network.c from wan.@entry, so they read the
+ * real state and take only the value they have (dmmtk.h MTK_SET_SAME):
+ *   ConnectionTrigger  wan.@entry ppp_conn_mode (hal_network.h: 0 AlwaysOn,
+ *                      1 OnDemand, 2 Manual)
+ *   IPv6CPEnable       network.<if>.ipv6, which hal_network.c sets from the
+ *                      connection's IPv6
+ *   PPPoE.ACName / ServiceName  network.<if>.ac / service (empty: any)
+ *   PPPoE.SessionID    the Id of /proc/net/pppoe on the connection's device
+ *   IPv6CP.Local/RemoteInterfaceIdentifier  the link-local address of the
+ *                      session netdev (/proc/net/if_inet6) and the /128
+ *                      fe80:: route pppd adds to the peer
+ *                      (/proc/net/ipv6_route), as ::<64 bits> */
+static char *ppp181_dev(void *data)
+{
+	char *dev = wan_iface_l3_device(ppp_ifname(PPP_SEC(data)));
+
+	if (!dev || !*dev)
+		dmasprintf(&dev, "pppoe-%s", ppp_ifname(PPP_SEC(data)));
+	return dev;
+}
+
+static int get_ppp181_trigger(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *m = mtk_uci(WAN_PKG, PPP_SEC(data), "ppp_conn_mode");
+
+	*value = strcmp(m, "1") == 0 ? "OnDemand" : strcmp(m, "2") == 0 ? "Manual" : "AlwaysOn";
+	return 0;
+}
+
+static int get_ppp181_ipv6cp(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = mtk_bool(mtk_uci("network", ppp_ifname(PPP_SEC(data)), "ipv6")) ? "true" : "false";
+	return 0;
+}
+
+static int get_ppp181_ac(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = mtk_uci("network", ppp_ifname(PPP_SEC(data)), "ac");
+	return 0;
+}
+
+static int get_ppp181_service(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = mtk_uci("network", ppp_ifname(PPP_SEC(data)), "service");
+	return 0;
+}
+
+/* "Id Address Device" lines, Id in hex */
+static int get_ppp181_session(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *dev = mtk_uci("network", ppp_ifname(PPP_SEC(data)), "device");
+	char line[128], id[16], mac[32], d[64];
+	FILE *f = fopen("/proc/net/pppoe", "r");
+
+	*value = "0";
+	if (!f)
+		return 0;
+	while (fgets(line, sizeof(line), f)) {
+		if (sscanf(line, "%15s %31s %63s", id, mac, d) == 3 && strcmp(d, dev) == 0 &&
+		    strspn(id, "0123456789abcdefABCDEF") == strlen(id)) {
+			dmasprintf(value, "%lu", strtoul(id, NULL, 16));
+			break;
+		}
+	}
+	fclose(f);
+	return 0;
+}
+
+/* the low 64 bits of 32 hex digits, as ::<iid> */
+static char *ppp181_iid(const char *hex32)
+{
+	struct in6_addr a;
+	char buf[INET6_ADDRSTRLEN];
+	int i;
+
+	memset(&a, 0, sizeof(a));
+	for (i = 8; i < 16; i++) {
+		unsigned int b;
+
+		if (sscanf(hex32 + 2 * i, "%2x", &b) != 1)
+			return "";
+		a.s6_addr[i] = (unsigned char)b;
+	}
+	return inet_ntop(AF_INET6, &a, buf, sizeof(buf)) ? dmstrdup(buf) : "";
+}
+
+/* the fe80:: address of dev in /proc/net/if_inet6 ("addr idx plen scope
+ * flags dev"), "" when none */
+static char *ppp181_local_hex(const char *dev)
+{
+	char line[160], addr[40], name[32];
+	unsigned int idx, plen, scope, flags;
+	FILE *f = fopen("/proc/net/if_inet6", "r");
+	char *v = "";
+
+	if (!f)
+		return "";
+	while (fgets(line, sizeof(line), f)) {
+		if (sscanf(line, "%39s %x %x %x %x %31s", addr, &idx, &plen, &scope, &flags, name) == 6 &&
+		    strcmp(name, dev) == 0 && strncmp(addr, "fe80", 4) == 0) {
+			v = dmstrdup(addr);
+			break;
+		}
+	}
+	fclose(f);
+	return v;
+}
+
+static int get_ppp181_local_iid(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *hex = ppp181_local_hex(ppp181_dev(data));
+
+	*value = *hex ? ppp181_iid(hex) : "";
+	return 0;
+}
+
+/* the /128 fe80:: route of the session netdev that is not the local
+ * address: the peer's link-local address */
+static int get_ppp181_remote_iid(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *dev = ppp181_dev(data), *local = ppp181_local_hex(dev);
+	char line[256], dst[40], plen[8], name[32];
+	FILE *f = fopen("/proc/net/ipv6_route", "r");
+
+	*value = "";
+	if (!f)
+		return 0;
+	while (fgets(line, sizeof(line), f)) {
+		/* dst plen src splen nexthop metric refcnt use flags dev */
+		if (sscanf(line, "%39s %7s %*s %*s %*s %*s %*s %*s %*s %31s", dst, plen, name) == 3 &&
+		    strcmp(name, dev) == 0 && strcmp(plen, "80") == 0 && strncmp(dst, "fe80", 4) == 0 &&
+		    strcmp(dst, local) != 0) {
+			*value = ppp181_iid(dst);
+			break;
+		}
+	}
+	fclose(f);
+	return 0;
+}
+
+static int get_ppp181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *d;
+
+	dmasprintf(&d, "cpe-ppp-%s", instance);
+	*value = mtk_alias181_get(refparam, d);
+	return 0;
+}
+
+static int set_ppp181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	char *d;
+
+	dmasprintf(&d, "cpe-ppp-%s", instance);
+	return mtk_alias181_set(refparam, d, value, action);
+}
+
+MTK_SET_SAME(ppp181_trigger, get_ppp181_trigger)
+MTK_SET_SAME_BOOL(ppp181_ipv6cp, get_ppp181_ipv6cp)
+MTK_SET_SAME(ppp181_ac, get_ppp181_ac)
+MTK_SET_SAME(ppp181_service, get_ppp181_service)
+
+static DMLEAF tPpp181PppoeParams[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"SessionID", &DMREAD, DMT_UNINT, get_ppp181_session, NULL, NULL, NULL},
+{"ACName", &DMWRITE, DMT_STRING, get_ppp181_ac, set_same_ppp181_ac, NULL, NULL},
+{"ServiceName", &DMWRITE, DMT_STRING, get_ppp181_service, set_same_ppp181_service, NULL, NULL},
+{0}
+};
+
+static DMLEAF tPpp181Ipv6cpParams[] = {
+{"LocalInterfaceIdentifier", &DMREAD, DMT_STRING, get_ppp181_local_iid, NULL, NULL, NULL},
+{"RemoteInterfaceIdentifier", &DMREAD, DMT_STRING, get_ppp181_remote_iid, NULL, NULL, NULL},
+{0}
+};
+
 static DMLEAF tPpp181IfParams[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Enable", &DMWRITE, DMT_BOOL, get_ppp_enable, set_ppp_enable, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_ppp_status, NULL, NULL, NULL},
 {"Name", &DMREAD, DMT_STRING, get_ppp_name, NULL, NULL, NULL},
 {"LastChange", &DMREAD, DMT_UNINT, get_ppp_lastchange, NULL, NULL, NULL},
+{"Alias", &DMWRITE, DMT_STRING, get_ppp181_alias, set_ppp181_alias, NULL, NULL},
 {"LowerLayers", &DMWRITE, DMT_STRING, get_ppp181_lowerlayers, set_ppp181_lowerlayers, NULL, NULL},
+{"ConnectionTrigger", &DMWRITE, DMT_STRING, get_ppp181_trigger, set_same_ppp181_trigger, NULL, NULL},
+{"IPv6CPEnable", &DMWRITE, DMT_BOOL, get_ppp181_ipv6cp, set_same_ppp181_ipv6cp, NULL, NULL},
 {"Reset", &DMWRITE, DMT_BOOL, get_ppp181_reset, set_ppp181_reset, NULL, NULL},
 {"ConnectionStatus", &DMREAD, DMT_STRING, get_ppp_connstatus, NULL, NULL, NULL},
 {"LastConnectionError", &DMREAD, DMT_STRING, get_ppp_lasterror, NULL, NULL, NULL},
@@ -605,11 +788,7 @@ static DMLEAF tPpp181IpcpParams[] = {
  * pppoe-<interface>), device_ip_mtk.c dip_stat181 */
 static int get_ppp181_stat(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	char *dev = wan_iface_l3_device(ppp_ifname(PPP_SEC(data)));
-
-	if (!dev || !*dev)
-		dmasprintf(&dev, "pppoe-%s", ppp_ifname(PPP_SEC(data)));
-	*value = dip_stat181(dev, STATS181_LEAF(refparam));
+	*value = dip_stat181(ppp181_dev(data), STATS181_LEAF(refparam));
 	return 0;
 }
 
@@ -635,6 +814,8 @@ static DMLEAF tPpp181StatsParams[] = {
 static DMOBJ tPpp181IfObj[] = {
 {"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tPpp181StatsParams, NULL},
 {"IPCP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tPpp181IpcpParams, NULL},
+{"IPv6CP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tPpp181Ipv6cpParams, NULL},
+{"PPPoE", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tPpp181PppoeParams, NULL},
 {0}
 };
 

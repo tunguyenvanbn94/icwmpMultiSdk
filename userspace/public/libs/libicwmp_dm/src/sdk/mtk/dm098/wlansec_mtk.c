@@ -678,6 +678,130 @@ static int set_wepkey181(char *refparam, struct dmctx *ctx, void *data, char *in
 	return set_wep_key(refparam, ctx, &k, instance, value, action);
 }
 
+/* T7 S5b: WiFiAccessPoint:2 Security and WPS leaves, on the options
+ * mtkdat.lua turns into the driver profile (RekeyMethod/RekeyInterval,
+ * RADIUS_Server/Port/Key, WscConfMode/WscConfStatus); a write goes into
+ * wireless.<iface> and queues "wifi reload", like the setters above.
+ *   RekeyingInterval  rekey_interval while rekey_meth is not DISABLE, else
+ *                     0; 0 writes DISABLE, n > 0 TIME + n
+ *   RadiusServerIPAddr / Port / Secret  auth_server ("0": none) /
+ *                     auth_port / auth_secret (secured: reads empty)
+ *   WPS.Enable        wps_state 1 or 2 (WscConfMode 7); true writes 2
+ *                     (configured), false clears it (WscConfMode 0)
+ *   WPS.ConfigMethods* the push button and the PIN of the MTK driver */
+static int sec181_write(void *data, const char *option, const char *value)
+{
+	dmuci_set_value("wireless", (char *)wlan_iface_of(data)->name, (char *)option, (char *)value);
+	wlan_reload();
+	return 0;
+}
+
+static int get_sec181_rekey(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *v = wlan_opt(data, "rekey_interval");
+
+	*value = (strcmp(wlan_opt(data, "rekey_meth"), "DISABLE") == 0 || !*v) ? "0" : v;
+	return 0;
+}
+
+static int set_sec181_rekey(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	if (!value || !*value || strspn(value, "0123456789") != strlen(value) || strlen(value) > 9)
+		return FAULT_9007;
+	if (action == VALUECHECK)
+		return 0;
+	if (strtol(value, NULL, 10) == 0)
+		return sec181_write(data, "rekey_meth", "DISABLE");
+	dmuci_set_value("wireless", (char *)wlan_iface_of(data)->name, "rekey_meth", "TIME");
+	return sec181_write(data, "rekey_interval", value);
+}
+
+static int get_sec181_radius_ip(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *v = wlan_opt(data, "auth_server");
+
+	*value = strcmp(v, "0") == 0 ? "" : v;
+	return 0;
+}
+
+static int set_sec181_radius_ip(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	if (value && *value && !mtk_shell_ipv4(value) && !mtk_shell_ipv6(value))
+		return FAULT_9007;
+	if (action == VALUECHECK)
+		return 0;
+	return sec181_write(data, "auth_server", value && *value ? value : "0");
+}
+
+static int get_sec181_radius_port(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *v = wlan_opt(data, "auth_port");
+
+	*value = *v ? v : "1812";
+	return 0;
+}
+
+static int set_sec181_radius_port(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	long p = (value && *value && strspn(value, "0123456789") == strlen(value)) ? strtol(value, NULL, 10) : -1;
+
+	if (p < 1 || p > 65535)
+		return FAULT_9007;
+	if (action == VALUECHECK)
+		return 0;
+	return sec181_write(data, "auth_port", value);
+}
+
+static int get_sec181_empty(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "";
+	return 0;
+}
+
+static int set_sec181_radius_secret(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	if (!value || strlen(value) > 64 || !mtk_shell_safe_input(value))
+		return FAULT_9007;
+	if (action == VALUECHECK)
+		return 0;
+	return sec181_write(data, "auth_secret", value);
+}
+
+static int get_wps181_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *v = wlan_opt(data, "wps_state");
+
+	*value = (strcmp(v, "1") == 0 || strcmp(v, "2") == 0) ? "true" : "false";
+	return 0;
+}
+
+static int set_wps181_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	int b = mtk_parse_bool(value);
+
+	if (b < 0)
+		return FAULT_9007;
+	if (action == VALUECHECK)
+		return 0;
+	return sec181_write(data, "wps_state", b ? "2" : "");
+}
+
+static int get_wps181_methods(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "PushButton,PIN";
+	return 0;
+}
+
+MTK_SET_SAME(wps181_methods, get_wps181_methods)
+
+static DMLEAF tWps181Param[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"Enable", &DMWRITE, DMT_BOOL, get_wps181_enable, set_wps181_enable, NULL, NULL},
+{"ConfigMethodsSupported", &DMREAD, DMT_STRING, get_wps181_methods, NULL, NULL, NULL},
+{"ConfigMethodsEnabled", &DMWRITE, DMT_STRING, get_wps181_methods, set_same_wps181_methods, NULL, NULL},
+{0}
+};
+
 static DMLEAF tSec181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"ModesSupported", &DMREAD, DMT_STRING, get_modes_supported181, NULL, NULL, NULL},
@@ -686,12 +810,17 @@ static DMLEAF tSec181Param[] = {
 {"PreSharedKey", &DMWRITE, DMT_HEXBIN, get_empty, set_presharedkey, NULL, NULL},
 /* T7 S4d: secured in TR-181 (reads empty, whatever the key); written as before */
 {"KeyPassphrase", &DMWRITE, DMT_STRING, get_empty, set_key_passphrase, NULL, NULL},
+{"RekeyingInterval", &DMWRITE, DMT_UNINT, get_sec181_rekey, set_sec181_rekey, NULL, NULL},
+{"RadiusServerIPAddr", &DMWRITE, DMT_STRING, get_sec181_radius_ip, set_sec181_radius_ip, NULL, NULL},
+{"RadiusServerPort", &DMWRITE, DMT_UNINT, get_sec181_radius_port, set_sec181_radius_port, NULL, NULL},
+{"RadiusSecret", &DMWRITE, DMT_STRING, get_sec181_empty, set_sec181_radius_secret, NULL, NULL},
 {0}
 };
 
 static DMOBJ tAp181SecObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
 {"Security", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tSec181Param, NULL},
+{"WPS", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tWps181Param, NULL},
 {0}
 };
 

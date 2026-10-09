@@ -326,8 +326,31 @@ static DMOBJ tTr143181DiagObj[] = {
 {0}
 };
 
+/* T7 S5b: the downloader and uploader of the product run over IPv4 only
+ * (no ProtocolVersion, no IPv6 path); merged into IP.Diagnostics with the
+ * leaves of the other diagnostics */
+static int get_tr143_181_true(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "true";
+	return 0;
+}
+
+static int get_tr143_181_false(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "false";
+	return 0;
+}
+
+static DMLEAF tTr143181DiagParams[] = {
+{"IPv4DownloadDiagnosticsSupported", &DMREAD, DMT_BOOL, get_tr143_181_true, NULL, NULL, NULL},
+{"IPv6DownloadDiagnosticsSupported", &DMREAD, DMT_BOOL, get_tr143_181_false, NULL, NULL, NULL},
+{"IPv4UploadDiagnosticsSupported", &DMREAD, DMT_BOOL, get_tr143_181_true, NULL, NULL, NULL},
+{"IPv6UploadDiagnosticsSupported", &DMREAD, DMT_BOOL, get_tr143_181_false, NULL, NULL, NULL},
+{0}
+};
+
 static DMOBJ tTr143181IpObj[] = {
-{"Diagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tTr143181DiagObj, NULL, NULL},
+{"Diagnostics", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tTr143181DiagObj, tTr143181DiagParams, NULL},
 {0}
 };
 
