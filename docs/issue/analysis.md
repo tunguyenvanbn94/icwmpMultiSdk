@@ -5784,3 +5784,26 @@ lịch reboot sản phẩm tắt, `/backup/log` mới nhất 04/10, không pstor
 cao cùng đợt tắt/mở của user). Sau boot 3h17: một pid, RSS 5820 kB, fd 12, 11 thread, failure 0
 (`logs/20261009_g9_soak_image_e87c65f.csv`). G9 image `c3be28a` từ 20:35:29, máy host kéo csv mỗi 30 phút vào
 `logs/20261009_g9_soak_image_c3be28a.csv` để reboot không làm mất dữ liệu.
+
+## 92. Tag TR-181 MTK; BDK: hai model chuyển giữa hai session như MTK (`tr181-0023`) (09/10 21:59–22:04)
+
+**Tag** (chatlog 102): `release/mtk-tr181-20261009` tại `95e195b`. `export.py --sdk mtk` → `release/icwmp_mtk_tr181_95e195b.tar.gz`
+(workspace issue `release/`), sha256 `ed4536ad…`, hai lần export trùng; `SHA256SUMS` trong bundle đạt; lib/app của bundle trùng
+từng byte với cây `2_src` đã build image `c3be28a` (§91). Tag local.
+
+**BDK — yêu cầu (chatlog 102):** chạy được cả hai model, tương đương; user tự thử trên board sau.
+- Từ lần BDK build đạt (`3e1ef1f`, §75) tới `95e195b`, code chung chỉ đổi kiểu `DMT_UNLONG` (`xsd:unsignedLong`, §80) và
+  `proxy_xsd_type()` của BDK báo kiểu đó. [Verified] Không `switch` nào theo enum kiểu bỏ sót; agent chỉ chép chuỗi `xsd:*`
+  ra XML (`xml.c`, `event.c`).
+- **Lệch tìm được:** MTK chốt model giữa hai session (`dm_entry_load_model()` lúc start và config reload, `dm_entry_model()` ở
+  `dm_platform_select_root()`). BDK thì icwmpd chốt (`icwmp_bdk_load_mode()`), còn libtr098 (`bdk_proxy_load_mode()` trong
+  `dm_platform_ctx_init`) đọc lại `cwmp.cpe.datamodel` ở **mỗi** dm context. ACS ghi `X_MARUSYS_COM_Icwmp.DataModel` (commit
+  cuối RPC) thì các RPC sau trong cùng session đã đi cây kia trong khi icwmpd vẫn chạy model cũ (đồng bộ ManagementServer, chọn
+  path). **Sửa:** `bdk_proxy_load_mode()` theo `dm_entry_model()`, `icwmp_bdk_load_mode()` gọi `dm_entry_load_model()`; hook
+  reload chốt model **trước** khi đọc lại DeviceId (trước đây đọc sau). [Verified] libuci đi kèm BDK có `UCI_CONFDIR`
+  `/data/icwmp/config` (`libs/uci/BDK-CHANGES.md`), nên context UCI riêng của `dm_entry_load_model()` đọc đúng file.
+- `docs/bdk/icwmp_bdk_debug_guide.md`: đổi model có hiệu lực từ lúc reload.
+- **Chưa build-test trên BDK** (máy này không có toolchain/header HAL; build ở `192.168.100.38` cần mật khẩu user). Bundle
+  `release/icwmp_bdk_tr181_7f46319.tar.gz` sha256 `b715605a…`. Chưa có board BDK (PH7).
+- Ghi chú MTK: hook reload của MTK đọc DeviceId trước khi chốt model; trên MTK hai cây đọc identity từ cùng nguồn (easycwmp
+  config), nên không đổi sau tag.
