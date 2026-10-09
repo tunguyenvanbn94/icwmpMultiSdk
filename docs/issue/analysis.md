@@ -5368,3 +5368,142 @@ mảng mà lá đếm vẫn đếm (`ipv6181_count`, lá đếm TR-181 của `de
 - **`tr181-bbf-check`: RESULT PASS** — 611 tham số, 418 chuẩn; unknown/access/type/status 0.
 - Cổng tĩnh lib MTK 71/0, automake 0, cross-gcc SDK lib 71 file 0 lỗi.
 - `run.sh all` 25/25 (`ALL_RC=0`, 11:15). Commit code `177f327`.
+
+## 85. Board: image S3+S4+S4b (`a302687`) (09/10 11:03–11:24)
+
+**Build:**
+- `scratchpad/sdkbuild3.sh` tăng dần ở `2_src`: export HEAD `a302687`, apply, clean 2 gói; `ICWMP_IMAGE_RC=0`.
+- `libtr098.so.3.0.0` md5 `4e8bb6cf…`, có `mtk-stack-181`, `tr181_alias`, `SupportedNCPs`, `InterfaceSettingNumberOfEntries`.
+  `icwmp_tr098d` không đổi (`937c508d…`).
+- `tclinux.bin` `d8cfb32a…` → `2_src/2025q3/.icwmp-images/tclinux_t7s4b_a302687_devaccess.bin`.
+
+**G9 image cũ `192ae45`** (đọc lần cuối trước khi nạp, `logs/20261009_g9_soak_image_192ae45.csv`):
+- 35 mẫu 05:33→11:13, pid 25623 không đổi, fd 12, 11 thread.
+- VmRSS 5540 → 5588 → 5656 kB, chỉ tăng đúng lúc có phiên (success 1 → 5 → 7), giữa các phiên phẳng.
+- failure 2 / starts 4 có từ đầu (cửa sổ T6/T7 lúc 05:31) và không tăng.
+- MemAvailable 135–140 MB.
+
+**Nạp** (đường WebUI, §50.1):
+- md5 trùng hai đầu; `hni_validate_image.sh` `Model validation successful: HP-2236B`; `"valid": true`; `sysupgrade -T` rc 0.
+- `sysupgrade` 11:18:12 qua `start-stop-daemon`, ping lại lúc kiểm 11:21:18.
+- `libtr098` md5 trên board trùng bản build. Tiến trình `icwmp_tr098d` 1, `"status": "up"`, 3 phiên success sau boot,
+  không có `/usr/share/icwmp`.
+
+**TR-098 parity** (C so với shell trên cùng board): **PASS**. 1735 chung: 1576 bằng, 111 động, 16 đã biết, 32 nháy;
+writable lệch 13 như trước (K24).
+
+**`tests/board/tr181_window.sh`** (ACS `172.16.0.15` bị chặn, 11:22; log `logs/20261009_t7s4b_board_tr181_window.log`):
+- So cặp TR-098/TR-181: **PASS**. 1099 bằng + 2 tham chiếu, B 218, động 102, D 332; TR-181 không ai chạm tới 0.
+- `tr181-bbf-check` (thêm kiểm enum, §86): 549 tham số; unknown/access/type/status 0; enum 3 (bên dưới).
+- Kiểm chung lá đếm trên dump board: 0 lệch, trừ `DynamicDNS.ServerNumberOfEntries` = 2 không có bảng (S4d).
+- Stack — **Verified trên board:**
+  - `IP.Interface.1` (lan) → `Ethernet.Link.1` (br-lan, Up, MAC `00:03:78:…`) → `Bridging.Bridge.1.Port.1`;
+  - `IP.Interface.2` (if0, PPPoE) và `.3` (if0_6) → `PPP.Interface.1` → `Ethernet.VLANTermination.1` (`pon.10`, VLANID 10,
+    Up) → `Ethernet.Link.2` (pon, Up) → `Optical.Interface.1`;
+  - `InterfaceStack` 51 dòng, 0 tham chiếu treo.
+  - `Bridge.1`: 17 port (quản lý + `eth0.1..4` + 12 SSID), Status theo operstate (`eth0.1` Down vì không cắm cáp,
+    `ra0` Up). Đối chiếu `/sys/class/net/br-lan/brif`: khớp mọi port, trừ `apcli0`/`apclii0`. Đây là hai interface client
+    Wi-Fi (backhaul mesh/repeater); chuẩn đặt chúng ở `WiFi.EndPoint`, cây chưa có bảng này, nên chưa có port tương ứng.
+  - `network.@device[0]` br-lan `ports='eth0.1 eth0.2 eth0.3 eth0.4'`, `@device[1]` `pon.10`. Không có kết nối bridged
+    trên board: phần bridge của kết nối bridged vẫn chỉ kiểm trên host.
+- Ghi qua tên TR-181 vẫn đạt: `Time.Client.1.Servers` đổi rồi trả lại, `X_AIS_Conf` sai kiểu 9007,
+  `TraceRoute.Interface` tham chiếu → `pppoe-if0`.
+- Sau cửa sổ: model `tr098`, `Device.` 9005, ACS mở lại, `/etc/config` trước và sau giống hệt (diff rỗng).
+
+**Ba giá trị ngoài enum chuẩn trên board** (kiểm enum mới, host không thấy vì không có dòng DDNS):
+- `DynamicDNS.Client.1.LastError` = `ERROR_MISCONFIGURED` (sản phẩm dùng tên riêng; chuẩn: `MISCONFIGURATION_ERROR`…) → S4d;
+- `StorageService.{i}.Capabilities.SupportedFileSystemTypes` = tên filesystem của kernel (`vfat`, `exfat`, `fuseblk`,
+  `squashfs`); chuẩn TR-140: `FAT16`, `FAT32`, `exFAT`, `NTFS`, `ext4`…;
+- `SupportedNetworkProtocols` = `FTP,HTTP`; chuẩn TR-140 chỉ có `SMB|NFS|AFP`.
+
+G9 image mới từ 11:24:21 (pid 26150, VmRSS 5828 kB, failure 2 / starts 4 do cửa sổ vừa chạy). Đã dọn trên board
+`/tmp/t6`, file parity, image tải lên.
+
+## 86. T7 chuẩn hoá S4d: DynamicDNS, tên năng lực TR-140, lá secured (`tr181-0019`) (09/10 11:25–15:00)
+
+Phiên bị dừng vì hết usage lúc `run.sh all` đang chạy (11:4x). Phiên tiếp theo (chatlog 98, 14:59) đọc kết quả: 25/25
+`ALL_RC=0`, cây làm việc đúng như lúc dừng. Sau đó commit.
+
+**`tr181-bbf-check.py` có thêm hai loại kiểm trên dump GPV:**
+- `enum`: giá trị (mỗi phần tử nếu là list) nằm ngoài enumeration của tham số hoặc của dataType của nó;
+- `secured`: tham số BBF đánh dấu `secured`/`hidden` (mật khẩu, khoá) mà đọc ra khác rỗng.
+
+Cả hai đều làm RESULT FAIL. Kiểm trên host (dump S4c) và board (§85) cho thấy:
+
+| Lá | Giá trị | Chuẩn | Sửa |
+|---|---|---|---|
+| `DynamicDNS.Client.{i}.LastError` (board) | `ERROR_MISCONFIGURED`, `ERROR_NONE`… | `NO_ERROR`, `MISCONFIGURATION_ERROR`, `DNS_ERROR`, `CONNECTION_ERROR`, `AUTHENTICATION_ERROR`, `PROTOCOL_ERROR`… | ánh xạ; `ERROR_UNKNOWN: …` → `PROTOCOL_ERROR` |
+| `DynamicDNS.Client.{i}.Status` | `Up` | `Updated`/`Connecting`/`Error`/`Disabled`… | xem dưới |
+| `StorageService.{i}.Capabilities.SupportedFileSystemTypes` | `vfat`, `exfat`, `fuseblk`, `squashfs` (tên kernel) | `FAT16`, `FAT32`, `exFAT`, `NTFS`, `ext4`… | ánh xạ; bỏ loại không phải định dạng lưu trữ; `fuseblk` = `NTFS` khi có `ntfs-3g` |
+| `…Capabilities.SupportedNetworkProtocols` | `FTP,HTTP` (board), `None` (host) | `SMB`, `NFS`, `AFP` | `SMB` khi có `smbd`, còn lại rỗng (FTP/SFTP/HTTP đã có lá `…Capable` riêng) |
+| `WiFi.AccessPoint.{i}.Security.KeyPassphrase`, `XPON…TC.Authentication.Password`, `DynamicDNS.Client.{i}.Password` | đọc ra giá trị thật | secured: đọc luôn rỗng | getter TR-181 trả rỗng, setter giữ nguyên. Password XPON bỏ forced inform (không còn gửi mật khẩu PON trong mọi Inform) |
+| `NAT.PortMapping.{i}.Protocol` | `TCP/UDP` (rule `tcp/udp` của `firewall_clay`) | chỉ `TCP` hoặc `UDP` | **chưa sửa, cần quyết** (dưới) |
+
+**DynamicDNS** (bảng TR-181 riêng trong `device_ddns_mtk.c`; nhánh TR-098 graft giữ nguyên của sản phẩm).
+Dữ kiện đã Verified:
+- `hal_service.c` (đường WebUI) chỉ có hai nhà cung cấp, DynDNS và No-IP, và ghi `lookup_host` = `domain` = hostName.
+- Trên board, ddns-scripts 2.8.2 dùng `/usr/share/ddns/default/*.json` (71 file), không có `/etc/ddns/services`.
+  `<sec>.update` lưu uptime của lần cập nhật thành công. Mặc định: check 600 s, retry 60 s, `retry_count` 0 = thử lại
+  vô hạn. curl 7.62 có OpenSSL.
+- `no-ip.com.json` trỏ tới script `update_no-ip_com.sh`, URL `http://…@dynupdate.noip.com/…`.
+
+Thay đổi:
+- `Server.{i}`: một dòng cho mỗi dịch vụ.
+  - Nguồn tên: file services (`/etc/ddns/services`, rồi `/usr/lib/ddns/services`); tên là chuỗi trong nháy đầu tiên,
+    không có thì từ đầu tiên. Không có file thì là `dyndns.org`, `no-ip.com`.
+  - `ServerAddress`/`ServerPort`/`Protocol` từ URL cập nhật: file services, JSON 2.8, hoặc URL đầu tiên trong script.
+  - `CheckInterval` 600, `RetryInterval` 60, `MaxRetries` 4294967295. Theo chuẩn, 0 nghĩa là không thử lại, còn
+    ddns-scripts thì thử lại vô hạn: Conditional.
+  - Mọi lá ghi được là set-same; `SupportedProtocols` `HTTP,HTTPS`.
+- `SupportedServices` = tên các dòng Server. **Phát hiện:** cách đọc của sản phẩm (port nguyên `cut -d'"' -f1` của
+  shell) lấy phần trước dấu nháy đầu tiên, nên với file dạng `"dyndns.org"<tab>"url"` ra tên rỗng (`,`). Trên board không
+  có file nên rơi về danh sách mặc định, không lộ. Nhánh TR-098 giữ nguyên.
+- `Client.Server` là tham chiếu `Device.DynamicDNS.Server.<n>`, ghi trở lại thành `service_name`. Tên dịch vụ trần,
+  `Server.3` (không có), có dấu `.` ở cuối → 9007.
+- `Client.Status`:
+  - `Disabled` khi `enabled` ≠ 1;
+  - `Error` khi updater không chạy (`<sec>.pid` không trỏ tới tiến trình sống);
+  - `Updated` khi có `<sec>.update`, còn lại `Connecting`.
+- `Client.Alias` qua kho (`cpe-ddns-<n>`). `Client.Interface` rỗng khi network section chưa có số (sản phẩm:
+  `Device.IP.Interface.0`).
+- `Client.Hostname.1` (`HostnameNumberOfEntries` 1):
+  - `Name` = `domain`; ghi cả `domain` lẫn `lookup_host`, độ dài 1..256 như `X_AIS_DDNS.DomainName`;
+  - `Status` `Registered`/`Updating`/`Error`/`Disabled` theo Client;
+  - `LastUpdate` = giờ hiện tại − (uptime − uptime trong `<sec>.update`);
+  - `Enable` set-same theo `enabled`.
+
+**Ánh xạ / công cụ:**
+- 7 cặp → B: DDNS `ServerNumberOfEntries`, `SupportedServices`, `Status`, `LastError`, `Alias`, `Server`, `Interface`;
+  và 2 lá Capabilities.
+- 16 dòng `new` (`Server.{i}.*`, `HostnameNumberOfEntries`, `Hostname.{i}.*`).
+- `KeyPassphrase` vẫn A, để giữ kiểu shell kiểm SPV. `tr181-map.py equiv` có thêm lớp `secured`: tên TR-181 secured đọc
+  rỗng trong khi TR-098 đọc ra giá trị.
+
+**Kiểm (host):** fixture `ddns` gồm:
+- service `myddns`: no-ip.com, domain, `ip_network if0`;
+- file `/etc/ddns/services`: dyndns.org `http://…members.dyndns.org/…`, no-ip.com `https://dynupdate.no-ip.com:8443/…`;
+- file chạy `<sec>.pid` (một `sleep` đang sống) và `<sec>.update` (uptime − 60).
+
+Kết quả:
+- `run.sh tr181`:
+  - Server 2 dòng, `members.dyndns.org 80 HTTP`, `dynupdate.no-ip.com 8443 HTTPS`;
+  - Client `Server.2`, `Error NO_ERROR cpe-ddns-1`, Interface của if0;
+  - `Connecting/Updating` khi chạy mà chưa cập nhật, `Updated/Registered` với LastUpdate dạng dateTime;
+  - ghi Server.1 → `service_name` dyndns.org; Server.3 / tên trần → 9007;
+  - `Hostname.Name` ghi `domain` + `lookup_host`, rỗng → 9007;
+  - set-same ServerPort/MaxRetries;
+  - secured đọc rỗng, uci vẫn giữ mật khẩu; Capabilities không còn tên kernel hay `None`;
+  - kiểm chung lá đếm không còn miễn trừ.
+- `run.sh all` 25/25 (`ALL_RC=0`). `tr181-map.py check` 669 = 669.
+- `tr181-bbf-check`: 635 tham số, unknown/access/type/status/secured 0, enum 1: `NAT.PortMapping.{i}.Protocol TCP/UDP`.
+- Cổng tĩnh lib MTK 71/0, automake 0, cross-gcc SDK 0 lỗi.
+- Commit code `0baf9e4`. Chưa nạp board (image trên board là `a302687`, chưa có S4c/S4d).
+
+**Còn mở — `NAT.PortMapping.{i}.Protocol` = `TCP/UDP`.** Sản phẩm lưu một rule `protocol 'tcp/udp'` trong
+`firewall_clay`; TR-181 (và cả TR-098) chỉ có `TCP` hoặc `UDP`. Có hai cách:
+1. Đúng chuẩn: một rule `tcp/udp` hiện thành hai dòng PortMapping, một `TCP` một `UDP`. Ghi vào một dòng thì tách section
+   uci thành hai rule riêng. Cách này đổi số instance PortMapping (ánh xạ `{pm:iC:iJ}` T4d) và cách ghi vào
+   `firewall_clay`.
+2. Giữ `TCP/UDP` như sản phẩm, ghi là lệch chuẩn đã biết.
+
+Cần người dùng / nhà mạng quyết: ACS có tạo rule `tcp/udp` qua TR-069 không, WebUI có cần thấy lại một rule không.
