@@ -89,7 +89,7 @@ Ba câu cần nhớ:
 | Chuyển dần shell sang C, không phải chuyển một lần | Path nào có module C thì C trả lời, còn lại thì shell trả lời | Đạt và xong: router native/compat của MTK đưa từng object sang C, tới 0100 không còn path nào cho shell; PH5 tắt compat |
 | Test được không cần board | `tests/host/run.sh all`: agent thật + ACS giả trên Linux host | Đạt: 24/24 PASS 08/10 trong container `ubuntu:24.04` trên máy build, cả từ bundle giao |
 | Thêm SDK mới không đụng code chung | Thêm `sdk/<tên>/` ở lib và app, chạy `tools/sdk-scan.sh` | Đạt về cấu trúc: `--sdk-only` xoá SDK khác mà vẫn build (0083) |
-| Sau này hỗ trợ TR-181 | Model là chiều riêng, không gắn vào SDK | BDK có prototype. MTK: branch `dev_181` chọn model lúc chạy bằng `cwmp.cpe.datamodel`, bảng TR-181 dùng chung getter TR-098 ([tr181_mtk_design.md](../plan/tr181_mtk_design.md)); resolver chung ở PH1 |
+| Sau này hỗ trợ TR-181 | Model là chiều riêng, không gắn vào SDK | BDK có prototype. MTK: branch `dev_181` chọn model lúc chạy bằng `cwmp.cpe.datamodel`, bảng TR-181 dùng chung getter TR-098 ([tr181_mtk_design.md](../plan/tr181_mtk_design.md)); chuẩn hoá TR-181 2.19 xong, phạm vi và khác biệt: [icwmp_tr181_mtk_guide.md](icwmp_tr181_mtk_guide.md); resolver chung ở PH1 |
 
 ### 1.3 Vì sao chọn icwmp (iopsys) làm core
 
