@@ -66,6 +66,7 @@
 #include "dmmtk.h"
 #include "device_ip_mtk.h"
 #include "wanconn_mtk.h"
+#include "stack181_mtk.h"
 
 #define IP_PKG		"network"
 #define WAN_RELOAD	"/usr/sbin/hni_wan_reload.sh"
@@ -834,6 +835,25 @@ char *dip_netdev_of_ref(const char *ref)
 	return sec ? dip_netdev(sec) : "";
 }
 
+/* every numbered Interface.{i}: its network section and number, in instance
+ * order, at most max; how many */
+int dip_all(const char **sec, const char **inst, int max)
+{
+	struct dip_iface list[DIP_MAX];
+	int i, n, m = 0;
+
+	n = dip_list(list, DIP_MAX, 0);
+	qsort(list, n, sizeof(list[0]), dip_cmp);
+	for (i = 0; i < n && m < max; i++) {
+		if (!*list[i].inst)
+			continue;
+		sec[m] = list[i].sec;
+		inst[m] = list[i].inst;
+		m++;
+	}
+	return m;
+}
+
 char *dip_ref_of_netdev(const char *dev)
 {
 	struct dip_iface list[DIP_MAX];
@@ -931,7 +951,15 @@ static DMOBJ tDip181InterfaceChildObj[] = {
 };
 
 /* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
-MTK_SET_SAME(dip181_lowerlayers, get_dip_lowerlayers)
+/* TR-181: the reference of the layer under the interface (stack181_mtk.c),
+ * not the product's device name */
+static int get_dip181_lowerlayers(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = stack181_ipif_lower(DIP_SEC(data));
+	return 0;
+}
+
+MTK_SET_SAME(dip181_lowerlayers, get_dip181_lowerlayers)
 
 static DMLEAF tDip181InterfaceParams[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
@@ -942,7 +970,7 @@ static DMLEAF tDip181InterfaceParams[] = {
 {"IPv6Enable", &DMWRITE, DMT_BOOL, get_dip_v6, set_dip_v6, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_dip_status, NULL, NULL, NULL},
 {"LastChange", &DMREAD, DMT_UNINT, get_dip_lastchange, NULL, NULL, NULL},
-{"LowerLayers", &DMWRITE, DMT_STRING, get_dip_lowerlayers, set_same_dip181_lowerlayers, NULL, NULL},
+{"LowerLayers", &DMWRITE, DMT_STRING, get_dip181_lowerlayers, set_same_dip181_lowerlayers, NULL, NULL},
 {"MaxMTUSize", &DMWRITE, DMT_UNINT, get_dip181_mtu, set_dip181_mtu, NULL, NULL},
 {"IPv4AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip_v4_count, NULL, NULL, NULL},
 {"IPv6AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip_v6_count, NULL, NULL, NULL},

@@ -1533,7 +1533,7 @@ PY
 # must be one of them.
 # T2 (LAN) fixtures: a LAN, a WAN, four switch ports, a DHCP pool and two
 # hosts, one on Wi-Fi and one on a LAN port.  Saved and put back like p8's.
-TR181_CONFIGS="network dhcp lanhost wireless wan firewall_clay hmxwslbackend pon system"
+TR181_CONFIGS="network dhcp lanhost wireless wan firewall_clay hmxwslbackend pon system clay"
 tr181_fixtures() {
 	for c in $TR181_CONFIGS; do
 		if [ -f "/etc/config/$c" ]; then cp "/etc/config/$c" "$RUN/$c.t181saved"; else rm -f "${RUN:?}/${c:?}.t181saved"; fi
@@ -1549,6 +1549,8 @@ tr181_fixtures() {
 	uci -q add_list system.ntp.server=a.pool.ntp.org
 	uci -q add_list system.ntp.server=b.pool.ntp.org
 	uci -q commit system
+	# the WAN uplink (T7 S4: Ethernet.Link.2 on Optical.Interface.1)
+	printf "config opermode 'opermode'\n\toption uplink 'pon'\n" > /etc/config/clay
 	# the G-PON ONU (T7: Device.XPON)
 	printf "config xpon_auth 'xpon_auth'\n\toption pon_mode 'GPON'\n\toption sn 'HMXA0000ABCD'\n\toption sn_ascii_password 'pw-1234'\n" > /etc/config/pon
 	cat > /etc/config/network <<'EOF2'
@@ -1573,6 +1575,10 @@ config interface 'if1'
 config interface 'if_wanbr2'
 	option device 'dev_wanbr2'
 	option proto 'none'
+
+config device 'dev_wanbr2'
+	option name 'br-wan2'
+	option type 'bridge'
 
 config SwitchPara
 	option enable 'Yes'
@@ -1668,6 +1674,10 @@ config entry
 	option name 'iptv'
 	option switch_mode '1'
 	option active '1'
+	option vlan_active '1'
+	option vlan_id '20'
+	option lan4 '1'
+	option mlo '1'
 EOF2
 	# T4d: port forwarding rules, two on the IPoE connection (pon.<vlan>),
 	# one on the PPP one
@@ -1828,7 +1838,8 @@ print(sum(1 for p in json.load(open(sys.argv[1]))["parameters"] if re.match(r"De
 	# T4a: the WAN port as Ethernet.Interface.5, the PON link, static routes as
 	# Routing.Router.1.IPv4Forwarding (same sections, Add, Interface as a
 	# Device.IP.Interface reference)
-	expect "WAN port Upstream/Name/Duplex/Status" "$(dm_value $E.5.Upstream) $(dm_value $E.5.Name) $(dm_value $E.5.DuplexMode) $(dm_value $E.5.Status)" "true eth0 Full Down"
+	# the WAN port answers for the uplink of clay.opermode (pon in the fixture)
+	expect "WAN port Upstream/Name/Duplex/Status" "$(dm_value $E.5.Upstream) $(dm_value $E.5.Name) $(dm_value $E.5.DuplexMode) $(dm_value $E.5.Status)" "true pon Full Down"
 	expect "set WAN port MaxBitRate (read only)" "$(dm_set_fault $E.5.MaxBitRate 100 "$key")" "9008"
 	expect "Optical.Interface.1 Status/Name" "$(dm_value Device.Optical.Interface.1.Status) $(dm_value Device.Optical.Interface.1.Name)" "Down pon"
 	F=Device.Routing.Router.1.IPv4Forwarding
@@ -1952,6 +1963,59 @@ for x in json.load(open(sys.argv[1]))["parameters"]:
 		"0 9007 0 9007 9007 0 9007"
 	expect "Radio 2 Enable false" "$(dm_set_fault Device.WiFi.Radio.2.Enable false "$key") $(uci -q get wireless.MT7993_1_2.disabled) $(dm_value Device.WiFi.Radio.2.Status)" "0 1 Down"
 	expect "Radio 2 Enable true" "$(dm_set_fault Device.WiFi.Radio.2.Enable true "$key") $(uci -q get wireless.MT7993_1_2.disabled)" "0 0"
+	# T7 S4: the interface stack.  LowerLayers are references: the LAN on
+	# Ethernet.Link.1 (br-lan), IPoE on its VLANTermination (id+1), PPP on
+	# PPP.Interface, the bridged connection on its bridge's Link (id+11);
+	# br-lan is Bridge.1 minus what the bridged connection (Bridge.4) took
+	# (LAN port 4, the MLO SSIDs 11 and 12), its WAN side on VLANTermination.3
+	expect "IP.Interface LowerLayers" "$(dm_value $I.$lan.LowerLayers) $(dm_value $I.$w0.LowerLayers) $(dm_value $I.$w1.LowerLayers) $(dm_value $I.$w2.LowerLayers)" \
+		"Device.Ethernet.Link.1 Device.Ethernet.VLANTermination.1 Device.PPP.Interface.$p Device.Ethernet.Link.13"
+	L=Device.Ethernet.Link V=Device.Ethernet.VLANTermination B=Device.Bridging.Bridge
+	expect "Ethernet.Link 1/2/13" "$(dm_value Device.Ethernet.LinkNumberOfEntries) $(dm_value $L.1.Name) $(dm_value $L.1.LowerLayers) $(dm_value $L.2.Name) $(dm_value $L.2.LowerLayers) $(dm_value $L.13.Name) $(dm_value $L.13.LowerLayers)" \
+		"3 br-lan Device.Bridging.Bridge.1.Port.1 pon Device.Optical.Interface.1 br-wan2 Device.Bridging.Bridge.4.Port.1"
+	expect "VLANTermination 1/3" "$(dm_value Device.Ethernet.VLANTerminationNumberOfEntries) $(dm_value $V.1.Name) $(dm_value $V.1.VLANID) $(dm_value $V.1.Enable) $(dm_value $V.1.TPID) $(dm_value $V.1.LowerLayers) $(dm_value $V.3.Name) $(dm_value $V.3.VLANID)" \
+		"2 pon.10 10 true 33024 Device.Ethernet.Link.2 pon.20 20"
+	expect "Bridges, ports" "$(dm_value Device.Bridging.BridgeNumberOfEntries) $(dm_value $B.1.PortNumberOfEntries) $(dm_value $B.4.PortNumberOfEntries) $(dm_value $B.4.Name) $(dm_value $B.1.Standard)" "2 14 5 br-wan2 802.1D-2004"
+	expect "br-lan ports" "$(dm_value $B.1.Port.1.ManagementPort) $(dm_value $B.1.Port.2.LowerLayers) $(dm_value $B.1.Port.5.Name) $(dm_value $B.1.Port.14.Name) $(dm_value $B.1.Port.14.LowerLayers)" \
+		"true Device.Ethernet.Interface.1 <none> rai4 Device.WiFi.SSID.9"
+	expect "bridged connection's ports" "$(dm_value $B.4.Port.1.LowerLayers) $(dm_value $B.4.Port.5.Name) $(dm_value $B.4.Port.16.LowerLayers) $(dm_value $B.4.Port.18.Name) $(dm_value $B.4.Port.18.LowerLayers)" \
+		"Device.Bridging.Bridge.4.Port.5,Device.Bridging.Bridge.4.Port.16,Device.Bridging.Bridge.4.Port.17,Device.Bridging.Bridge.4.Port.18 eth0.4 Device.WiFi.SSID.11 pon.20 Device.Ethernet.VLANTermination.3"
+	$UBUS call tr069 dm '{"cmd":"get","path":"Device.InterfaceStack."}' > "$RUN/stack.gpv" 2>/dev/null
+	expect "InterfaceStack: count, expected rows, every reference in the tree" "$(python3 - "$RUN/stack.gpv" "$RUN/tr181.gpn" "$(dm_value Device.InterfaceStackNumberOfEntries)" "$lan" "$w0" "$w1" "$w2" "$p" <<'PY'
+import json, sys
+vals = {x["parameter"]: x.get("value", "") for x in json.load(open(sys.argv[1]))["parameters"]}
+names = set(x["parameter"] for x in json.load(open(sys.argv[2]))["parameters"])
+n, lan, w0, w1, w2, ppp = sys.argv[3:9]
+rows = {}
+for k, v in vals.items():
+    f = k.split(".")
+    rows.setdefault(f[2], {})[f[3]] = v
+pairs = set((r.get("HigherLayer"), r.get("LowerLayer")) for r in rows.values())
+I, E, BR = "Device.IP.Interface.", "Device.Ethernet.", "Device.Bridging.Bridge."
+want = [(I + lan, E + "Link.1"), (I + w0, E + "VLANTermination.1"), (I + w1, "Device.PPP.Interface." + ppp),
+        (I + w2, E + "Link.13"), ("Device.PPP.Interface." + ppp, E + "Link.2"), (E + "VLANTermination.1", E + "Link.2"),
+        (E + "VLANTermination.3", E + "Link.2"), (E + "Link.1", BR + "1.Port.1"), (E + "Link.2", "Device.Optical.Interface.1"),
+        (E + "Link.13", BR + "4.Port.1"), (BR + "4.Port.1", BR + "4.Port.18"), (BR + "4.Port.18", E + "VLANTermination.3"),
+        (BR + "1.Port.2", E + "Interface.1"), ("Device.WiFi.SSID.9", "Device.WiFi.Radio.2"), ("Device.WiFi.SSID.1", "Device.WiFi.Radio.1")]
+missing = [w for w in want if w not in pairs]
+dangling = sorted(set(x for pr in pairs for x in pr if x + "." not in names))
+print(len(rows) == int(n), len(missing), len(dangling), missing[:2], dangling[:3])
+PY
+)" "True 0 0 [] []"
+	expect "set-same: Link LowerLayers, TPID, ManagementPort, Bridge Enable" "$(dm_set_fault $L.1.LowerLayers Device.Bridging.Bridge.1.Port.2 "$key") $(dm_set_fault $V.1.TPID 34984 "$key") $(dm_set_fault $V.1.TPID 33024 "$key") $(dm_set_fault $B.1.Port.2.ManagementPort true "$key") $(dm_set_fault $B.1.Enable 1 "$key")" \
+		"9007 9007 0 9007 0"
+	expect "Bridge Port Alias unique per bridge" "$(dm_set_fault $B.1.Port.2.Alias p2 "$key") $(dm_set_fault $B.1.Port.3.Alias p2 "$key") $(dm_set_fault $B.4.Port.5.Alias p2 "$key") $(dm_value $B.4.Port.5.Alias)" "0 9007 0 p2"
+	uci -q delete cwmp.tr181_alias
+	uci -q commit cwmp
+	# PPP LowerLayers: the uplink link or the connection's own VLAN, written
+	# as the product's pon / pon.<vid>; then back on the uplink
+	P1=Device.PPP.Interface.$p
+	expect "PPP LowerLayers set Link.1, Link.2 (same)" "$(dm_set_fault $P1.LowerLayers $L.1 "$key") $(dm_set_fault $P1.LowerLayers $L.2 "$key")" "9007 0"
+	uci -q set wan.@entry[1].vlan_id=30
+	uci -q commit wan
+	expect "PPP LowerLayers on its VLANTermination.2" "$(dm_value $V.2.Enable) $(dm_set_fault $P1.LowerLayers $V.2 "$key") $(uci -q get wan.@entry[1].vlan_active) $(uci -q get network.if1.device) $(dm_value $P1.LowerLayers) $(dm_value $V.2.Enable)" \
+		"false 0 1 pon.30 $V.2 true"
+	expect "PPP LowerLayers back on Link.2" "$(dm_set_fault $P1.LowerLayers $L.2 "$key") $(uci -q get wan.@entry[1].vlan_active) $(uci -q get network.if1.device) $(dm_value $V.2.Name)" "0 0 pon <none>"
 	# T7: Time.Client.1 for the NTPServer1..5 TR-181 2.19 deleted; Status from
 	# the file the ntp hotplug writes at ntpd's first stratum
 	T=Device.Time

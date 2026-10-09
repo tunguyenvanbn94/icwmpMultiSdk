@@ -31,6 +31,9 @@ char *dip_netdev_of_ref(const char *ref);
 /* a layer 3 device -> "Device.IP.Interface.<n>" of the lowest interface on
  * it, NULL when none */
 char *dip_ref_of_netdev(const char *dev);
+/* every numbered Interface.{i}: network section and number, in instance
+ * order, at most max; returns how many */
+int dip_all(const char **sec, const char **inst, int max);
 
 /*
  * The Interface of a TR-181 diagnostic around the product's getter/setter,

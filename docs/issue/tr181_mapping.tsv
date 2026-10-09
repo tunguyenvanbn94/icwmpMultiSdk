@@ -5,6 +5,8 @@ leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.HopHos
 leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.HopErrorCode	Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.ErrorCode	A	TR-181 leaf name
 leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.HopRTTTimes	Device.IP.Diagnostics.TraceRoute.RouteHops.{i}.RTTimes	A	TR-181 leaf name (the product spells HopRTTTimes)
 leaf	InternetGatewayDevice.Device.IP.Diagnostics.TraceRoute.Interface	Device.IP.Diagnostics.TraceRoute.Interface	B	the product's grafted branch reads the device name; TR-181 a Device.IP.Interface reference of the device name the product stores (IFREF181, device_ip_mtk.h), a device name still taken
+leaf	InternetGatewayDevice.Device.IP.Interface.{i}.LowerLayers	Device.IP.Interface.{i}.LowerLayers	B	T7 S4: the product's grafted branch reads the device name (br-lan, pon.10, dev_wanbr2); TR-181 the reference of the layer under the interface (Ethernet.Link, Ethernet.VLANTermination, PPP.Interface), stack181_mtk.c
+leaf	InternetGatewayDevice.Device.PPP.Interface.{i}.LowerLayers	Device.PPP.Interface.{i}.LowerLayers	B	T7 S4: the product's pon / pon.<vid>; TR-181 Ethernet.Link.2 (the uplink) or the connection's Ethernet.VLANTermination, written back as the product's value (stack181_mtk.c)
 prefix	InternetGatewayDevice.DeviceInfo.	Device.DeviceInfo.	A	same getters, deviceinfo_mtk.c
 leaf	InternetGatewayDevice.DeviceInfo.X_AIS.PonPassword	Device.XPON.ONU.1.ANI.1.TC.Authentication.Password	B	T7 standard: the standard leaf for the PLOAM password (same getter/setter); X_AIS. is no X_<id>_<name>
 leaf	InternetGatewayDevice.DeviceInfo.X_AIS.PonPasswordState	Device.XPON.ONU.1.ANI.1.TC.ONUActivation.ONUState	B	T7 standard: the ONU state itself (O1..O9), the product reports 0 in O5 and 2 otherwise
@@ -119,7 +121,7 @@ leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPServerEnabl
 leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPLeaseTime	Device.DHCPv4.Server.Pool.{i}.LeaseTime	A	TR-181 leaf name
 leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPStaticAddressNumberOfEntries	Device.DHCPv4.Server.Pool.{i}.StaticAddressNumberOfEntries	A	0, no instance (as TR-098)
 leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPOptionNumberOfEntries	Device.DHCPv4.Server.Pool.{i}.OptionNumberOfEntries	A	0, no instance (as TR-098)
-leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.MACAddress	-	D	TR-181 has it on Ethernet.Link.{i}.MACAddress; Ethernet.Link is not built (T7 with the LowerLayers references)
+leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.MACAddress	Device.Ethernet.Link.1.MACAddress	B	T7 S4: br-lan's address on its Ethernet.Link.1; TR-098 in capitals as ifconfig printed it, TR-181 as sysfs has it
 leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPServerConfigurable	-	D	product lock of the LAN pool, no TR-181 counterpart
 leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.DHCPRelay	-	D	constant false; TR-181 DHCPv4.Relay is its own object
 leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.UseAllocatedWAN	-	D	TR-098 only
@@ -375,3 +377,38 @@ new	-	Device.Time.Client.{i}.Version	A	time_mtk.c, sysntpd as Time.Client.1 (T7)
 new	-	Device.Time.Client.{i}.Interface	A	time_mtk.c, sysntpd as Time.Client.1 (T7)
 new	-	Device.IP.Interface.{i}.Alias	A	T7 S3: the Alias of an interface no connection carries (the LAN: cpe-lan), kept in cwmp.tr181_alias
 new	-	Device.IP.Interface.{i}.IPv4Address.{i}.Alias	A	T7 S3: the Alias of a connection's address (cpe-ipv4-<n>), kept in cwmp.tr181_alias
+new	-	Device.Ethernet.LinkNumberOfEntries	A	T7 S4 interface stack, stack181_mtk.c
+new	-	Device.Ethernet.VLANTerminationNumberOfEntries	A	T7 S4 interface stack, stack181_mtk.c
+new	-	Device.Ethernet.Link.{i}.Enable	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), the uplink (2), a bridged connection's bridge (id+11)
+new	-	Device.Ethernet.Link.{i}.Status	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), the uplink (2), a bridged connection's bridge (id+11)
+new	-	Device.Ethernet.Link.{i}.Alias	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), the uplink (2), a bridged connection's bridge (id+11)
+new	-	Device.Ethernet.Link.{i}.Name	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), the uplink (2), a bridged connection's bridge (id+11)
+new	-	Device.Ethernet.Link.{i}.LowerLayers	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), the uplink (2), a bridged connection's bridge (id+11)
+new	-	Device.Ethernet.Link.{i}.MACAddress	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), the uplink (2), a bridged connection's bridge (id+11)
+new	-	Device.Ethernet.VLANTermination.{i}.Enable	A	T7 S4 interface stack, stack181_mtk.c: the connection's X_AIS_VLAN* leaf (same getter/setter), instance id+1
+new	-	Device.Ethernet.VLANTermination.{i}.VLANID	A	T7 S4 interface stack, stack181_mtk.c: the connection's X_AIS_VLAN* leaf (same getter/setter), instance id+1
+new	-	Device.Ethernet.VLANTermination.{i}.VLANPriority	A	T7 S4 interface stack, stack181_mtk.c: the connection's X_AIS_VLAN* leaf (same getter/setter), instance id+1
+new	-	Device.Ethernet.VLANTermination.{i}.Status	A	T7 S4 interface stack, stack181_mtk.c: a connection's VLAN <uplink>.<vlan_id>, instance id+1
+new	-	Device.Ethernet.VLANTermination.{i}.Alias	A	T7 S4 interface stack, stack181_mtk.c: a connection's VLAN <uplink>.<vlan_id>, instance id+1
+new	-	Device.Ethernet.VLANTermination.{i}.Name	A	T7 S4 interface stack, stack181_mtk.c: a connection's VLAN <uplink>.<vlan_id>, instance id+1
+new	-	Device.Ethernet.VLANTermination.{i}.LowerLayers	A	T7 S4 interface stack, stack181_mtk.c: a connection's VLAN <uplink>.<vlan_id>, instance id+1
+new	-	Device.Ethernet.VLANTermination.{i}.TPID	A	T7 S4 interface stack, stack181_mtk.c: a connection's VLAN <uplink>.<vlan_id>, instance id+1
+new	-	Device.Bridging.BridgeNumberOfEntries	A	T7 S4 interface stack, stack181_mtk.c
+new	-	Device.Bridging.Bridge.{i}.Enable	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), a bridged connection's bridge (id+2)
+new	-	Device.Bridging.Bridge.{i}.Status	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), a bridged connection's bridge (id+2)
+new	-	Device.Bridging.Bridge.{i}.Alias	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), a bridged connection's bridge (id+2)
+new	-	Device.Bridging.Bridge.{i}.Name	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), a bridged connection's bridge (id+2)
+new	-	Device.Bridging.Bridge.{i}.Standard	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), a bridged connection's bridge (id+2)
+new	-	Device.Bridging.Bridge.{i}.PortNumberOfEntries	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), a bridged connection's bridge (id+2)
+new	-	Device.Bridging.Bridge.{i}.VLANNumberOfEntries	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), a bridged connection's bridge (id+2)
+new	-	Device.Bridging.Bridge.{i}.VLANPortNumberOfEntries	A	T7 S4 interface stack, stack181_mtk.c: br-lan (1), a bridged connection's bridge (id+2)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Enable	A	T7 S4 interface stack, stack181_mtk.c: management 1, LAN port k at k+1, SSID n at n+5, WAN side 18
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Status	A	T7 S4 interface stack, stack181_mtk.c: management 1, LAN port k at k+1, SSID n at n+5, WAN side 18
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Alias	A	T7 S4 interface stack, stack181_mtk.c: management 1, LAN port k at k+1, SSID n at n+5, WAN side 18
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Name	A	T7 S4 interface stack, stack181_mtk.c: management 1, LAN port k at k+1, SSID n at n+5, WAN side 18
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.LowerLayers	A	T7 S4 interface stack, stack181_mtk.c: management 1, LAN port k at k+1, SSID n at n+5, WAN side 18
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.ManagementPort	A	T7 S4 interface stack, stack181_mtk.c: management 1, LAN port k at k+1, SSID n at n+5, WAN side 18
+new	-	Device.InterfaceStackNumberOfEntries	A	T7 S4 interface stack, stack181_mtk.c
+new	-	Device.InterfaceStack.{i}.Alias	A	T7 S4 interface stack, stack181_mtk.c: one row per LowerLayers item, generated
+new	-	Device.InterfaceStack.{i}.HigherLayer	A	T7 S4 interface stack, stack181_mtk.c: one row per LowerLayers item, generated
+new	-	Device.InterfaceStack.{i}.LowerLayer	A	T7 S4 interface stack, stack181_mtk.c: one row per LowerLayers item, generated

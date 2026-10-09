@@ -86,6 +86,17 @@ wan=$(val Device.NAT.InterfaceSetting.1.Interface)
 log "first WAN $wan: IPv4 AddressingType $(val $wan.IPv4Address.1.AddressingType), PPP $(val Device.PPP.InterfaceNumberOfEntries)"
 X=Device.XPON.ONU.1.ANI.1
 log "XPON: Status $(val $X.Status), PONMode $(val $X.PONMode), ONUState $(val $X.TC.ONUActivation.ONUState), ONUID $(val $X.TC.ONUActivation.ONUID), VendorID $(val $X.TC.ONUActivation.VendorID)"
+# T7 S4 (analysis section 82): the interface stack against what the device
+# really has (bridge members, netdevs) -- compare on the host with tr181.gpv
+for i in 1 2 3 4 5 6; do
+	ll=$(val Device.IP.Interface.$i.LowerLayers)
+	[ -n "$ll" ] && log "IP.Interface.$i ($(val Device.IP.Interface.$i.Name)) LowerLayers $ll"
+done
+log "Ethernet.Link $(val Device.Ethernet.LinkNumberOfEntries), VLANTermination $(val Device.Ethernet.VLANTerminationNumberOfEntries), Bridge $(val Device.Bridging.BridgeNumberOfEntries) (Bridge.1 ports $(val Device.Bridging.Bridge.1.PortNumberOfEntries)), InterfaceStack $(val Device.InterfaceStackNumberOfEntries)"
+log "Link.1 $(val Device.Ethernet.Link.1.Name) $(val Device.Ethernet.Link.1.Status) $(val Device.Ethernet.Link.1.MACAddress), Link.2 $(val Device.Ethernet.Link.2.Name) $(val Device.Ethernet.Link.2.Status) on $(val Device.Ethernet.Link.2.LowerLayers)"
+uci show network | grep -E "=device|\.ports=|\.name=|\.device=" > "$D/network_devices.txt"
+ls /sys/class/net > "$D/netdevs.txt"
+for b in /sys/class/net/*/brif; do echo "$b: $(ls "$b" | tr '\n' ' ')"; done > "$D/bridge_members.txt" 2>/dev/null
 trc=$(uci -q -P /var/state/traceroute get easycwmp.@local[0].Interface)
 log "set TraceRoute.Interface=$wan: fault $(fault_set Device.IP.Diagnostics.TraceRoute.Interface "$wan" "$key"), stored '$(uci -q -P /var/state/traceroute get easycwmp.@local[0].Interface)', reads '$(val Device.IP.Diagnostics.TraceRoute.Interface)'"
 uci -q -P /var/state/traceroute set easycwmp.@local[0].Interface="$trc"

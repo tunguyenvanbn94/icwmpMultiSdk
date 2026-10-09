@@ -61,7 +61,7 @@ TREES = {
         "root": DEFAULT_SRC,
         "target": None,
         "inc": ("", "tr098", "tr098/common", "upnp", "sdk/%(sdk)s",
-                "sdk/%(sdk)s/dm098"),
+                "sdk/%(sdk)s/dm098", "sdk/%(sdk)s/dm181"),
     },
     "app": {
         "root": APP_SRC,

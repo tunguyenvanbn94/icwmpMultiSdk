@@ -77,6 +77,17 @@ const struct wlan_iface *wlan_iface_of(void *data)
 	return data ? (const struct wlan_iface *)data : &wlan_ifaces[0];
 }
 
+const char *wlan_ifname_of_index(int index)
+{
+	int i;
+
+	for (i = 0; i < WLAN_IFACE_COUNT; i++) {
+		if (wlan_ifaces[i].index == index)
+			return wlan_ifaces[i].name;
+	}
+	return "";
+}
+
 static char *iface_name(void *data)
 {
 	return (char *)wlan_iface_of(data)->name;

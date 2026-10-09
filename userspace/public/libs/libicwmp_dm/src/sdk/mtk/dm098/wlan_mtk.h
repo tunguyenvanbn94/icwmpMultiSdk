@@ -20,6 +20,8 @@ struct wlan_iface {
 };
 
 const struct wlan_iface *wlan_iface_of(void *data);
+/* the interface of WLANConfiguration.<index> / WiFi.SSID.<index>, "" if none */
+const char *wlan_ifname_of_index(int index);
 /* wireless.<iface>.<option>, never NULL */
 char *wlan_opt(void *data, char *option);
 /* mirror one option into mapd's own node, ignored when the iface has none */

@@ -56,7 +56,8 @@ libtr098_la_SOURCES +=	\
 	../sdk/mtk/dm098/device_ddns_mtk.c	\
 	../sdk/mtk/dm098/device_ra_mtk.c	\
 	../sdk/mtk/dm098/services_mtk.c	\
-	../sdk/mtk/dm181/root181_mtk.c
+	../sdk/mtk/dm181/root181_mtk.c	\
+	../sdk/mtk/dm181/stack181_mtk.c
 
 if DM_MTK_SCRIPT_COMPAT
 libtr098_la_SOURCES +=	\

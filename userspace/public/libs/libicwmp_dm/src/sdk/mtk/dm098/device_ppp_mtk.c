@@ -51,6 +51,7 @@
 #include "dm_registry.h"
 #include "dmmtk.h"
 #include "wanconn_mtk.h"
+#include "stack181_mtk.h"
 
 #define WAN_PKG		"wan"
 #define WAN_RELOAD	"/usr/sbin/hni_wan_reload.sh"
@@ -547,13 +548,34 @@ PPP181_GET(reset, "Reset")
 PPP181_SET(reset, "Reset")
 PPP181_GET(remote_ip, "RemoteIPAddress")
 
+/* TR-181: Ethernet.Link.2 (the uplink) or the connection's own
+ * Ethernet.VLANTermination (stack181_mtk.c), going to the product's setter
+ * as pon / pon.<vid>; anything else, or another uplink than pon, is 9007 */
+static int get_ppp181_lowerlayers(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = stack181_ppp_lower(PPP_SEC(data));
+	return 0;
+}
+
+static int set_ppp181_lowerlayers(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	char *v;
+
+	if (value && *value && strcmp(value, stack181_ppp_lower(PPP_SEC(data))) == 0)
+		return 0;
+	v = stack181_ppp_lower_to_product(PPP_SEC(data), value);
+	if (!v)
+		return FAULT_9007;
+	return set_ppp_lowerlayers(refparam, ctx, data, instance, v, action);
+}
+
 static DMLEAF tPpp181IfParams[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Enable", &DMWRITE, DMT_BOOL, get_ppp_enable, set_ppp_enable, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_ppp_status, NULL, NULL, NULL},
 {"Name", &DMREAD, DMT_STRING, get_ppp_name, NULL, NULL, NULL},
 {"LastChange", &DMREAD, DMT_UNINT, get_ppp_lastchange, NULL, NULL, NULL},
-{"LowerLayers", &DMWRITE, DMT_STRING, get_ppp_lowerlayers, set_ppp_lowerlayers, NULL, NULL},
+{"LowerLayers", &DMWRITE, DMT_STRING, get_ppp181_lowerlayers, set_ppp181_lowerlayers, NULL, NULL},
 {"Reset", &DMWRITE, DMT_BOOL, get_ppp181_reset, set_ppp181_reset, NULL, NULL},
 {"ConnectionStatus", &DMREAD, DMT_STRING, get_ppp_connstatus, NULL, NULL, NULL},
 {"LastConnectionError", &DMREAD, DMT_STRING, get_ppp_lasterror, NULL, NULL, NULL},
