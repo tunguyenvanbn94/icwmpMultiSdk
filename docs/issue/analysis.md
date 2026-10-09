@@ -5607,3 +5607,79 @@ Trên dump S4d: thiếu 166 lá, 26 yêu cầu create/delete. Chia lô:
 - IPv6: không có IPv6 global trên lab; bảng IPv6 rỗng, lá đếm 0 = 0 dòng.
 
 G9 image mới từ 15:30:54 (pid 26004, VmRSS 5788 kB). Đã dọn file test và image tải lên trên board.
+
+## 89. T7 chuẩn hoá S5b + S5c: lá bắt buộc còn lại, profile khai được (`tr181-0021`) (09/10 15:31–15:54)
+
+**S5b — 83 lá bắt buộc còn thiếu sau S5a.** Mỗi lá lấy dữ liệu thật của sản phẩm nếu có. Lá ghi được mà sản phẩm không có
+đường ghi thì set-same.
+
+| Nhóm | Lá | Nguồn (Verified trong source/board) | Ghi |
+|---|---|---|---|
+| PPP | `ConnectionTrigger` | `wan.@entry ppp_conn_mode` (hal_network.h: 0 AlwaysOn, 1 OnDemand, 2 Manual) | set-same: `hni.wan modify` (ubusmon `wan_set.c`) chỉ nhận một danh sách param cố định, không có tham số này |
+| | `IPv6CPEnable`, `PPPoE.ACName/ServiceName` | `network.<if>.ipv6 / ac / service` (hal_network.c sinh ra) | set-same |
+| | `PPPoE.SessionID` | Id của `/proc/net/pppoe` trên device của kết nối (board: `000020B7` trên `pon.10`) | — |
+| | `IPv6CP.Local/RemoteInterfaceIdentifier` | link-local của `pppoe-if0` (`/proc/net/if_inet6`), route /128 `fe80::` tới đầu kia (`/proc/net/ipv6_route`), dạng `::<64 bit>` | — |
+| | `Alias` | kho Alias | ghi |
+| DHCPv4 | `Server.Enable` | `dhcp.lan.ignore` | set-same (công tắc của sản phẩm là Pool.Enable) |
+| | `Pool.Order` 1, `ReservedAddresses` | một pool; dnsmasq không có danh sách reserved | set-same (trước đây nhận rồi bỏ) |
+| | `Client.LeaseTimeRemaining` | `data.leasetime` của netifd − (uptime mod T1 = lease/2). **Conditional**: netifd không reset uptime khi renew | — |
+| | `Client.DHCPServer` | rỗng: `dhcp.script` của netifd không lưu server id | — |
+| | `Client.Renew` | ghi true → `ubus call network.interface.<if> renew` (cuối phiên) | ghi |
+| DHCPv6 | `Server.Enable`, `Pool.IANAEnable/IAPDEnable` | `dhcpv6 server`, `dhcpv6_na`/`dhcpv6_pd` (odhcpd 2021-07 `config.c`) | IANA/IAPD ghi uci + reload odhcpd |
+| | `Pool.IANAPrefixes` | dòng `IPv6Prefix` mà interface của pool cấp ra (S4c) | — |
+| | `IAPDAddLength` 0, `Order` 1, `OptionNumberOfEntries` 0 | odhcpd trả theo gợi ý của client, không cộng độ dài cố định | set-same |
+| RA | `AdvCurHopLimit/LinkMTU/ReachableTime/RetransTimer/PreferredRouterFlag` | `ra_hoplimit/ra_mtu/ra_reachabletime/ra_retranstime/ra_preference` | ghi uci + reload, cùng cách các setter RA của sản phẩm |
+| | `AdvMobileAgentFlag`, `AdvNDProxyFlag` false; `Enable` | odhcpd không gửi hai cờ này; có setting nào `ra server` | set-same |
+| DNS | `SupportedRecordTypes` `A,AAAA,SRV,PTR`, `Client.Enable/Status` | resolver luôn bật | set-same |
+| IP | `ULAPrefix`, `Interface.ULAEnable` | `network.globals.ula_prefix`, `ip6assign` | set-same |
+| | `Interface.Type` `Normal`, `Reset` | ghi true → `ubus … down; … up` cuối phiên | ghi |
+| | `IPv4Address.Status` `Enabled`, `IPv4Address.Enable` | — | set-same (trước đây nhận rồi bỏ) |
+| | `Diagnostics.IPv4/IPv6 Download/UploadDiagnosticsSupported` | download/upload của sản phẩm không có `ProtocolVersion` hay IPv6 → IPv4 true, IPv6 false | — |
+| NAT, Routing | `PortMapping.AllInterfaces`, `Router.Status` | rule có Interface → false; theo `Enable` | set-same |
+| DeviceInfo | `ProcessStatus.Process.{i}` (PID, Command, Size, Priority, CPUTime, State) + lá đếm | `/proc/<pid>/{stat,cmdline,status}` (bảng trước đây rỗng) | — |
+| | `TemperatureSensor.1.Status/Name/ResetTime/LastUpdate/Min*/Max*/Reset/Alias/Enable` | thermal_zone0. Min/Max giữ trong `/tmp/icwmp_temp181` theo các lần đọc. **Conditional**: sản phẩm chỉ đọc cảm biến khi được hỏi | Reset ghi |
+| Ethernet | `Interface.CurrentBitRate` | cổng 1: dòng EN8811 (`2.5Gbps/Full`); cổng 2..4: mã `link_speed` của switchmgr giải theo `valSpeedDuplex[]` của hal_network.c (board: 1 → 1000, 2 → 100) | — |
+| | `Interface.LastChange` 0 | không có nguồn thời gian | — |
+| Wi-Fi Radio | `ExtensionChannel`, `GuardInterval`, `IEEE80211h*`, `MCS`, `MaxBitRate`, `SupportedFrequencyBands`, `Upstream`, `AutoChannelSupported`, `Alias` | `ht_extcha`, `ht_gi`, `doth` (5 GHz), `ht_mcs` (33 = -1), `htmode` + `ht_txstream`: tốc độ đỉnh EHT MCS13/HE MCS11/VHT MCS9/HT MCS7 ở GI 0,8 µs × số luồng (**Conditional**, tính ra; board 2,4G EHT20 2 luồng 344, 5G EHT160 2 luồng 2882) | set-same |
+| SSID | `MLDUnit` | nhóm MLO của `x_ais_mlo_mtk.c`: apmld1 (ra5+rai5) 0, apmld2 (ra4+rai4) 1 khi bật, còn lại -1 | set-same |
+| AccessPoint | `Status`, `WMM/UAPSD Capability`, `AllowedMACAddress` | `disabled`, `access_policy 1` + `access_list` | set-same |
+| | `WMMEnable/UAPSDEnable/MACAddressControlEnabled` | `wmm`, `apsd_capable`, `access_policy`. **Trước đây đọc false cố định và nhận rồi bỏ khi ghi; board có wmm=1, apsd=1** | set-same, cặp TR-098 → B |
+| Security | `RekeyingInterval`, `RadiusServerIPAddr/Port/Secret` (secured) | `rekey_meth`/`rekey_interval` (DISABLE → 0), `auth_server/port/secret` | ghi uci + wifi reload |
+| WPS | `Enable`, `ConfigMethodsSupported/Enabled` `PushButton,PIN` | `wps_state` 1/2 = WscConfMode 7 (mtkdat.lua); S1 bỏ WPS vì là hằng số, nay dựng lại trên `wps_state` | Enable ghi `2`/rỗng |
+
+Các lá TR-181 cuối cùng còn "nhận rồi bỏ" (`IPv4Address.Enable`, `Pool.ReservedAddresses` và 3 lá AP) đã thành set-same. Bảng
+TR-098 giữ nguyên hành vi của sản phẩm.
+
+Sửa kèm (S4d, thấy trên board §88): URL của script DDNS lấy dòng `__UPDURL=` (IPv4) trước. `update_no-ip_com.sh` khai
+`__UPDURL6` trước, nên trước đây ra `dynupdate6.noip.com`.
+
+**S5c — profile khai được.** Trên dump host sau S5b, 29 profile ứng với chức năng cây có:
+- **Đủ lá, không vướng create/delete (khai được, 16):** Time:2, MemoryStatus:1, ProcessStatus:1, TempStatus:1, EthernetInterface:2,
+  IPv6Interface:1, PPPInterface:2, WiFiRadio:1, Optical:1, IPPing:1, TraceRoute:1, DownloadTCP:1, UploadTCP:1, NSLookupDiag:1,
+  Download:1, Upload:1.
+- **Không khai được (13)**, chỉ vì profile đòi AddObject/DeleteObject trên bảng mà sản phẩm dựng từ cấu hình cố định:
+
+| Profile | Bảng phải create/delete | Vì sao sản phẩm không làm được |
+|---|---|---|
+| Baseline:4 | `DNS.Client.Server` | server DNS là của từng kết nối (DHCP/IPCP hoặc `v4_static_dns` của entry) |
+| EthernetLink:1, VLANTermination:1, Bridge:1 (Port) | `Ethernet.Link`, `VLANTermination`, `Bridge.Port` | tầng interface do `hal_network.c` dựng từ `wan.@entry`; tạo/xoá qua tạo/xoá kết nối |
+| IPInterface:2 | `IP.Interface.IPv4Address` | một địa chỉ cho mỗi interface |
+| Routing:2 | `Routing.Router` + **thiếu `Routing.RIP`** | một router; sản phẩm không chạy RIP. `SupportedModes` chỉ có `Send/Receive/Both`, không có giá trị "không hỗ trợ", nên không thêm object RIP |
+| DHCPv4Server:1, DHCPv4Client:1, DHCPv6Server:1, RouterAdvertisement:1, NAT:1 | Pool / Client / InterfaceSetting | một pool LAN; client/NAT theo kết nối; RA theo section `dhcp` |
+| WiFiSSID:2, WiFiAccessPoint:2 | `WiFi.SSID`, `AccessPoint` | 12 interface cố định (bảng `wlan_ifaces` của driver MTK) |
+
+Các bảng này có thể làm AddObject/DeleteObject sau này nếu nhà mạng cần (ví dụ tạo kết nối IPoE, mà user đã để sau).
+
+**Kiểm (host):**
+- `run.sh tr181` thêm:
+  - kiểm từng nhóm trên;
+  - `LeaseTimeRemaining` = 3480 (lease 3600, uptime 120 trong ubus giả);
+  - Radio EHT40 1 luồng 344 Mbps, EHT160 1441, `BelowControlChannel`/`Auto`;
+  - `MLDUnit` -1/1/0;
+  - ghi `RekeyingInterval` 600 → `TIME/600`, `RadiusServerPort` 70000 → 9007, `WPS.Enable` true → `wps_state 2`.
+  - Check S1 cũ "WPS gone" đổi thành có WPS.
+- Profile: 28/29 không thiếu lá (chỉ Routing:2 thiếu RIP).
+- **`tr181-bbf-check`: 810 tham số**; unknown/access/type/status/secured 0, enum 1 (NAT `TCP/UDP`, §86).
+- `tr181-map.py check` 844 = 844. Cổng tĩnh lib MTK 71/0, automake 0, cross-gcc SDK 0 lỗi, không cảnh báo ở file đã sửa.
+- Bảng `Process` trên host rất lớn vì container dùng chung PID với máy host; board có vài trăm tiến trình.
+- `run.sh all` 25/25 (`ALL_RC=0`, 15:53). Commit code `fa1adfa`. Chưa nạp board.
