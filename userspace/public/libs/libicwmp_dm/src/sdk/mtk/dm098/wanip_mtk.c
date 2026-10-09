@@ -2072,11 +2072,14 @@ static int get_c181_enabled(char *refparam, struct dmctx *ctx, void *data, char 
 	return 0;
 }
 
+/* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
+MTK_SET_SAME(dhcpc181_interface, get_c181_interface)
+
 static DMLEAF tDhcpc181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Enable", &DMWRITE, DMT_BOOL, get_dhcpc181_enable, set_dhcpc181_enable, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_dhcpc181_status, NULL, NULL, NULL},
-{"Interface", &DMREAD, DMT_STRING, get_c181_interface, NULL, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_c181_interface, set_same_dhcpc181_interface, NULL, NULL},
 {"IPAddress", &DMREAD, DMT_STRING, get_c181_ipaddr, NULL, NULL, NULL},
 {"SubnetMask", &DMREAD, DMT_STRING, get_c181_mask, NULL, NULL, NULL},
 {"IPRouters", &DMREAD, DMT_STRING, get_c181_routers, NULL, NULL, NULL},
@@ -2084,18 +2087,25 @@ static DMLEAF tDhcpc181Param[] = {
 {0}
 };
 
+/* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
+MTK_SET_SAME(nat181_interface, get_c181_interface)
+
 static DMLEAF tNat181IfParam[] = {
 {"Enable", &DMWRITE, DMT_BOOL, get_c181_nat, set_c181_nat, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_nat181_status, NULL, NULL, NULL},
-{"Interface", &DMREAD, DMT_STRING, get_c181_interface, NULL, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_c181_interface, set_same_nat181_interface, NULL, NULL},
 {0}
 };
 
+/* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
+MTK_SET_SAME_BOOL(dns181_enable, get_c181_true)
+MTK_SET_SAME(dns181_interface, get_dns181_interface)
+
 static DMLEAF tDns181ServerParam[] = {
-{"Enable", &DMREAD, DMT_BOOL, get_c181_true, NULL, NULL, NULL},
+{"Enable", &DMWRITE, DMT_BOOL, get_c181_true, set_same_dns181_enable, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_c181_enabled, NULL, NULL, NULL},
 {"DNSServer", &DMWRITE, DMT_STRING, get_dns181_server, set_dns181_server, NULL, NULL},
-{"Interface", &DMREAD, DMT_STRING, get_dns181_interface, NULL, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_dns181_interface, set_same_dns181_interface, NULL, NULL},
 {"Type", &DMREAD, DMT_STRING, get_dns181_type, NULL, NULL, NULL},
 {0}
 };

@@ -439,9 +439,12 @@ static int get_one181(char *refparam, struct dmctx *ctx, void *data, char *insta
 	return 0;
 }
 
+/* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
+MTK_SET_SAME_BOOL(optical_enable, get_true)
+
 static DMLEAF tOptical181IfParam[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
-{"Enable", &DMREAD, DMT_BOOL, get_true, NULL, NULL, NULL},
+{"Enable", &DMWRITE, DMT_BOOL, get_true, set_same_optical_enable, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_wancommon_link_status, NULL, NULL, NULL},
 {"Name", &DMREAD, DMT_STRING, get_optical181_name, NULL, NULL, NULL},
 {0}

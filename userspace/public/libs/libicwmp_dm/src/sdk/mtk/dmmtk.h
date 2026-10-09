@@ -148,4 +148,46 @@ const char *mtk_ipif_prefix(void);
 /* Accepts the CWMP spellings, returns 0/1, -1 when not a boolean. */
 int mtk_parse_bool(const char *v);
 
+/*
+ * TR-181 Alias of an instance (T7 S3), refparam being the leaf's full path
+ * (Device.Ethernet.Interface.1.Alias): what an ACS set, kept in
+ * cwmp.tr181_alias.<Ethernet_Interface_1>, else dflt -- the CPE's own value,
+ * "cpe-..." (TR-069 Alias rules).  A set takes 1..64 letters, digits, '_'
+ * and '-', a letter first, not "cpe-...", unique among the instances of the
+ * table; the value the instance has already is taken.
+ */
+char *mtk_alias181_get(const char *refparam, const char *dflt);
+int mtk_alias181_set(const char *refparam, const char *dflt, char *value, int action);
+
+/*
+ * A TR-181 leaf the standard makes writable but the product cannot change
+ * (a fixed reference, a constant, a property of the hardware): the value it
+ * reads now is taken (nothing to do), any other is 9007 -- the CPE refusing
+ * a value it does not support.  _BOOL compares as booleans ("1" = "true").
+ */
+#define MTK_SET_SAME(name, getter)						\
+static int set_same_##name(char *refparam, struct dmctx *ctx, void *data,	\
+			   char *instance, char *value, int action)		\
+{										\
+	char *cur = NULL;							\
+										\
+	if (getter(refparam, ctx, data, instance, &cur) != 0 || !cur ||		\
+	    strcmp(cur, value ? value : "") != 0)				\
+		return FAULT_9007;						\
+	return 0;								\
+}
+
+#define MTK_SET_SAME_BOOL(name, getter)						\
+static int set_same_##name(char *refparam, struct dmctx *ctx, void *data,	\
+			   char *instance, char *value, int action)		\
+{										\
+	char *cur = NULL;							\
+	int b = mtk_parse_bool(value);						\
+										\
+	if (b < 0 || getter(refparam, ctx, data, instance, &cur) != 0 || !cur ||	\
+	    mtk_parse_bool(cur) != b)						\
+		return FAULT_9007;						\
+	return 0;								\
+}
+
 #endif

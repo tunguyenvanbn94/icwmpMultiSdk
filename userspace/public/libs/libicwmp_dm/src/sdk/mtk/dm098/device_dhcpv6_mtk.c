@@ -372,12 +372,15 @@ DM_MODULE_REGISTER(device_dhcpv6_mtk_module);
  * IP.Interface follow the root (mtk_ipif_prefix()).  DUID is xsd:hexBinary
  * there (the DUID-LL is hex digits already): tD6Pool181Params is a copy of
  * tD6PoolParams, keep in step (T7 S2). */
+/* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
+MTK_SET_SAME(d6_duid, get_d6_duid)
+
 static DMLEAF tD6Pool181Params[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Enable", &DMWRITE, DMT_BOOL, get_d6_enable, set_d6_enable, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_d6_status, NULL, NULL, NULL},
 {"Interface", &DMWRITE, DMT_STRING, get_d6_interface, set_d6_interface, NULL, NULL},
-{"DUID", &DMREAD, DMT_HEXBIN, get_d6_duid, NULL, NULL, NULL},
+{"DUID", &DMWRITE, DMT_HEXBIN, get_d6_duid, set_same_d6_duid, NULL, NULL},
 {0}
 };
 

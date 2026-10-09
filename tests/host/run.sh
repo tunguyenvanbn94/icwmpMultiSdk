@@ -1852,7 +1852,7 @@ print(sum(1 for p in json.load(open(sys.argv[1]))["parameters"] if re.match(r"De
 	# DHCP; the pair is B, tr181.equiv below checks it is present on both sides)
 	w1=$(uci -q get network.if1.ip_int_instance)
 	expect "PPP IPv4Address AddressingType" "$(dm_value $I.$w1.IPv4Address.1.IPAddress) $(dm_value $I.$w1.IPv4Address.1.AddressingType)" "10.20.30.40 IPCP"
-	expect "IPoE Alias, LAN Alias empty" "$(dm_value $I.$w0.Alias)|$(dm_value $I.$lan.Alias)" "cpe-internet-tr069|"
+	expect "IP.Interface Alias (cpe-<network section>, T7 S3)" "$(dm_value $I.$w0.Alias)|$(dm_value $I.$lan.Alias)" "cpe-if0|cpe-lan"
 	expect "bridge has no IPv4Address" "$(dm_value $I.$w2.IPv4Address.1.IPAddress)" "<none>"
 	expect "DNS servers" "$(dm_value $D.1.DNSServer) $(dm_value $D.2.DNSServer) $(dm_value $D.4.DNSServer) $(dm_value Device.DNS.Client.ServerNumberOfEntries)" "8.8.4.4 9.9.9.9 1.0.0.1 3"
 	expect "DNS types" "$(dm_value $D.1.Type) $(dm_value $D.4.Type)" "DHCPv4 IPCP"
@@ -1939,6 +1939,19 @@ for x in json.load(open(sys.argv[1]))["parameters"]:
 		"<none> <none> <none> <none> <none> <none> <none> <none> <none>"
 	expect "placeholders gone (2)" "$(dm_value Device.CaptivePortal.Enable) $(dm_value Device.SelfTestDiagnostics.DiagnosticsState) $(dm_value Device.FAP.GPS.Latitude) $(dm_value Device.BulkData.Enable) $(dm_value Device.WiFi.AccessPoint.1.WPS.Enable) $(dm_value Device.DeviceInfo.X_AIS_DSL.SNR) $(dm_value Device.DeviceInfo.X_AIS_reuseCPE_status) $(dm_value Device.DeviceInfo.X_AIS.PonPassword)" \
 		"<none> <none> <none> <none> <none> <none> <none> <none>"
+	# T7 S3: Alias writable and kept (cwmp.tr181_alias), leaves the product
+	# cannot change take their current value only, Radio.Enable writes
+	E1=Device.Ethernet.Interface.1
+	expect "Ethernet Alias default, set, kept" "$(dm_value $E1.Alias) $(dm_set_fault $E1.Alias lan-port-1 "$key") $(dm_value $E1.Alias) $(uci -q get cwmp.tr181_alias.Ethernet_Interface_1)" "cpe-Ethernet-1 0 lan-port-1 lan-port-1"
+	expect "Alias of another port, cpe- prefix, bad syntax" "$(dm_set_fault Device.Ethernet.Interface.2.Alias lan-port-1 "$key") $(dm_set_fault Device.Ethernet.Interface.2.Alias cpe-x "$key") $(dm_set_fault Device.Ethernet.Interface.2.Alias 1abc "$key") $(dm_set_fault $E1.Alias lan-port-1 "$key")" "9007 9007 9007 0"
+	expect "IPv4Address Alias set" "$(dm_set_fault Device.IP.Interface.$lan.IPv4Address.1.Alias lan-v4 "$key") $(dm_value Device.IP.Interface.$lan.IPv4Address.1.Alias)" "0 lan-v4"
+	uci -q delete cwmp.tr181_alias
+	uci -q commit cwmp
+	nat1=$(dm_value Device.NAT.InterfaceSetting.1.Interface)
+	expect "set-same: Firewall.Config, NAT Interface, Radio band, IPv4Enable" "$(dm_set_fault Device.Firewall.Config High "$key") $(dm_set_fault Device.Firewall.Config Low "$key") $(dm_set_fault Device.NAT.InterfaceSetting.1.Interface "$nat1" "$key") $(dm_set_fault Device.NAT.InterfaceSetting.1.Interface Device.IP.Interface.1 "$key") $(dm_set_fault Device.WiFi.Radio.1.OperatingFrequencyBand 5GHz "$key") $(dm_set_fault Device.IP.IPv4Enable 1 "$key") $(dm_set_fault Device.IP.IPv4Enable false "$key")" \
+		"0 9007 0 9007 9007 0 9007"
+	expect "Radio 2 Enable false" "$(dm_set_fault Device.WiFi.Radio.2.Enable false "$key") $(uci -q get wireless.MT7993_1_2.disabled) $(dm_value Device.WiFi.Radio.2.Status)" "0 1 Down"
+	expect "Radio 2 Enable true" "$(dm_set_fault Device.WiFi.Radio.2.Enable true "$key") $(uci -q get wireless.MT7993_1_2.disabled)" "0 0"
 	# T7: Time.Client.1 for the NTPServer1..5 TR-181 2.19 deleted; Status from
 	# the file the ntp hotplug writes at ntpd's first stratum
 	T=Device.Time

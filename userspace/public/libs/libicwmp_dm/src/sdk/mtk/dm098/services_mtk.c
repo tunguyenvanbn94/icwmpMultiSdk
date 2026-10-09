@@ -980,15 +980,19 @@ DM_MODULE_REGISTER(services_mtk_module);
  * not in the TR-181 tree (T7). */
 /* TR-140 Capacity and UsedSpace are xsd:unsignedInt (MB); copies of
  * tLvParams and tSsChildObj, keep in step (T7 S2) */
+/* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
+MTK_SET_SAME(lv_capacity, get_lv_capacity)
+MTK_SET_SAME(lv_physref, get_lv_physref)
+
 static DMLEAF tLv181Params[] = {
 {"Enable", &DMWRITE, DMT_BOOL, get_lv_enable, set_lv_enable, NULL, NULL},
 {"Name", &DMWRITE, DMT_STRING, get_lv_name, set_lv_name, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_lv_status, NULL, NULL, NULL},
 {"FileSystem", &DMREAD, DMT_STRING, get_lv_fs, NULL, NULL, NULL},
-{"Capacity", &DMREAD, DMT_UNINT, get_lv_capacity, NULL, NULL, NULL},
+{"Capacity", &DMWRITE, DMT_UNINT, get_lv_capacity, set_same_lv_capacity, NULL, NULL},
 {"UsedSpace", &DMREAD, DMT_UNINT, get_lv_used, NULL, NULL, NULL},
 {"Encrypted", &DMREAD, DMT_BOOL, get_lv_encrypted, NULL, NULL, NULL},
-{"PhysicalReference", &DMREAD, DMT_STRING, get_lv_physref, NULL, NULL, NULL},
+{"PhysicalReference", &DMWRITE, DMT_STRING, get_lv_physref, set_same_lv_physref, NULL, NULL},
 {"FolderNumberOfEntries", &DMREAD, DMT_UNINT, get_lv_folders, NULL, NULL, NULL},
 {0}
 };

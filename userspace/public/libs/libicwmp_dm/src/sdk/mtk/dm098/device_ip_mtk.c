@@ -868,9 +868,25 @@ static int get_dip181_wan(void *data, const char *leaf, char **value)
 	return e ? wan181_get(e, leaf, value) : 0;
 }
 
+/* TR-181 Alias (T7 S3): what an ACS set (dmmtk.h mtk_alias181_*), else the
+ * CPE's own "cpe-<network section>", unique in the table -- the product's
+ * connection alias (cpe-internet, cpe-tr069 ... from service_type) can be
+ * the same on two connections, and the LAN had none */
 static int get_dip181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	return get_dip181_wan(data, "Alias", value);
+	char *dflt;
+
+	dmasprintf(&dflt, "cpe-%s", DIP_SEC(data));
+	*value = mtk_alias181_get(refparam, dflt);
+	return 0;
+}
+
+static int set_dip181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	char *dflt;
+
+	dmasprintf(&dflt, "cpe-%s", DIP_SEC(data));
+	return mtk_alias181_set(refparam, dflt, value, action);
 }
 
 static int get_dip181_mtu(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
@@ -914,16 +930,19 @@ static DMOBJ tDip181InterfaceChildObj[] = {
 {0}
 };
 
+/* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
+MTK_SET_SAME(dip181_lowerlayers, get_dip_lowerlayers)
+
 static DMLEAF tDip181InterfaceParams[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Name", &DMREAD, DMT_STRING, get_dip_name, NULL, NULL, NULL},
-{"Alias", &DMREAD, DMT_STRING, get_dip181_alias, NULL, NULL, NULL},
+{"Alias", &DMWRITE, DMT_STRING, get_dip181_alias, set_dip181_alias, NULL, NULL},
 {"Enable", &DMWRITE, DMT_BOOL, get_dip_enable, set_dip_enable, NULL, NULL},
 {"IPv4Enable", &DMWRITE, DMT_BOOL, get_dip_v4, set_dip_v4, NULL, NULL},
 {"IPv6Enable", &DMWRITE, DMT_BOOL, get_dip_v6, set_dip_v6, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_dip_status, NULL, NULL, NULL},
 {"LastChange", &DMREAD, DMT_UNINT, get_dip_lastchange, NULL, NULL, NULL},
-{"LowerLayers", &DMREAD, DMT_STRING, get_dip_lowerlayers, NULL, NULL, NULL},
+{"LowerLayers", &DMWRITE, DMT_STRING, get_dip_lowerlayers, set_same_dip181_lowerlayers, NULL, NULL},
 {"MaxMTUSize", &DMWRITE, DMT_UNINT, get_dip181_mtu, set_dip181_mtu, NULL, NULL},
 {"IPv4AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip_v4_count, NULL, NULL, NULL},
 {"IPv6AddressNumberOfEntries", &DMREAD, DMT_UNINT, get_dip_v6_count, NULL, NULL, NULL},
@@ -937,8 +956,23 @@ static DMOBJ tDip181Obj[] = {
 {0}
 };
 
+/* TR-181 IP.IPv4Enable is readWrite: IPv4 is always on here, true is taken,
+ * false is 9007 (T7 S3); a copy of tDipParams, keep in step */
+MTK_SET_SAME_BOOL(ipv4_enable, get_dip_true)
+
+static DMLEAF tDip181Params[] = {
+{"InterfaceNumberOfEntries", &DMREAD, DMT_UNINT, get_dip_count, NULL, NULL, NULL},
+{"IPv4Capable", &DMREAD, DMT_BOOL, get_dip_true, NULL, NULL, NULL},
+{"IPv4Enable", &DMWRITE, DMT_BOOL, get_dip_true, set_same_ipv4_enable, NULL, NULL},
+{"IPv4Status", &DMREAD, DMT_STRING, get_dip_enabled, NULL, NULL, NULL},
+{"IPv6Capable", &DMREAD, DMT_BOOL, get_dip_v6_capable, NULL, NULL, NULL},
+{"IPv6Enable", &DMWRITE, DMT_BOOL, get_dip_v6_enable, set_dip_v6_enable, NULL, NULL},
+{"IPv6Status", &DMREAD, DMT_STRING, get_dip_v6_status, NULL, NULL, NULL},
+{0}
+};
+
 static DMOBJ tDeviceIp181Obj[] = {
-{"IP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDip181Obj, tDipParams, NULL},
+{"IP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tDip181Obj, tDip181Params, NULL},
 {0}
 };
 

@@ -1018,6 +1018,22 @@ static int get_radio181_supported(char *refparam, struct dmctx *ctx, void *data,
 	return 0;
 }
 
+/* TR-181 Radio.Enable is readWrite: wireless.<radio>.disabled, what Enable
+ * and Status read, then the wireless reload of the other setters (T7 S3) */
+static int set_radio181_enable(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	int b = mtk_parse_bool(value);
+	char *radio = radio_section(data);
+
+	if (b < 0 || !radio || !*radio)
+		return FAULT_9007;
+	if (action == VALUECHECK)
+		return 0;
+	dmuci_set_value("wireless", radio, "disabled", b ? "0" : "1");
+	wlan_reload();
+	return 0;
+}
+
 /* TR-181 Channel is the channel in use: with automatic selection on
  * (wireless.<radio>.channel 0) that is ChannelsInUse, not the 0 the
  * product's WLANConfiguration.Channel reads */
@@ -1118,12 +1134,17 @@ static int browseWlan181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *pre
 	return 0;
 }
 
+/* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
+MTK_SET_SAME(radio181_band, get_radio181_band)
+MTK_SET_SAME(radio181_basic_rates, get_transmit_rates)
+MTK_SET_SAME(radio181_op_rates, get_transmit_rates)
+
 static DMLEAF tRadio181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
-{"Enable", &DMREAD, DMT_BOOL, get_radio181_enable, NULL, NULL, NULL},
+{"Enable", &DMWRITE, DMT_BOOL, get_radio181_enable, set_radio181_enable, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_radio181_status, NULL, NULL, NULL},
 {"Name", &DMREAD, DMT_STRING, get_radio181_name, NULL, NULL, NULL},
-{"OperatingFrequencyBand", &DMREAD, DMT_STRING, get_radio181_band, NULL, NULL, NULL},
+{"OperatingFrequencyBand", &DMWRITE, DMT_STRING, get_radio181_band, set_same_radio181_band, NULL, NULL},
 {"SupportedStandards", &DMREAD, DMT_STRING, get_radio181_supported, NULL, NULL, NULL},
 {"OperatingStandards", &DMWRITE, DMT_STRING, get_wlan_standard, set_wlan_standard, NULL, NULL},
 {"PossibleChannels", &DMREAD, DMT_STRING, get_possible_channels, NULL, NULL, NULL},
@@ -1133,8 +1154,8 @@ static DMLEAF tRadio181Param[] = {
 {"TransmitPowerSupported", &DMREAD, DMT_STRING, get_power_supported, NULL, NULL, NULL},
 {"TransmitPower", &DMWRITE, DMT_INT, get_transmit_power, set_transmit_power, NULL, NULL},
 {"RegulatoryDomain", &DMWRITE, DMT_STRING, get_regulatory_domain, set_regulatory_domain, NULL, NULL},
-{"BasicDataTransmitRates", &DMREAD, DMT_STRING, get_transmit_rates, NULL, NULL, NULL},
-{"OperationalDataTransmitRates", &DMREAD, DMT_STRING, get_transmit_rates, NULL, NULL, NULL},
+{"BasicDataTransmitRates", &DMWRITE, DMT_STRING, get_transmit_rates, set_same_radio181_basic_rates, NULL, NULL},
+{"OperationalDataTransmitRates", &DMWRITE, DMT_STRING, get_transmit_rates, set_same_radio181_op_rates, NULL, NULL},
 {0}
 };
 
@@ -1154,11 +1175,14 @@ static DMOBJ tSsid181Obj[] = {
 {0}
 };
 
+/* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
+MTK_SET_SAME(ssid181_lowerlayers, get_ssid181_lowerlayers)
+
 static DMLEAF tSsid181Param[] = {
 {"Enable", &DMWRITE, DMT_BOOL, get_wlan_enable, set_wlan_enable, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_ssid181_status, NULL, NULL, NULL},
 {"Name", &DMREAD, DMT_STRING, get_ssid181_name, NULL, NULL, NULL},
-{"LowerLayers", &DMREAD, DMT_STRING, get_ssid181_lowerlayers, NULL, NULL, NULL},
+{"LowerLayers", &DMWRITE, DMT_STRING, get_ssid181_lowerlayers, set_same_ssid181_lowerlayers, NULL, NULL},
 {"BSSID", &DMREAD, DMT_STRING, get_bssid, NULL, NULL, NULL},
 {"MACAddress", &DMREAD, DMT_STRING, get_bssid, NULL, NULL, NULL},
 {"SSID", &DMWRITE, DMT_STRING, get_ssid, set_ssid, NULL, NULL},
@@ -1171,9 +1195,12 @@ static DMLEAF tSsid181Param[] = {
  * are constants (a fixed PIN among them) and writes are dropped, which the
  * standard does not allow; it comes back with a real WPS control. */
 
+/* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
+MTK_SET_SAME(ap181_ssidref, get_ap181_ssidref)
+
 static DMLEAF tAp181Param[] = {
 {"Enable", &DMWRITE, DMT_BOOL, get_radio_enabled, set_radio_enabled, NULL, NULL},
-{"SSIDReference", &DMREAD, DMT_STRING, get_ap181_ssidref, NULL, NULL, NULL},
+{"SSIDReference", &DMWRITE, DMT_STRING, get_ap181_ssidref, set_same_ap181_ssidref, NULL, NULL},
 {"SSIDAdvertisementEnabled", &DMWRITE, DMT_BOOL, get_ssid_advertisement, set_ssid_advertisement, NULL, NULL},
 {"WMMEnable", &DMWRITE, DMT_BOOL, get_false, set_accept_and_drop, NULL, NULL},
 {"UAPSDEnable", &DMWRITE, DMT_BOOL, get_false, set_accept_and_drop, NULL, NULL},

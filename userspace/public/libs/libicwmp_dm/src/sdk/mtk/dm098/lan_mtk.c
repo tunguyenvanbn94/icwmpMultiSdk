@@ -782,13 +782,28 @@ static int browseLanIpv4Inst(struct dmctx *dmctx, DMNODE *parent_node, void *pre
 	return 0;
 }
 
+/* TR-181 Alias (T7 S3): what an ACS set (dmmtk.h mtk_alias181_*), else the
+ * CPE's own: the LAN's cpe-ipif1 as before, cpe-ipv4-<n> on a connection
+ * (it had none); writes used to be dropped */
+static char *ipv4_alias181_default(void *data, char *instance)
+{
+	char *d;
+
+	if (!data)
+		return "cpe-ipif1";
+	dmasprintf(&d, "cpe-ipv4-%s", instance);
+	return d;
+}
+
 static int get_ipv4_alias181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	if (data) {
-		*value = "";
-		return 0;
-	}
-	return get_ipif_alias(refparam, ctx, data, instance, value);
+	*value = mtk_alias181_get(refparam, ipv4_alias181_default(data, instance));
+	return 0;
+}
+
+static int set_ipv4_alias181(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	return mtk_alias181_set(refparam, ipv4_alias181_default(data, instance), value, action);
 }
 
 static int get_ipv4_ipaddr181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
@@ -835,7 +850,7 @@ static int get_ipv4_addressing181(char *refparam, struct dmctx *ctx, void *data,
 static DMLEAF tLanIpv4181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Enable", &DMWRITE, DMT_BOOL, get_ipv4_enable181, set_accept_and_drop, NULL, NULL},
-{"Alias", &DMWRITE, DMT_STRING, get_ipv4_alias181, set_accept_and_drop, NULL, NULL},
+{"Alias", &DMWRITE, DMT_STRING, get_ipv4_alias181, set_ipv4_alias181, NULL, NULL},
 {"IPAddress", &DMWRITE, DMT_STRING, get_ipv4_ipaddr181, set_ipv4_ipaddr181, NULL, NULL},
 {"SubnetMask", &DMWRITE, DMT_STRING, get_ipv4_mask181, set_ipv4_mask181, NULL, NULL},
 {"AddressingType", &DMREAD, DMT_STRING, get_ipv4_addressing181, NULL, NULL, NULL},
@@ -854,9 +869,12 @@ static DMOBJ tLanIp181Obj[] = {
 {0}
 };
 
+/* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
+MTK_SET_SAME(pool_interface181, get_pool_interface181)
+
 static DMLEAF tDhcp4Pool181Param[] = {
 {"Enable", &DMWRITE, DMT_BOOL, get_dhcp_enable, set_dhcp_enable, NULL, NULL},
-{"Interface", &DMREAD, DMT_STRING, get_pool_interface181, NULL, NULL, NULL},
+{"Interface", &DMWRITE, DMT_STRING, get_pool_interface181, set_same_pool_interface181, NULL, NULL},
 {"MinAddress", &DMWRITE, DMT_STRING, get_min_address, set_min_address, NULL, NULL},
 {"MaxAddress", &DMWRITE, DMT_STRING, get_max_address, set_max_address, NULL, NULL},
 {"ReservedAddresses", &DMWRITE, DMT_STRING, get_empty_string, set_accept_and_drop, NULL, NULL},

@@ -657,8 +657,28 @@ static DMOBJ tEth181InstObj[] = {
 {0}
 };
 
+/* TR-181 Alias (T7 S3): what an ACS set (dmmtk.h mtk_alias181_*), else the
+ * CPE's own "cpe-Ethernet-<n>" (the product's TR-098 value is Ethernet-<n>,
+ * without the cpe- prefix TR-069 wants for a CPE-assigned alias) */
+static int get_eth181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *dflt;
+
+	dmasprintf(&dflt, "cpe-Ethernet-%s", instance);
+	*value = mtk_alias181_get(refparam, dflt);
+	return 0;
+}
+
+static int set_eth181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	char *dflt;
+
+	dmasprintf(&dflt, "cpe-Ethernet-%s", instance);
+	return mtk_alias181_set(refparam, dflt, value, action);
+}
+
 static DMLEAF tEth181InstParam[] = {
-{"Alias", &DMREAD, DMT_STRING, get_eth_alias, NULL, NULL, NULL},
+{"Alias", &DMWRITE, DMT_STRING, get_eth181_alias, set_eth181_alias, NULL, NULL},
 {"Enable", &DMWRITE, DMT_BOOL, get_eth181_enable, set_eth181_enable, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_eth_status181, NULL, NULL, NULL},
 {"Name", &DMREAD, DMT_STRING, get_eth181_name, NULL, NULL, NULL},

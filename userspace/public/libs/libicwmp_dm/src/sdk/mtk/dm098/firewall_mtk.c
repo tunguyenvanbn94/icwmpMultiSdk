@@ -1446,8 +1446,20 @@ static DMOBJ tFirewall181Obj[] = {
 {0}
 };
 
+/* TR-181 Config and Enable are readWrite: the product's firewall level and
+ * state are fixed, the values they read are taken, others are 9007 (T7 S3);
+ * a copy of tFirewallParams, keep in step */
+MTK_SET_SAME(fw_config, get_fw_config)
+MTK_SET_SAME_BOOL(fw_enable, get_fw_enable)
+
+static DMLEAF tFirewall181Params[] = {
+{"Config", &DMWRITE, DMT_STRING, get_fw_config, set_same_fw_config, NULL, NULL},
+{"Enable", &DMWRITE, DMT_BOOL, get_fw_enable, set_same_fw_enable, NULL, NULL},
+{0}
+};
+
 static DMOBJ tFirewall181Root[] = {
-{"Firewall", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tFirewall181Obj, tFirewallParams, NULL},
+{"Firewall", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tFirewall181Obj, tFirewall181Params, NULL},
 {0}
 };
 

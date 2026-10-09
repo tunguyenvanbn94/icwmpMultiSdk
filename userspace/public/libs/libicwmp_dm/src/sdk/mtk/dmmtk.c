@@ -652,3 +652,85 @@ const char *mtk_ipif_prefix(void)
 {
 	return strcmp(dmroot, "Device") == 0 ? "Device.IP.Interface." : "InternetGatewayDevice.Device.IP.Interface.";
 }
+
+/* ------------------------------------------------------------------ */
+/* TR-181 Alias (docs/plan/tr181_mtk_design.md T7 S3)                  */
+/* ------------------------------------------------------------------ */
+
+#define ALIAS181_PKG	"cwmp"
+#define ALIAS181_SEC	"tr181_alias"
+
+/* "Device.IP.Interface.3.IPv4Address.1.Alias" -> key
+ * "IP_Interface_3_IPv4Address_1", table length: the key without its last
+ * instance number ("IP_Interface_3_IPv4Address_") */
+static int alias181_key(const char *refparam, char *key, size_t len, size_t *table_len)
+{
+	const char *p = refparam ? strchr(refparam, '.') : NULL;
+	const char *end = refparam ? strrchr(refparam, '.') : NULL;
+	size_t n = 0;
+
+	if (!p || !end || end <= p)
+		return -1;
+	for (p++; p < end && n < len - 1; p++)
+		key[n++] = (*p == '.') ? '_' : *p;
+	key[n] = '\0';
+	*table_len = n;
+	while (*table_len > 0 && isdigit((unsigned char)key[*table_len - 1]))
+		(*table_len)--;
+	return (*table_len > 0 && *table_len < n) ? 0 : -1;
+}
+
+char *mtk_alias181_get(const char *refparam, const char *dflt)
+{
+	char key[128];
+	size_t tl;
+	char *v;
+
+	if (alias181_key(refparam, key, sizeof(key), &tl) == 0) {
+		v = mtk_uci(ALIAS181_PKG, ALIAS181_SEC, key);
+		if (v && *v)
+			return v;
+	}
+	return (char *)dflt;
+}
+
+int mtk_alias181_set(const char *refparam, const char *dflt, char *value, int action)
+{
+	struct uci_ptr ptr = {0};
+	struct uci_element *e;
+	char key[128];
+	size_t tl, i, len = value ? strlen(value) : 0;
+
+	if (alias181_key(refparam, key, sizeof(key), &tl) != 0)
+		return FAULT_9002;
+	/* the value it has: nothing to do */
+	if (strcmp(mtk_alias181_get(refparam, dflt), value ? value : "") == 0)
+		return 0;
+	/* 1..64 characters, a letter first, letters, digits, '_' and '-';
+	 * "cpe-" is the CPE's own prefix (the defaults), not taken from an ACS
+	 * so that a default and a set value never collide */
+	if (len < 1 || len > 64 || !isalpha((unsigned char)value[0]) || strncmp(value, "cpe-", 4) == 0)
+		return FAULT_9007;
+	for (i = 0; i < len; i++) {
+		if (!isalnum((unsigned char)value[i]) && value[i] != '_' && value[i] != '-')
+			return FAULT_9007;
+	}
+	/* unique in the table: no other instance holds it */
+	if (dmuci_lookup_ptr(uci_ctx, &ptr, ALIAS181_PKG, ALIAS181_SEC, NULL, NULL) == 0 && ptr.s) {
+		uci_foreach_element(&ptr.s->options, e) {
+			struct uci_option *o = uci_to_option(e);
+			const char *inst = e->name + tl;
+
+			if (strcmp(e->name, key) == 0 || strncmp(e->name, key, tl) != 0 ||
+			    !*inst || strspn(inst, "0123456789") != strlen(inst))
+				continue;
+			if (o->type == UCI_TYPE_STRING && strcmp(o->v.string, value) == 0)
+				return FAULT_9007;
+		}
+	}
+	if (action == VALUECHECK)
+		return 0;
+	dmuci_set_value(ALIAS181_PKG, ALIAS181_SEC, NULL, "alias");
+	dmuci_set_value(ALIAS181_PKG, ALIAS181_SEC, key, value);
+	return 0;
+}

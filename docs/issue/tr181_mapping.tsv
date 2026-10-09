@@ -135,6 +135,7 @@ leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.{i}
 leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.{i}.IPInterfaceAddressingType	Device.IP.Interface.{lan}.IPv4Address.{i2}.AddressingType	A	TR-181 leaf name
 leaf	InternetGatewayDevice.LANDevice.{i}.LANHostConfigManagement.IPInterface.{i}.Enable	Device.IP.Interface.{lan}.IPv4Address.{i2}.Enable	B	TR-098 answers a "false" placeholder, TR-181 true (the LAN address is always on)
 prefix	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.	Device.Ethernet.Interface.	A	laneth_mtk.c, the same four ports in the same order
+leaf	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.Alias	Device.Ethernet.Interface.{i2}.Alias	B	T7 S3: TR-181 Alias is writable and kept (cwmp.tr181_alias); the CPE's own value is cpe-Ethernet-<n> (TR-069 cpe- prefix), the product's Ethernet-<n>
 leaf	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.Status	Device.Ethernet.Interface.{i2}.Status	B	TR-181 enumeration: NoLink/Disable -> Down
 leaf	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.MaxBitRate	Device.Ethernet.Interface.{i2}.MaxBitRate	B	TR-181 int, -1 = Auto
 leaf	InternetGatewayDevice.LANDevice.{i}.LANEthernetInterfaceConfig.{i}.MACAddressControlEnabled	-	D	TR-098 only
@@ -192,7 +193,7 @@ leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnectio
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_LanInterface	Device.IP.Interface.{wanif:i3}.X_AIS_LanInterface	B	TR-181 paths in the list (Device.Ethernet.Interface.n, Device.WiFi.SSID.n), same numbers
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_ServiceList	Device.IP.Interface.{wanif:i3}.X_AIS_ServiceList	C	servicelist_mtk.c, same getter/setter
 prefix	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.X_AIS_IPv6	Device.IP.Interface.{wanif:i3}.X_AIS_IPv6	C	wanipv6_mtk.c: the flat X_AIS_IPv6* leaves and the X_AIS_IPv6 subtree, same names
-leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Alias	Device.IP.Interface.{wanif:i3}.Alias	A	wanip_mtk.c through device_ip_mtk.c (wan181_get): the IP.Interface of the connection's network section
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Alias	Device.IP.Interface.{wanif:i3}.Alias	B	T7 S3: TR-181 Alias is writable and kept (cwmp.tr181_alias); the CPE's own value is cpe-<network section>, unique in the table (the product's service alias may repeat)
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Uptime	Device.IP.Interface.{wanif:i3}.LastChange	A	the same netifd uptime of if<id>
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.MaxMTUSize	Device.IP.Interface.{wanif:i3}.MaxMTUSize	A	the connection's getter/setter
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.ExternalIPAddress	Device.IP.Interface.{wanif:i3}.IPv4Address.1.IPAddress	A	lan_mtk.c IPv4Address.1 (wan181_get/set); a bridge has none
@@ -217,7 +218,7 @@ leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.EthernetDiscardPacketsSent	Device.IP.Interface.{wanif:i3}.Stats.DiscardPacketsSent	A	IP.Interface counters of the network section (the TR-098 getter reads the netdev's sysfs; PPP: the ppp netdev)
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.EthernetDiscardPacketsReceived	Device.IP.Interface.{wanif:i3}.Stats.DiscardPacketsReceived	A	IP.Interface counters of the network section (the TR-098 getter reads the netdev's sysfs; PPP: the ppp netdev)
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANIPConnection.{i}.Stats.EthernetUnknownProtoPacketsReceived	Device.IP.Interface.{wanif:i3}.Stats.UnknownProtoPacketsReceived	A	IP.Interface counters of the network section (the TR-098 getter reads the netdev's sysfs; PPP: the ppp netdev)
-leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Alias	Device.IP.Interface.{wanif:i3}.Alias	A	wanip_mtk.c through device_ip_mtk.c (wan181_get): the IP.Interface of the connection's network section
+leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Alias	Device.IP.Interface.{wanif:i3}.Alias	B	T7 S3: TR-181 Alias is writable and kept (cwmp.tr181_alias); the CPE's own value is cpe-<network section>, unique in the table (the product's service alias may repeat)
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.Uptime	Device.IP.Interface.{wanif:i3}.LastChange	A	the same netifd uptime of if<id>
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.MaxMTUSize	Device.IP.Interface.{wanif:i3}.MaxMTUSize	A	the connection's getter/setter
 leaf	InternetGatewayDevice.WANDevice.{i}.WANConnectionDevice.{i}.WANPPPConnection.{i}.ExternalIPAddress	Device.IP.Interface.{wanif:i3}.IPv4Address.1.IPAddress	A	lan_mtk.c IPv4Address.1 (wan181_get/set); a bridge has none
@@ -372,3 +373,5 @@ new	-	Device.Time.Client.{i}.Mode	A	time_mtk.c, sysntpd as Time.Client.1 (T7)
 new	-	Device.Time.Client.{i}.Port	A	time_mtk.c, sysntpd as Time.Client.1 (T7)
 new	-	Device.Time.Client.{i}.Version	A	time_mtk.c, sysntpd as Time.Client.1 (T7)
 new	-	Device.Time.Client.{i}.Interface	A	time_mtk.c, sysntpd as Time.Client.1 (T7)
+new	-	Device.IP.Interface.{i}.Alias	A	T7 S3: the Alias of an interface no connection carries (the LAN: cpe-lan), kept in cwmp.tr181_alias
+new	-	Device.IP.Interface.{i}.IPv4Address.{i}.Alias	A	T7 S3: the Alias of a connection's address (cpe-ipv4-<n>), kept in cwmp.tr181_alias
