@@ -33,6 +33,7 @@ flowchart LR
 |---|---|---|
 | 08/10 | user (chatlog 89) | TR-098 bản giao là đủ khi phần tham số/xử lý là C. Chẩn đoán và script hành động giữ shell. Làm TR-181 trên branch mới `dev_181` |
 | 08/10 | user (chatlog 90) | Phạm vi: **trước hết TR-181 tương đương TR-098** (783 tham số). Sau đó tham khảo TR-181 của BDK (`projects/brcm_ap_wifi7_mvn/src/bcm963xx`, issue 20260914, 20260916) và **chỉ thêm tham số cần và được dùng**, không làm tất cả |
+| 09/10 | user (chatlog 97) | `LowerLayers` và các tham số TR-181 **làm đúng chuẩn**. Tham số đến từ TR-098 mà không dùng hoặc không đúng chuẩn thì **bỏ khỏi cây TR-181, hoặc thay bằng tham số chuẩn tương đương**. Chưa có dữ liệu nhà mạng: làm một bản hỗ trợ theo chuẩn, cập nhật theo yêu cầu thực tế sau. Tạo kết nối IPoE qua TR-181: để sau |
 
 ## Nguyên tắc
 
@@ -42,9 +43,10 @@ flowchart LR
    của TR-181 là chuỗi POSIX). `sdk/mtk/dm181/` chỉ chứa gốc `Device.` (`root181_mtk.c`).
 2. **Chọn model lúc chạy** bằng `cwmp.cpe.datamodel` (`tr098` mặc định, `tr181`), giống BDK. Mỗi lúc chỉ một model.
    Build không có module TR-181 thì giữ TR-098 và ghi lỗi vào log, không im lặng.
-3. **Tên và kiểu theo chuẩn.** Kiểm bằng `docs/issue/tr181-schema.py` (tên BBF trong XML của BDK, đọc lúc chạy, không
-   chép vào repo). Tên chuẩn mà bảng tra thiếu (`Users.User`, `FaultMgmt`, `SelfTestDiagnostics`,
-   `Services.StorageService`) kiểm tay theo BBF và ghi lại.
+3. **Tên, kiểu, quyền ghi theo chuẩn BBF.** Từ 09/10, nguồn chuẩn là XML của Broadband Forum (TR-181 2.19.1,
+   TR-135 1.4.1 STBService, TR-140 1.3.1 StorageService), đọc lúc chạy, không chép vào repo. Kiểm bằng
+   `docs/issue/tr181-bbf-check.py <bbf-dir> <gpn.json> <gpv.json>`: tên không chuẩn, quyền ghi lệch, tên đã bị
+   xoá/lỗi thời, kiểu lệch. `tr181-schema.py` (bảng tra BDK) chỉ còn để đối chiếu BDK.
 4. **Bằng chứng tương đương.** Mỗi cặp TR-098 ↔ TR-181 trong bảng ánh xạ phải đọc ra cùng giá trị trên cùng board,
    vì chúng đi qua cùng một getter. Test board mới: dump cả hai model, so từng cặp.
 5. **Extension của nhà mạng.** `X_AIS_*` giữ nguyên tên lá, đặt dưới `Device.` ở vị trí tương ứng.
@@ -170,6 +172,7 @@ phase WAN). DeviceId (OUI, ProductClass, SerialNumber, Manufacturer) không đ�
 | `docs/issue/tr181-map.py equiv <tr098.json> <tr181.json>` | giá trị từng cặp trên hai bản dump thật (host `run.sh tr181`, board sau) |
 | `docs/issue/tr181-schema.py <bcm963xx>/data-model --check <file>` | tên có trong TR-181 chuẩn (bảng tra BDK); tên BBF mà XML Broadcom không có thì xét tay |
 | `docs/issue/verify-dm-paths.py --model tr181 --dump` | cây TR-181 build khai báo |
+| `docs/issue/tr181-bbf-check.py <bbf-dir> <gpn.json> <gpv.json>` | đối chiếu dump TR-181 với XML BBF (TR-181 2.19.1, TR-135, TR-140, đọc lúc chạy): tên không chuẩn, quyền ghi, kiểu, tên đã xoá |
 | `tests/board/tr181_window.sh` (chạy trên board) | dump TR-098 rồi TR-181 của cùng board, ACS bị chặn suốt lúc ở `tr181`, trả model và trạng thái agent trước khi mở ACS (T6) |
 
 Số phủ sau T5 (hết phần tương đương TR-098): nguồn TR-098 (ma trận + tên chỉ có ở C, 800 tên) theo loại: A 458, B 34, C 218,
@@ -191,6 +194,22 @@ của section `network.if<id>` (bridge: `if_wanbr<id>`), đánh số bằng `ip_
 | `X_AIS_*` (VLAN, IPMode, DefaultRoute, LanInterface, ServiceList, `X_AIS_IPv6.*`) | `IP.Interface.{n}.X_AIS_*`, cùng tên lá (nguyên tắc 5) | rỗng ở instance không phải WAN |
 | `PortMapping.{j}` | `NAT.PortMapping.{k}` (+`Interface`) | T4d |
 | `Name` (tên hiển thị của sản phẩm), `Uptime`, `PossibleConnectionTypes`, `ConnectionType` | D, hoặc `X_AIS_` nếu ACS cần | TR-181 không có tương ứng trực tiếp |
+
+## T7: chuẩn hoá theo TR-181 2.19 (09/10, user chốt ở chatlog 97)
+
+Kiểm kê ban đầu (`tr181-bbf-check.py` trên dump host tại `tr181-0012`): 597 tham số, 374 chuẩn, 190 vendor (`X_<id>_`),
+**33 không chuẩn**; trong số tên chuẩn: quyền ghi lệch 24, kiểu lệch 49, **10 tên đã bị xoá khỏi 2.19**.
+
+| Bước | Nội dung | Xong khi |
+|---|---|---|
+| S1 tên — **xong** (`tr181-0013`, analysis §79) | Bỏ khỏi cây TR-181: `WiFi.X-AIS_*TransmitPower` (tên sai dạng, đã có `Radio.TransmitPower`), `DNSDiagnostics` (object không tiền tố, đã có `DNS.Diagnostics.NSLookupDiagnostics`), `LTE` và `XMPP` (giữ chỗ: sản phẩm không có modem LTE, không có XMPP client, giá trị cố định, ghi không có tác dụng), các lá `Hosts.Host` đã bị xoá. Đổi sang dạng chuẩn: `DeviceInfo.X_AIS.PonPassword` → `XPON.ONU.1.ANI.1.TC.Authentication.Password`, `PonPasswordState` → `…TC.ONUActivation.ONUState`; `Time.NTPServer1..5` → `Time.Client.1` (`Servers`); `UserInterface.CarrierLocking` → `UserInterface.X_AIS_CarrierLocking`; `Account.Web.SessionMaxTime` → lá vendor dưới `UserInterface.X_AIS_WebUserInfo`; `STBService.ServiceMonitoring.Enable/ServiceType` → tên TR-135 | `tr181-bbf-check` unknown 0, status 0 |
+| S2 kiểu | Bảng TR-181 riêng với kiểu chuẩn: bộ đếm `unsignedLong`, mốc thời gian `dateTime`, `TransmitPower` `int`, khoá `hexBinary`… (bảng TR-098 không đổi) | type 0, hoặc lệch có lý do ghi trong bảng ánh xạ |
+| S3 quyền ghi | Lá chuẩn `readWrite` thì ghi được (`Alias`, `Enable`…): giá trị sản phẩm không hỗ trợ trả 9007 thay vì từ chối cả lá | access 0 |
+| S4 tầng interface | `Ethernet.Link` (LAN `br-lan`, link WAN trên `pon`/cổng Ethernet WAN), `Ethernet.VLANTermination` (mỗi kết nối có VLAN), `Bridging.Bridge` (LAN, port quản lý + cổng Ethernet + SSID), `LowerLayers` là tham chiếu và ghi được (đặt VLAN qua `VLANTermination.VLANID`), `InterfaceStack` sinh từ `LowerLayers`; `PPP.` gốc; lá `NumberOfEntries` của mọi bảng | stack đọc ra đúng trên board, `InterfaceStack` khớp |
+| S5 profile | Lá bắt buộc của các profile khai báo (Baseline...) | danh sách thiếu = 0 |
+
+Để sau: tạo kết nối IPoE qua TR-181 (user, chatlog 97). Nếu ACS nhà mạng cần lại object đã bỏ (ví dụ XMPP giữ chỗ),
+thêm lại theo yêu cầu thực tế.
 
 ## Quy ước trên `dev_181`
 

@@ -5039,3 +5039,73 @@ cũng không có, giữ nguyên). 9 bảng chuẩn:
 
 Engine không có hàm đếm chung, nên mỗi lá phải đếm đúng như browse của bảng đó. ACS lab không dùng các lá này. Đưa vào
 danh sách T7 để chốt, chưa làm.
+
+## 79. T7 chuẩn hoá S1: tên theo TR-181 2.19 (`tr181-0013`) (09/10 09:20–09:45)
+
+User (chatlog 97): `LowerLayers` và tham số TR-181 làm đúng chuẩn; tham số đến từ TR-098 mà không dùng hoặc không đúng
+chuẩn thì bỏ khỏi cây TR-181 hoặc thay bằng tham số chuẩn tương đương; chưa có dữ liệu nhà mạng nên làm một bản hỗ trợ theo
+chuẩn. Kế hoạch S1–S5: `docs/plan/tr181_mtk_design.md` mục "T7: chuẩn hoá theo TR-181 2.19".
+
+**Chuẩn để đối chiếu.** Bảng tra BDK (`tr181-schema.py`) không đủ: nó thiếu tên mới của TR-181 (`ManagementServer.HTTPCompression*`,
+`DynamicDNS.*NumberOfEntries`, `XMPP.Connection.{i}.ServerConnectAttempts`) và các service object (`STBService` TR-135,
+`StorageService` TR-140). Nay dùng XML CWMP "full" của Broadband Forum (TR-181 2.19.1, TR-135 1.4.1, TR-140 1.3.1), đọc
+lúc chạy, không chép vào repo. Công cụ mới `docs/issue/tr181-bbf-check.py <bbf-dir> <gpn.json> <gpv.json>`:
+- chia từng tham số thành chuẩn / vendor / không chuẩn. Đoạn path đầu tiên chuẩn không có phải có dạng `X_<id>_…`
+  (bảng `X.{i}.` tính là đã biết `X.`);
+- với tên chuẩn: quyền ghi lệch, kiểu lệch, trạng thái deprecated/obsoleted/deleted;
+- exit 1 khi còn tên không chuẩn, quyền ghi lệch, hoặc tên đã obsoleted/deleted.
+
+Kiểm kê trên dump host tại `tr181-0012`: 597 tham số, 374 chuẩn, 190 vendor, **33 không chuẩn**, quyền ghi lệch 24, kiểu lệch
+49, **10 tên đã bị xoá khỏi 2.19** (`Time.NTPServer1..5`, `Hosts.Host.{i}.AddressSource/ClientID/LeaseTimeRemaining/
+UserClassID/VendorClassID`).
+
+**Bỏ khỏi cây TR-181 (không dùng: object giữ chỗ của sản phẩm, giá trị cố định, ghi không có tác dụng):**
+
+| Object | Vì sao | Chuẩn thay thế (nếu có) |
+|---|---|---|
+| `XMPP`, `LTE` | không có XMPP client, không có modem LTE (`xmpp_mtk.c`); `SupportedConnReqMethods` ở TR-181 nay là `HTTP,STUN`, `ConnReqXMPPConnection` bỏ | — |
+| `Services.STBService` | không có set-top box, hằng số | — (`StorageService` giữ: dữ liệu thật) |
+| `SelfTestDiagnostics`, `FaultMgmt`, `BulkData`, `SoftwareModules`, `USB.USBHosts`, `CaptivePortal`, `FAP`, `Users.User`, `WiFi.NeighboringWiFiDiagnostic` | hằng số, bảng rỗng, ghi không lưu, chẩn đoán không chạy (`root_hidden_mtk.c`) | — |
+| `WiFi.AccessPoint.{i}.WPS` | hằng số, PIN cố định, ghi bị bỏ | — |
+| `DeviceInfo.X_AIS_DSL`, `X_AIS_reuseCPE_cycles/_status` | hằng số (không có DSL), luôn rỗng | — |
+| `DNSDiagnostics` | object không tiền tố vendor | `DNS.Diagnostics.NSLookupDiagnostics` |
+| `WiFi.X-AIS_2-4GHzTransmitPower`, `X-AIS_5GHzTransmitPower` | `X-AIS_` không phải tiền tố vendor (TR-106 đòi `X_<id>_`) | `WiFi.Radio.{i}.TransmitPower` (cùng `wireless.<radio>.txpower`, tính theo phần trăm) |
+| `Hosts.Host.{i}.AddressSource`, `ClientID`, `LeaseTimeRemaining`, `UserClassID`, `VendorClassID` | đã xoá trong 2.19 | `DHCPv4.Server.Pool.{i}.Client` (chưa làm) |
+
+**Đổi sang dạng chuẩn hoặc vendor hợp lệ (cùng getter/setter):**
+- `DeviceInfo.X_AIS.PonPassword` (object tên `X_AIS`, không phải `X_<id>_<tên>`) → `XPON.ONU.1.ANI.1.TC.Authentication.Password`.
+  `PonPasswordState` (0 khi ONU ở O5, 2 khi khác) → chính trạng thái ONU `…TC.ONUActivation.ONUState` (O1…O9). Hai lá
+  này giữ forced Inform như bên TR-098. Cây `Device.XPON` mới (`deviceinfo_mtk.c`, ONU.1 và ANI.1):
+  - `Enable` đọc `true`; sản phẩm không tắt được ONU/ANI nên ghi `false` trả 9007;
+  - `ANI.Status`: Up ở O5, Down ở trạng thái khác, Unknown khi không có ponmgr;
+  - `PONMode` lấy từ `pon.xpon_auth.pon_mode` (GPON → `G-PON`…);
+  - `ONUID` lấy từ `ponmgr gpon get info`; `VendorID`/`SerialNumber` lấy từ `pon.xpon_auth.sn`;
+  - `HexadecimalPassword` đọc `false`, vì sản phẩm chỉ giữ mật khẩu ASCII; ghi `true` trả 9007.
+- `Time.NTPServer1..5` (đã xoá trong 2.19) → `Time.Client.1`:
+  - `Servers` là danh sách phân tách dấu phẩy của `system.ntp.server`; ghi thay cả danh sách, tối đa 5 server, mỗi server
+    tối đa 64 ký tự;
+  - `Enable` như `Time.Enable`; `Mode` Unicast, `Port` 123, `Version` 4, `Interface` rỗng; giá trị khác trả 9007;
+  - `Time.ClientNumberOfEntries` = 1.
+- **`Time.Status` (và `Client.1.Status`) nay đọc trạng thái thật**: `Disabled` khi tắt; `Synchronized` khi ntpd đã báo
+  stratum từ lúc boot (hotplug `/etc/hotplug.d/ntp/25-dnsmasqsec` của sản phẩm ghi `/var/state/dnsmasqsec`, trên tmpfs);
+  `Unsynchronized` khi chưa. Bên TR-098 sản phẩm vẫn trả hằng số `Synchronized`.
+- `UserInterface.CarrierLocking` (object không tiền tố dưới một object chuẩn) → `UserInterface.X_AIS_CarrierLocking`.
+- `Account.Web.SessionMaxTime` (`Account` không tiền tố, ở gốc) → `UserInterface.X_AIS_WebUserInfo.SessionMaxTime`. Lá này
+  gắn vào object của module WebUserInfo bằng merge, không khai claim.
+
+Bảng ánh xạ: các cặp bị bỏ → D (ghi lý do). Các cặp đổi chỗ → C hoặc B. Thêm dòng `new` cho XPON và `Time.Client`.
+`check` 592 = 592. `shelltypes_mtk.h` sinh lại: `SessionMaxTime` và `X_AIS_CarrierLocking` mang kiểu shell sang tên mới (SPV
+`SessionMaxTime=abc` vẫn trả 9007).
+
+**Kiểm (host):**
+- `run.sh tr181` thêm các kiểm sau, có fixture `pon`, `system.ntp`, `hmxwslbackend` (lưu và trả lại như các config khác):
+  - 17 tên đã bỏ đọc ra `<none>`; `SupportedConnReqMethods` = `HTTP,STUN`;
+  - XPON: PONMode/VendorID/SerialNumber/Password đúng, ghi Password vào `pon.xpon_auth.sn_ascii_password`,
+    `HexadecimalPassword=true` và `ONU.Enable=false` → 9007;
+  - `Time.Client.1`: `Servers`, Status Unsynchronized → Synchronized theo file, ghi 3 server vào list uci, 6 server → 9007,
+    `Port` 124 / `Mode` Broadcast → 9007.
+- So cặp 1074 bằng + 2 tham chiếu, B 163, D 351, 0 tên TR-181 thiếu cặp.
+- `tr181-bbf-check`: 550 tham số, 357 chuẩn, 193 vendor, **0 không chuẩn, 0 đã xoá**. Còn quyền ghi lệch 21 (S3) và kiểu lệch
+  46 (S2).
+- Cổng tĩnh và cross-gcc SDK 69 file 0 lỗi. `tests/board/tr181_window.sh` ghi `Time.Client.1.Servers` thay `NTPServer3` và
+  đọc XPON.
