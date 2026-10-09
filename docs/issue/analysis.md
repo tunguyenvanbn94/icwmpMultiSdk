@@ -5109,3 +5109,42 @@ Bảng ánh xạ: các cặp bị bỏ → D (ghi lý do). Các cặp đổi ch�
   46 (S2).
 - Cổng tĩnh và cross-gcc SDK 69 file 0 lỗi. `tests/board/tr181_window.sh` ghi `Time.Client.1.Servers` thay `NTPServer3` và
   đọc XPON.
+
+## 80. T7 chuẩn hoá S2: kiểu theo TR-181 2.19 (`tr181-0014`) (09/10 09:50–10:01)
+
+`tr181-bbf-check` sau S1: 45 lá lệch kiểu (đã sửa công cụ: một `list` của BBF truyền đi là `xsd:string`, không lấy kiểu
+phần tử, nên `Radio.TransmitPowerSupported` không còn bị tính là lệch).
+
+**Engine:**
+- Thêm `DMT_UNLONG` (`xsd:unsignedLong`) vào **cuối** enum, giữ nguyên giá trị các kiểu cũ.
+- Sửa chuỗi của `DMT_HEXBIN` từ `xsd:hexbin` thành `xsd:hexBinary`. Chuỗi cũ không phải kiểu XML Schema; bản BDK cũng
+  dùng nó cho tham số `hexBinary` của MDM.
+- `dmproxy_bdk.c` ánh xạ `unsignedLong` sang `DMT_UNLONG`; trước đây là `xsd:long`.
+- `mtk_xsd_type` (cầu nối compat) nhận cả kiểu mới.
+
+**Bảng TR-181 (bảng TR-098 không đổi):**
+
+| Lá | Kiểu | Ghi chú |
+|---|---|---|
+| `Ethernet.Interface.{i}.Stats` (10 bộ đếm bytes/packets), `WiFi.SSID.{i}.Stats` (4), `IP.Interface.{i}.Stats` (10) | `unsignedLong` | `IP.Interface.Stats` của nhánh graft sản phẩm in `xsd:string`: bảng TR-181 riêng `tDip181StatsParams` |
+| `IP.Diagnostics.Download/UploadDiagnostics` `TestBytesReceived`, `TotalBytesReceived`, `TestFileLength`, `TotalBytesSent` | `unsignedLong` | |
+| `…ROMTime`, `BOMTime`, `EOMTime`, `TCPOpenRequestTime`, `TCPOpenResponseTime` | `dateTime` | sản phẩm lưu `0000-00-00T00:00:00.000000` cho thời điểm chưa có: TR-181 đọc `0001-01-01T00:00:00Z` (giá trị "chưa biết" của chuẩn) |
+| `IP.Diagnostics.IPPing.DSCP` | `unsignedInt` | sản phẩm: chuỗi không kiểm, "" khi chưa đặt → TR-181 đọc `0`, ghi ngoài 0–63 trả 9007 |
+| `WiFi.Radio.{i}.TransmitPower` | `int` | |
+| `WiFi.AccessPoint.{i}.Security.PreSharedKey`, `WEPKey` | `hexBinary` | đọc rỗng như chuẩn. Setter của sản phẩm nhận passphrase 8–63 ký tự, nên PSK 64 chữ số hex của chuẩn bị 9007; ghi passphrase qua `KeyPassphrase`. Chưa đổi đường ghi: PSK hex qua mapd/hostapd chưa được kiểm |
+| `DHCPv6.Server.Pool.{i}.DUID` | `hexBinary` | DUID-LL của sản phẩm đã là chữ số hex |
+| `Services.StorageService.{i}.LogicalVolume.{i}.Capacity`, `UsedSpace` | `unsignedInt` (MB, TR-140) | |
+
+Bảng dùng chung thì sao thành bản TR-181 (`tD6Pool181Params`, `tDip181StatsParams` + `tDip181InterfaceChildObj`,
+`tLv181Params` + `tSsChild181Obj`), có chú thích "keep in step". Ánh xạ: 11 cặp đổi cách viết giá trị (10 mốc thời gian,
+DSCP) → B.
+
+**Kiểm (host):**
+- `run.sh tr181` thêm:
+  - nhãn kiểu trên wire của 8 lá đại diện, đọc từ dump GPV;
+  - DSCP: đọc `0`, `64` → 9007, `10` → 0 rồi đọc `10`;
+  - `ROMTime` chưa có = `0001-01-01T00:00:00Z`.
+- So cặp 1063 bằng + 2 tham chiếu, B 174, 0 tên thiếu cặp.
+- `tr181-bbf-check`: **type 0**, unknown 0, status 0. Còn access 21 (S3).
+- Cổng tĩnh: lib MTK 69/0; lib BDK 23 file, 4 vấn đề `cmsLog_error` không thấy khai báo, giống hệt trên HEAD trước S2. Cross-gcc
+  SDK 69 file, 0 lỗi.
