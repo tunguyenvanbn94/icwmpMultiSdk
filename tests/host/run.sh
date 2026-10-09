@@ -1908,20 +1908,31 @@ for x in json.load(open(sys.argv[1]))["parameters"]:
 	expect "set X_AIS_VLANID 5000 (9007)" "$(dm_set_fault $I.$w0.X_AIS_VLANID 5000 "$key")" "9007"
 	# T4d: every rule in NAT.PortMapping, Interface = the connection's IP.Interface
 	M=Device.NAT.PortMapping
-	expect "PortMapping count" "$(dm_value Device.NAT.PortMappingNumberOfEntries)" "3"
-	expect "PortMapping 1/2/3 Interface" "$(dm_value $M.1.Interface) $(dm_value $M.2.Interface) $(dm_value $M.3.Interface)" "Device.IP.Interface.$w0 Device.IP.Interface.$w1 Device.IP.Interface.$w0"
-	expect "PortMapping 2 Protocol/Status, 3 Protocol" "$(dm_value $M.2.Protocol) $(dm_value $M.2.Status) $(dm_value $M.3.Protocol)" "TCP/UDP Disabled UDP"
+	# T7 S5d: the tcp/udp rule (the 2nd) is two rows, TCP then UDP
+	PF=firewall_clay.@port_forwarding
+	expect "PortMapping count" "$(dm_value Device.NAT.PortMappingNumberOfEntries)" "4"
+	expect "PortMapping 1-4 Interface" "$(dm_value $M.1.Interface) $(dm_value $M.2.Interface) $(dm_value $M.3.Interface) $(dm_value $M.4.Interface)" "Device.IP.Interface.$w0 Device.IP.Interface.$w1 Device.IP.Interface.$w1 Device.IP.Interface.$w0"
+	expect "PortMapping 2/3 Protocol Status ExternalPort, 4 Protocol" "$(dm_value $M.2.Protocol) $(dm_value $M.2.Status) $(dm_value $M.2.ExternalPort) $(dm_value $M.3.Protocol) $(dm_value $M.3.Status) $(dm_value $M.3.ExternalPort) $(dm_value $M.4.Protocol)" "TCP Disabled 3074 UDP Disabled 3074 UDP"
+	expect "set PortMapping 3 Protocol TCP/UDP (9007)" "$(dm_set_fault $M.3.Protocol TCP/UDP "$key")" "9007"
+	expect "set the UDP row's ExternalPort" "$(dm_set_fault $M.3.ExternalPort 3075 "$key")" "0"
+	expect "  split: rule tcp 3074, then a udp 3075 copy, then the ssh rule" "$(uci -q get $PF[1].protocol) $(uci -q get $PF[1].ext_start_port) $(uci -q get $PF[2].protocol) $(uci -q get $PF[2].ext_start_port) $(uci -q get $PF[2].service_type) $(uci -q get $PF[2].interface) $(uci -q get $PF[3].service_type)" "tcp 3074 udp 3075 game pppoe-if1 ssh"
+	expect "  rows keep their number" "$(dm_value Device.NAT.PortMappingNumberOfEntries) $(dm_value $M.2.Protocol) $(dm_value $M.2.ExternalPort) $(dm_value $M.3.Protocol) $(dm_value $M.3.ExternalPort) $(dm_value $M.4.Description)" "4 TCP 3074 UDP 3075 ssh"
 	expect "add PortMapping" "$($UBUS call tr069 dm '{"cmd":"add","path":"Device.NAT.PortMapping."}' 2>/dev/null |
-		python3 -c 'import json, sys; r = json.load(sys.stdin); print(r.get("fault"), r.get("instance"))')" "0 4"
-	expect "  new rule without a connection" "$(dm_value $M.4.Interface) $(dm_value $M.4.Status)" " Error_Misconfigured"
-	expect "set PortMapping 4 Interface to the PPP one" "$(dm_set_fault $M.4.Interface Device.IP.Interface.$w1 "$key")" "0"
-	expect "  firewall_clay interface" "$(uci -q get firewall_clay.@port_forwarding[3].interface)" "pppoe-if1"
-	expect "set PortMapping 4 Interface to the bridge (9007)" "$(dm_set_fault $M.4.Interface Device.IP.Interface.$w2 "$key")" "9007"
-	expect "set PortMapping 4 Protocol TCP" "$(dm_set_fault $M.4.Protocol TCP "$key")" "0"
-	expect "  firewall_clay protocol" "$(uci -q get firewall_clay.@port_forwarding[3].protocol)" "tcp"
-	expect "delete PortMapping 4" "$($UBUS call tr069 dm '{"cmd":"del","path":"Device.NAT.PortMapping.4."}' 2>/dev/null |
+		python3 -c 'import json, sys; r = json.load(sys.stdin); print(r.get("fault"), r.get("instance"))')" "0 5"
+	expect "  new rule: one TCP row without a connection" "$(dm_value Device.NAT.PortMappingNumberOfEntries) $(dm_value $M.5.Protocol) $(dm_value $M.5.Interface) $(dm_value $M.5.Status)" "5 TCP  Error_Misconfigured"
+	expect "set PortMapping 5 Interface to the PPP one" "$(dm_set_fault $M.5.Interface Device.IP.Interface.$w1 "$key")" "0"
+	expect "  firewall_clay interface" "$(uci -q get $PF[4].interface)" "pppoe-if1"
+	expect "set PortMapping 5 Interface to the bridge (9007)" "$(dm_set_fault $M.5.Interface Device.IP.Interface.$w2 "$key")" "9007"
+	expect "set PortMapping 5 Protocol udp" "$(dm_set_fault $M.5.Protocol udp "$key")" "0"
+	expect "  firewall_clay protocol" "$(uci -q get $PF[4].protocol)" "udp"
+	uci set $PF[4].protocol=tcp/udp && uci commit firewall_clay
+	expect "  made tcp/udp by the product: rows 5 and 6" "$(dm_value Device.NAT.PortMappingNumberOfEntries) $(dm_value $M.5.Protocol) $(dm_value $M.6.Protocol)" "6 TCP UDP"
+	expect "delete the TCP row 5" "$($UBUS call tr069 dm '{"cmd":"del","path":"Device.NAT.PortMapping.5."}' 2>/dev/null |
 		python3 -c 'import json, sys; print(json.load(sys.stdin).get("fault"))')" "0"
-	expect "  count after delete" "$(dm_value Device.NAT.PortMappingNumberOfEntries)" "3"
+	expect "  the rule is left UDP" "$(dm_value Device.NAT.PortMappingNumberOfEntries) $(uci -q get $PF[4].protocol) $(dm_value $M.5.Protocol)" "5 udp UDP"
+	expect "delete PortMapping 5" "$($UBUS call tr069 dm '{"cmd":"del","path":"Device.NAT.PortMapping.5."}' 2>/dev/null |
+		python3 -c 'import json, sys; print(json.load(sys.stdin).get("fault"))')" "0"
+	expect "  count after delete" "$(dm_value Device.NAT.PortMappingNumberOfEntries)" "4"
 	# T5: firewall interface paths as Device.IP.Interface references, the
 	# IPPing store's TR-098 path the same way, the product's own objects
 	FW=Device.Firewall.X_AIS_ServiceControl.IPV4ServiceControl.1 FI=Device.Firewall.X_AIS_IPFilter.1

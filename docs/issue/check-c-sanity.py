@@ -102,7 +102,7 @@ json_object_object_foreach json_object_to_json_string json_tokener_parse
 json_object_new_boolean json_object_to_json_string_ext json_object_get_int64 json_object_from_file json_object_get_boolean
 blobmsg_data blobmsg_data_len blobmsg_parse blobmsg_get_string
 list_add list_add_tail list_del list_empty INIT_LIST_HEAD list_entry
-uci_lookup_ptr uci_set uci_commit uci_free_context uci_alloc_context
+uci_lookup_ptr uci_set uci_commit uci_free_context uci_alloc_context uci_reorder_section
 va_start va_end va_arg
 strcspn strspn strtoull strtoumax abs labs llabs log10 pow floor ceil lround
 usleep sleep nanosleep poll select signal execl execlp getenv setenv unsetenv

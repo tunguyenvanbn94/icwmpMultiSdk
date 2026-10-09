@@ -186,14 +186,21 @@ def ppp_of(d98, d181, conn):
     return "{ppp:%s}" % conn
 
 
-def pm_of(d181, conn, nth):
-    """the nth (1-based) NAT.PortMapping whose Interface is connection conn's IP.Interface"""
+def pm_of(d98, d181, conn, nth, name):
+    """the NAT.PortMapping row of the nth (1-based) TR-098 rule of connection
+    conn: rows of that connection's IP.Interface in order, a tcp/udp rule
+    being two of them (TCP then UDP, the TCP one is its row here)"""
     w = wanif_of(d181, conn)
     ref = "Device.IP.Interface.%s" % w
     ks = sorted(int(m.group(1)) for k, p in d181.items()
                 for m in [re.match(r"^Device\.NAT\.PortMapping\.(\d+)\.Interface$", k)]
                 if m and p.get("value") == ref)
-    return str(ks[int(nth) - 1]) if len(ks) >= int(nth) else "{pm:%s:%s}" % (conn, nth)
+    m = re.match(r"^(.*\.PortMapping\.)\d+\.", name)
+    at = 0
+    for j in range(1, int(nth)):
+        v = d98.get("%s%d.PortMappingProtocol" % (m.group(1), j), {}).get("value", "") if m else ""
+        at += 2 if v.lower() in ("tcp/udp", "udp/tcp", "both") else 1
+    return str(ks[at]) if len(ks) > at else "{pm:%s:%s}" % (conn, nth)
 
 
 def radio_of(d181, ssid):
@@ -251,7 +258,7 @@ def main():
             if t and "{ppp:" in t:
                 t = re.sub(r"\{ppp:(\d+)\}", lambda x: ppp_of(d98, d181, x.group(1)), t)
             if t and "{pm:" in t:
-                t = re.sub(r"\{pm:(\d+):(\d+)\}", lambda x: pm_of(d181, x.group(1), x.group(2)), t)
+                t = re.sub(r"\{pm:(\d+):(\d+)\}", lambda x: pm_of(d98, d181, x.group(1), x.group(2), name), t)
             kind = r[3] if r else "none"
             if not t:
                 cls[kind] = cls.get(kind, 0) + 1

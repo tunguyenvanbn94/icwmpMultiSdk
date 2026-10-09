@@ -101,6 +101,30 @@ trc=$(uci -q -P /var/state/traceroute get easycwmp.@local[0].Interface)
 log "set TraceRoute.Interface=$wan: fault $(fault_set Device.IP.Diagnostics.TraceRoute.Interface "$wan" "$key"), stored '$(uci -q -P /var/state/traceroute get easycwmp.@local[0].Interface)', reads '$(val Device.IP.Diagnostics.TraceRoute.Interface)'"
 uci -q -P /var/state/traceroute set easycwmp.@local[0].Interface="$trc"
 log "  TraceRoute store put back: '$(uci -q -P /var/state/traceroute get easycwmp.@local[0].Interface)'"
+# T7 S5d (analysis section 91): a tcp/udp rule is two NAT.PortMapping rows,
+# TCP then UDP; a write on the UDP row splits it.  A disabled test rule,
+# firewall_clay put back after
+M=Device.NAT.PortMapping
+cp /etc/config/firewall_clay "$D/bk/firewall_clay"
+pfs() {
+	for s in $(uci -q show firewall_clay | sed -n "s/^firewall_clay\.\([^.]*\)\.service_type='t7s5d'$/\1/p"); do
+		printf '%s ' "$(uci -q get firewall_clay.$s.protocol)/$(uci -q get firewall_clay.$s.ext_start_port)"
+	done
+}
+n0=$(val Device.NAT.PortMappingNumberOfEntries)
+s=$(uci add firewall_clay port_forwarding)
+for o in enabled=0 lease_dur=0 interface= service_type=t7s5d protocol=tcp/udp ext_start_port=40001 ext_end_port=40001 \
+	local_start_port=40001 local_end_port=40001 ip_address=192.168.1.250; do
+	uci set "firewall_clay.$s.$o"
+done
+uci commit firewall_clay
+t=$((n0 + 1)); u=$((n0 + 2))
+log "NAT tcp/udp rule: count $n0 -> $(val Device.NAT.PortMappingNumberOfEntries), row $t $(val $M.$t.Protocol)/$(val $M.$t.ExternalPort), row $u $(val $M.$u.Protocol)/$(val $M.$u.ExternalPort)"
+log "  set row $u ExternalPort 40002: fault $(fault_set $M.$u.ExternalPort 40002 "$key"), rules $(pfs), rows $(val $M.$t.Protocol)/$(val $M.$t.ExternalPort) $(val $M.$u.Protocol)/$(val $M.$u.ExternalPort), count $(val Device.NAT.PortMappingNumberOfEntries)"
+log "  set row $t Protocol TCP/UDP: fault $(fault_set $M.$t.Protocol TCP/UDP "$key")"
+log "  delete rows $u and $t: fault $(ubus call tr069 dm "{\"cmd\":\"del\",\"path\":\"$M.$u.\"}" 2>/dev/null | sed -n 's/^[[:space:]]*"fault": \([0-9]*\).*/\1/p') $(ubus call tr069 dm "{\"cmd\":\"del\",\"path\":\"$M.$t.\"}" 2>/dev/null | sed -n 's/^[[:space:]]*"fault": \([0-9]*\).*/\1/p'), count $(val Device.NAT.PortMappingNumberOfEntries), rules '$(pfs)'"
+cp "$D/bk/firewall_clay" /etc/config/firewall_clay
+rm -f /tmp/.uci/firewall_clay
 logread | grep -E 'icwmp|tr069' | tail -n 40 > "$D/logread181.txt"
 
 # 4. back to TR-098, state as before the window, then open the ACS again

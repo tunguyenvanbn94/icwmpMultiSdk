@@ -375,7 +375,7 @@ static int get_pm_entries(char *refparam, struct dmctx *ctx, void *data, char *i
  * rule's position.  Copied as is: that is the instance number the ACS was
  * handed before.
  */
-static int pm_add(const char *iface, char **instance)
+static int pm_add(const char *iface, const char *proto, char **instance)
 {
 	struct uci_section *s, *added = NULL;
 	char buf[16];
@@ -399,7 +399,7 @@ static int pm_add(const char *iface, char **instance)
 	dmuci_set_value_by_section(added, "local_end_port", "0");
 	dmuci_set_value_by_section(added, "ext_start_port", "0");
 	dmuci_set_value_by_section(added, "ext_end_port", "0");
-	dmuci_set_value_by_section(added, "protocol", "tcp/udp");
+	dmuci_set_value_by_section(added, "protocol", (char *)proto);
 	snprintf(buf, sizeof(buf), "%d", n + 1);
 	*instance = dmstrdup(buf);
 	return 0;
@@ -411,7 +411,7 @@ static int add_pm_instance(char *refparam, struct dmctx *ctx, void *data, char *
 
 	if (!iface[0])
 		return FAULT_9002;
-	return pm_add(iface, instance);
+	return pm_add(iface, "tcp/udp", instance);
 }
 
 static int del_pm_instance(char *refparam, struct dmctx *ctx, void *data, char *instance, unsigned char del_action)
@@ -523,32 +523,175 @@ DM_MODULE_REGISTER(portmapping_mtk_module);
  * (pm_iface_name()) the rule's "interface" option holds; writing it writes
  * that name.  An AddObject makes the rule with the product's defaults and no
  * connection yet: the ACS sets Interface, which TR-181 has for that.
- * Spelled the TR-181 way: Protocol in capitals (the product stores tcp, udp,
- * tcp/udp; the setter takes any case).  PortMappingNumberOfEntries of a
- * connection has no TR-181 counterpart (the TR-181 count is global).
+ * PortMappingNumberOfEntries of a connection has no TR-181 counterpart (the
+ * TR-181 count is global).
+ *
+ * T7 S5d: Protocol is TCP or UDP in TR-181, the product also stores
+ * "tcp/udp".  Such a rule is two rows, TCP then UDP, next to each other.
+ * Writing a leaf of one of them first splits the rule: the section becomes
+ * the TCP rule and a UDP copy is put right after it (uci_reorder_section), so
+ * every row keeps its number and protocol for the rest of the session, then
+ * the write goes to the rule of the row written.  Deleting one of the two rows leaves
+ * the rule with the other protocol.  AddObject makes one TCP row, not the
+ * product's tcp/udp default, which would add two.
  */
+
+/* half: 0 the whole rule, 1 the TCP row of a tcp/udp rule, 2 its UDP row */
+struct pm181_row {
+	struct uci_section *s;
+	int half;
+};
+
+typedef int (*pm_setfn)(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action);
+
+static int pm_both(struct uci_section *s)
+{
+	const char *p = pm_protocol_of(wan_sect_opt(s, "protocol"));
+
+	return p && strcmp(p, "tcp/udp") == 0;
+}
+
+static int pm_sections(void)
+{
+	struct uci_section *s;
+	int n = 0;
+
+	uci_foreach_sections(PM_PACKAGE, PM_TYPE, s)
+		n++;
+	return n;
+}
+
+/* the rows in instance order; returns how many (out may be NULL) */
+static int pm181_rows(struct pm181_row *out, int max)
+{
+	struct uci_section *s;
+	int n = 0, k = 0, h, last;
+
+	uci_foreach_sections(PM_PACKAGE, PM_TYPE, s) {
+		if (k++ >= PM_MAX_RULES)
+			break;
+		last = pm_both(s) ? 2 : 0;
+		for (h = last ? 1 : 0; h <= last; h++) {
+			if (out && n < max) {
+				out[n].s = s;
+				out[n].half = h;
+			}
+			n++;
+		}
+	}
+	return n;
+}
+
+/* a row of a tcp/udp rule becomes a rule of its own, see above */
+static int pm181_split(struct pm181_row *r)
+{
+	struct uci_section *copy = NULL;
+	struct uci_element *e, *li;
+	char *name = NULL;
+	int pos = 0;
+
+	if (!r->half)
+		return 0;
+	if (pm_sections() >= PM_MAX_RULES)
+		return FAULT_9004;
+	dmuci_add_section(PM_PACKAGE, PM_TYPE, &copy, &name);
+	if (!copy)
+		return FAULT_9002;
+	uci_foreach_element(&r->s->options, e) {
+		struct uci_option *o = uci_to_option(e);
+
+		if (o->type == UCI_TYPE_STRING) {
+			dmuci_set_value_by_section(copy, e->name, o->v.string);
+		} else {
+			uci_foreach_element(&o->v.list, li)
+				dmuci_add_list_value_by_section(copy, e->name, li->name);
+		}
+	}
+	/* the rows keep their order: the rule stays the TCP one, the copy
+	 * after it is the UDP one, and the row now names its own rule */
+	dmuci_set_value_by_section(copy, "protocol", "udp");
+	dmuci_set_value_by_section(r->s, "protocol", "tcp");
+	/* uci_reorder_section() counts from 0 among every section of the
+	 * package, the copy taken out: the original's index + 1 */
+	uci_foreach_element(&r->s->package->sections, e) {
+		pos++;
+		if (uci_to_section(e) == r->s)
+			break;
+	}
+	uci_reorder_section(uci_ctx, copy, pos);
+	if (r->half == 2)
+		r->s = copy;
+	r->half = 0;
+	pm_apply();
+	return 0;
+}
+
+/* every writable leaf of a row: check, split the rule if needed, write */
+static int pm181_set(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action,
+		     pm_setfn fn)
+{
+	struct pm181_row *r = (struct pm181_row *)data;
+	int f;
+
+	if (!r || !r->s)
+		return FAULT_9002;
+	if (action == VALUECHECK) {
+		f = fn(refparam, ctx, r->s, instance, value, action);
+		if (f)
+			return f;
+		return r->half && pm_sections() >= PM_MAX_RULES ? FAULT_9004 : 0;
+	}
+	f = pm181_split(r);
+	if (f)
+		return f;
+	return fn(refparam, ctx, r->s, instance, value, action);
+}
+
+#define PM181_LEAF(name, getbase, setbase)					\
+static int get_pm181_##name(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)	\
+{										\
+	return getbase(refparam, ctx, ((struct pm181_row *)data)->s, instance, value);	\
+}										\
+										\
+static int set_pm181_##name(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)	\
+{										\
+	return pm181_set(refparam, ctx, data, instance, value, action, setbase);	\
+}
+
+PM181_LEAF(enabled, get_pm_enabled, set_pm_enabled)
+PM181_LEAF(lease, get_pm_lease, set_pm_lease)
+PM181_LEAF(remote_host, get_pm_remote_host, set_pm_remote_host)
+PM181_LEAF(ext_port, get_pm_ext_port, set_pm_ext_port)
+PM181_LEAF(ext_port_end, get_pm_ext_port_end, set_pm_ext_port_end)
+PM181_LEAF(int_port, get_pm_int_port, set_pm_int_port)
+PM181_LEAF(internal_client, get_pm_internal_client, set_pm_internal_client)
+PM181_LEAF(description, get_pm_description, set_pm_description)
+PM181_LEAF(name, get_pm_name, set_pm_name)
+PM181_LEAF(int_port_end, get_pm_int_port_end, set_pm_int_port_end)
+PM181_LEAF(remote_host_end, get_pm_remote_host_end, set_pm_remote_host_end)
 
 static int browsePm181Inst(struct dmctx *dmctx, DMNODE *parent_node, void *prev_data, char *prev_instance)
 {
-	struct uci_section *s;
+	struct pm181_row *rows = dmcalloc(2 * PM_MAX_RULES, sizeof(*rows));
 	char *idx, *idx_last = NULL;
-	int n = 0;
+	int n, i;
 
-	uci_foreach_sections(PM_PACKAGE, PM_TYPE, s) {
-		if (n >= PM_MAX_RULES)
-			break;
-		idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section, 1, ++n);
-		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)s, idx) == DM_STOP)
+	if (!rows)
+		return 0;
+	n = pm181_rows(rows, 2 * PM_MAX_RULES);
+	for (i = 0; i < n; i++) {
+		idx = handle_update_instance(1, dmctx, &idx_last, update_instance_without_section, 1, i + 1);
+		if (DM_LINK_INST_OBJ(dmctx, parent_node, (void *)&rows[i], idx) == DM_STOP)
 			break;
 	}
 	return 0;
 }
 
 /* the connection a rule belongs to, NULL when its interface names none */
-static struct wan_entry *pm181_conn(void *data)
+static struct wan_entry *pm181_conn(struct uci_section *s)
 {
 	struct wan_entry *list = dmcalloc(2 * WAN_MAX_ENTRIES, sizeof(*list)), *e;
-	const char *want = pm_opt(data, "interface");
+	const char *want = wan_sect_opt(s, "interface");
 	int n, i;
 
 	if (!list || !want[0])
@@ -567,13 +710,14 @@ static struct wan_entry *pm181_conn(void *data)
 
 static int get_pm181_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	struct wan_entry *e = pm181_conn(data);
+	struct wan_entry *e = pm181_conn(((struct pm181_row *)data)->s);
 
 	*value = e ? wan181_ipif(e) : "";
 	return 0;
 }
 
-static int set_pm181_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+/* data is the rule's section */
+static int pm181_interface_of(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
 {
 	const char *prefix = mtk_ipif_prefix();
 	size_t l = strlen(prefix);
@@ -590,38 +734,81 @@ static int set_pm181_interface(char *refparam, struct dmctx *ctx, void *data, ch
 	return pm_write(data, "interface", pm_iface_name(&e));
 }
 
+static int set_pm181_interface(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	return pm181_set(refparam, ctx, data, instance, value, action, pm181_interface_of);
+}
+
 static int get_pm181_status(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	if (!pm181_conn(data))
+	struct uci_section *s = ((struct pm181_row *)data)->s;
+
+	if (!pm181_conn(s))
 		*value = "Error_Misconfigured";
 	else
-		*value = strcmp(pm_opt(data, "enabled"), "1") == 0 ? "Enabled" : "Disabled";
+		*value = strcmp(wan_sect_opt(s, "enabled"), "1") == 0 ? "Enabled" : "Disabled";
 	return 0;
 }
 
 static int get_pm181_protocol(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	char *p = pm_opt(data, "protocol"), *u;
+	struct pm181_row *r = (struct pm181_row *)data;
+	char *u;
 
-	*value = dmstrdup(p);
+	if (r->half) {
+		*value = r->half == 1 ? "TCP" : "UDP";
+		return 0;
+	}
+	*value = dmstrdup(wan_sect_opt(r->s, "protocol"));
 	for (u = *value; u && *u; u++)
 		*u = (char)toupper((unsigned char)*u);
 	return 0;
 }
 
+/* TCP or UDP, any case; not the product's tcp/udp (data is the section) */
+static int pm181_protocol_one(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	const char *p = pm_protocol_of(value);
+
+	if (!p || strcmp(p, "tcp/udp") == 0)
+		return FAULT_9007;
+	return set_pm_protocol(refparam, ctx, data, instance, value, action);
+}
+
+static int set_pm181_protocol(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	return pm181_set(refparam, ctx, data, instance, value, action, pm181_protocol_one);
+}
+
+/* one TCP row, numbered after every row there is */
 static int add_pm181_instance(char *refparam, struct dmctx *ctx, void *data, char **instance)
 {
-	return pm_add("", instance);
+	int rows = pm181_rows(NULL, 0);
+	char *unused = NULL;
+	int f = pm_add("", "tcp", &unused);
+
+	if (f)
+		return f;
+	dmasprintf(instance, "%d", rows + 1);
+	return 0;
+}
+
+static int del_pm181_instance(char *refparam, struct dmctx *ctx, void *data, char *instance, unsigned char del_action)
+{
+	struct pm181_row *r = (struct pm181_row *)data;
+
+	if (del_action != DEL_INST)
+		return FAULT_9005;
+	if (!r || !r->s)
+		return FAULT_9002;
+	if (r->half)
+		return pm_write(r->s, "protocol", r->half == 1 ? "udp" : "tcp");
+	return del_pm_instance(refparam, ctx, r->s, instance, del_action);
 }
 
 static int get_pm181_count(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
 {
-	struct uci_section *s;
-	int n = 0;
-
-	uci_foreach_sections(PM_PACKAGE, PM_TYPE, s)
-		n++;
-	dmasprintf(value, "%d", n > PM_MAX_RULES ? PM_MAX_RULES : n);
+	dmasprintf(value, "%d", pm181_rows(NULL, 0));
 	return 0;
 }
 
@@ -641,21 +828,21 @@ MTK_SET_SAME_BOOL(pm181_allif, get_pm181_allif)
 
 static DMLEAF tPm181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
-{"Enable", &DMWRITE, DMT_BOOL, get_pm_enabled, set_pm_enabled, NULL, NULL},
+{"Enable", &DMWRITE, DMT_BOOL, get_pm181_enabled, set_pm181_enabled, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_pm181_status, NULL, NULL, NULL},
 {"Interface", &DMWRITE, DMT_STRING, get_pm181_interface, set_pm181_interface, NULL, NULL},
 {"AllInterfaces", &DMWRITE, DMT_BOOL, get_pm181_allif, set_same_pm181_allif, NULL, NULL},
-{"LeaseDuration", &DMWRITE, DMT_UNINT, get_pm_lease, set_pm_lease, NULL, NULL},
-{"RemoteHost", &DMWRITE, DMT_STRING, get_pm_remote_host, set_pm_remote_host, NULL, NULL},
-{"ExternalPort", &DMWRITE, DMT_UNINT, get_pm_ext_port, set_pm_ext_port, NULL, NULL},
-{"ExternalPortEndRange", &DMWRITE, DMT_UNINT, get_pm_ext_port_end, set_pm_ext_port_end, NULL, NULL},
-{"InternalPort", &DMWRITE, DMT_UNINT, get_pm_int_port, set_pm_int_port, NULL, NULL},
-{"Protocol", &DMWRITE, DMT_STRING, get_pm181_protocol, set_pm_protocol, NULL, NULL},
-{"InternalClient", &DMWRITE, DMT_STRING, get_pm_internal_client, set_pm_internal_client, NULL, NULL},
-{"Description", &DMWRITE, DMT_STRING, get_pm_description, set_pm_description, NULL, NULL},
-{"X_AIS_Name", &DMWRITE, DMT_STRING, get_pm_name, set_pm_name, NULL, NULL},
-{"X_AIS_InternalPortEndRange", &DMWRITE, DMT_UNINT, get_pm_int_port_end, set_pm_int_port_end, NULL, NULL},
-{"X_AIS_RemoteHostEndRange", &DMWRITE, DMT_STRING, get_pm_remote_host_end, set_pm_remote_host_end, NULL, NULL},
+{"LeaseDuration", &DMWRITE, DMT_UNINT, get_pm181_lease, set_pm181_lease, NULL, NULL},
+{"RemoteHost", &DMWRITE, DMT_STRING, get_pm181_remote_host, set_pm181_remote_host, NULL, NULL},
+{"ExternalPort", &DMWRITE, DMT_UNINT, get_pm181_ext_port, set_pm181_ext_port, NULL, NULL},
+{"ExternalPortEndRange", &DMWRITE, DMT_UNINT, get_pm181_ext_port_end, set_pm181_ext_port_end, NULL, NULL},
+{"InternalPort", &DMWRITE, DMT_UNINT, get_pm181_int_port, set_pm181_int_port, NULL, NULL},
+{"Protocol", &DMWRITE, DMT_STRING, get_pm181_protocol, set_pm181_protocol, NULL, NULL},
+{"InternalClient", &DMWRITE, DMT_STRING, get_pm181_internal_client, set_pm181_internal_client, NULL, NULL},
+{"Description", &DMWRITE, DMT_STRING, get_pm181_description, set_pm181_description, NULL, NULL},
+{"X_AIS_Name", &DMWRITE, DMT_STRING, get_pm181_name, set_pm181_name, NULL, NULL},
+{"X_AIS_InternalPortEndRange", &DMWRITE, DMT_UNINT, get_pm181_int_port_end, set_pm181_int_port_end, NULL, NULL},
+{"X_AIS_RemoteHostEndRange", &DMWRITE, DMT_STRING, get_pm181_remote_host_end, set_pm181_remote_host_end, NULL, NULL},
 {0}
 };
 
@@ -666,7 +853,7 @@ static DMLEAF tNat181PmCountParam[] = {
 
 static DMOBJ tNat181PmObj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"PortMapping", &DMWRITE, add_pm181_instance, del_pm_instance, NULL, browsePm181Inst, NULL, NULL, NULL, tPm181Param, NULL},
+{"PortMapping", &DMWRITE, add_pm181_instance, del_pm181_instance, NULL, browsePm181Inst, NULL, NULL, NULL, tPm181Param, NULL},
 {0}
 };
 
