@@ -2066,6 +2066,16 @@ PY
 	expect "S4d secured: DDNS Password, KeyPassphrase read empty" "[$(dm_value $DC.Password)] [$(dm_value Device.WiFi.AccessPoint.1.Security.KeyPassphrase)] $(uci -q get ddns.myddns.password)" "[] [] pw-ddns"
 	expect "S4d server set-same" "$(dm_set_fault $DD.Server.1.ServerPort 80 "$key") $(dm_set_fault $DD.Server.1.ServerPort 81 "$key") $(dm_set_fault $DD.Server.2.MaxRetries 3 "$key")" "0 9007 9007"
 	expect "S4d storage capabilities in TR-140 names" "[$(dm_value Device.Services.StorageService.1.Capabilities.SupportedNetworkProtocols)] $(dm_value Device.Services.StorageService.1.Capabilities.SupportedFileSystemTypes | grep -c 'vfat\|squashfs\|None')" "[] 0"
+	# T7 S5a: profile leaves of the stack.  LastChange is the uptime of the
+	# netifd interface on the object (lan 300 s, if0 120 s in the stand-in),
+	# 0 where there is none; no netdev here, so counters read 0, the ports
+	# Disabled; no ponmgr, so no light (-65536)
+	expect "S5a LastChange (Link.1, VLAN.1, Link.2, Bridge.1 mgmt, Port.2)" "$(dm_value $L.1.LastChange) $(dm_value $V.1.LastChange) $(dm_value $L.2.LastChange) $(dm_value $B.1.Port.1.LastChange) $(dm_value $B.1.Port.2.LastChange)" "300 120 0 300 0"
+	expect "S5a PortState, MaxBridgeEntries, counters" "$(dm_value $B.1.Port.1.PortState) $(dm_value $B.1.Port.2.PortState) $(dm_value Device.Bridging.MaxBridgeEntries) $(dm_value Device.Bridging.MaxDBridgeEntries) $(dm_value $L.1.Stats.BytesSent) $(dm_value $B.4.Port.18.Stats.UnicastPacketsReceived) $(dm_value Device.WiFi.Radio.2.Stats.PacketsSent)" \
+		"Disabled Disabled 33 33 0 0 0"
+	expect "S5a PPP Stats (no pppoe-if1 netdev here)" "$(dm_value Device.PPP.Interface.$p.Stats.BytesSent) $(dm_value Device.PPP.Interface.$p.Stats.UnknownProtoPacketsReceived)" "0 0"
+	O=Device.Optical.Interface.1
+	expect "S5a Optical" "$(dm_value $O.Upstream) $(dm_value $O.Alias) $(dm_value $O.LastChange) $(dm_value $O.OpticalSignalLevel) $(dm_value $O.TransmitOpticalLevel) $(dm_value $O.Stats.BytesReceived)" "true cpe-Optical-1 0 -65536 -65536 0"
 	expect "S4b: no UserAccount/PhysicalMedium/Folder counts, PhysicalReference empty" "$(dm_value Device.Services.StorageService.1.UserAccountNumberOfEntries) $(dm_value Device.Services.StorageService.1.PhysicalMediumNumberOfEntries) $(dm_value Device.Services.StorageService.1.LogicalVolume.1.FolderNumberOfEntries) [$(dm_value Device.Services.StorageService.1.LogicalVolume.1.PhysicalReference)]" \
 		"<none> <none> <none> []"
 	# T7: Time.Client.1 for the NTPServer1..5 TR-181 2.19 deleted; Status from

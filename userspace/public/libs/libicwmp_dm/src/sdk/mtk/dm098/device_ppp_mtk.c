@@ -52,6 +52,7 @@
 #include "dmmtk.h"
 #include "wanconn_mtk.h"
 #include "stack181_mtk.h"
+#include "device_ip_mtk.h"
 
 #define WAN_PKG		"wan"
 #define WAN_RELOAD	"/usr/sbin/hni_wan_reload.sh"
@@ -600,7 +601,39 @@ static DMLEAF tPpp181IpcpParams[] = {
 {0}
 };
 
+/* T7 S5a: the counters of the session's netdev (netifd's l3_device,
+ * pppoe-<interface>), device_ip_mtk.c dip_stat181 */
+static int get_ppp181_stat(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *dev = wan_iface_l3_device(ppp_ifname(PPP_SEC(data)));
+
+	if (!dev || !*dev)
+		dmasprintf(&dev, "pppoe-%s", ppp_ifname(PPP_SEC(data)));
+	*value = dip_stat181(dev, STATS181_LEAF(refparam));
+	return 0;
+}
+
+static DMLEAF tPpp181StatsParams[] = {
+{"BytesSent", &DMREAD, DMT_UNLONG, get_ppp181_stat, NULL, NULL, NULL},
+{"BytesReceived", &DMREAD, DMT_UNLONG, get_ppp181_stat, NULL, NULL, NULL},
+{"PacketsSent", &DMREAD, DMT_UNLONG, get_ppp181_stat, NULL, NULL, NULL},
+{"PacketsReceived", &DMREAD, DMT_UNLONG, get_ppp181_stat, NULL, NULL, NULL},
+{"ErrorsSent", &DMREAD, DMT_UNINT, get_ppp181_stat, NULL, NULL, NULL},
+{"ErrorsReceived", &DMREAD, DMT_UNINT, get_ppp181_stat, NULL, NULL, NULL},
+{"UnicastPacketsSent", &DMREAD, DMT_UNLONG, get_ppp181_stat, NULL, NULL, NULL},
+{"UnicastPacketsReceived", &DMREAD, DMT_UNLONG, get_ppp181_stat, NULL, NULL, NULL},
+{"DiscardPacketsSent", &DMREAD, DMT_UNINT, get_ppp181_stat, NULL, NULL, NULL},
+{"DiscardPacketsReceived", &DMREAD, DMT_UNINT, get_ppp181_stat, NULL, NULL, NULL},
+{"MulticastPacketsSent", &DMREAD, DMT_UNLONG, get_ppp181_stat, NULL, NULL, NULL},
+{"MulticastPacketsReceived", &DMREAD, DMT_UNLONG, get_ppp181_stat, NULL, NULL, NULL},
+{"BroadcastPacketsSent", &DMREAD, DMT_UNLONG, get_ppp181_stat, NULL, NULL, NULL},
+{"BroadcastPacketsReceived", &DMREAD, DMT_UNLONG, get_ppp181_stat, NULL, NULL, NULL},
+{"UnknownProtoPacketsReceived", &DMREAD, DMT_UNINT, get_ppp181_stat, NULL, NULL, NULL},
+{0}
+};
+
 static DMOBJ tPpp181IfObj[] = {
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tPpp181StatsParams, NULL},
 {"IPCP", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tPpp181IpcpParams, NULL},
 {0}
 };

@@ -52,6 +52,7 @@
 #include "dm_registry.h"
 #include "dmmtk.h"
 #include "wan_mtk.h"
+#include "device_ip_mtk.h"
 
 /* ------------------------------------------------------------------ */
 /* uplink                                                              */
@@ -442,11 +443,58 @@ static int get_one181(char *refparam, struct dmctx *ctx, void *data, char *insta
 /* T7 S3: standard readWrite leaves the product cannot change (dmmtk.h MTK_SET_SAME) */
 MTK_SET_SAME_BOOL(optical_enable, get_true)
 
+/* T7 S5a: the counters of the pon netdev (device_ip_mtk.c dip_stat181), the
+ * Alias store, the interface faces the Internet; the kernel keeps no time of
+ * its last state change (LastChange 0).  OpticalSignalLevel and
+ * TransmitOpticalLevel come from deviceinfo_mtk.c (ponmgr). */
+static int get_optical181_stat(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = dip_stat181("pon", STATS181_LEAF(refparam));
+	return 0;
+}
+
+static int get_optical181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = mtk_alias181_get(refparam, "cpe-Optical-1");
+	return 0;
+}
+
+static int set_optical181_alias(char *refparam, struct dmctx *ctx, void *data, char *instance, char *value, int action)
+{
+	return mtk_alias181_set(refparam, "cpe-Optical-1", value, action);
+}
+
+static int get_zero181(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = "0";
+	return 0;
+}
+
+static DMLEAF tOptical181StatsParam[] = {
+{"BytesSent", &DMREAD, DMT_UNLONG, get_optical181_stat, NULL, NULL, NULL},
+{"BytesReceived", &DMREAD, DMT_UNLONG, get_optical181_stat, NULL, NULL, NULL},
+{"PacketsSent", &DMREAD, DMT_UNLONG, get_optical181_stat, NULL, NULL, NULL},
+{"PacketsReceived", &DMREAD, DMT_UNLONG, get_optical181_stat, NULL, NULL, NULL},
+{"ErrorsSent", &DMREAD, DMT_UNINT, get_optical181_stat, NULL, NULL, NULL},
+{"ErrorsReceived", &DMREAD, DMT_UNINT, get_optical181_stat, NULL, NULL, NULL},
+{"DiscardPacketsSent", &DMREAD, DMT_UNINT, get_optical181_stat, NULL, NULL, NULL},
+{"DiscardPacketsReceived", &DMREAD, DMT_UNINT, get_optical181_stat, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tOptical181IfObj[] = {
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tOptical181StatsParam, NULL},
+{0}
+};
+
 static DMLEAF tOptical181IfParam[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Enable", &DMWRITE, DMT_BOOL, get_true, set_same_optical_enable, NULL, NULL},
 {"Status", &DMREAD, DMT_STRING, get_wancommon_link_status, NULL, NULL, NULL},
+{"Alias", &DMWRITE, DMT_STRING, get_optical181_alias, set_optical181_alias, NULL, NULL},
 {"Name", &DMREAD, DMT_STRING, get_optical181_name, NULL, NULL, NULL},
+{"LastChange", &DMREAD, DMT_UNINT, get_zero181, NULL, NULL, NULL},
+{"Upstream", &DMREAD, DMT_BOOL, get_true, NULL, NULL, NULL},
 {0}
 };
 
@@ -457,7 +505,7 @@ static DMLEAF tOptical181Param[] = {
 
 static DMOBJ tOptical181Obj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Interface", &DMREAD, NULL, NULL, NULL, browseOptical181Inst, NULL, NULL, NULL, tOptical181IfParam, NULL},
+{"Interface", &DMREAD, NULL, NULL, NULL, browseOptical181Inst, NULL, NULL, tOptical181IfObj, tOptical181IfParam, NULL},
 {0}
 };
 

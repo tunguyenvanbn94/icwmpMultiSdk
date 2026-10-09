@@ -34,6 +34,12 @@ char *dip_ref_of_netdev(const char *dev);
 /* every numbered Interface.{i}: network section and number, in instance
  * order, at most max; returns how many */
 int dip_all(const char **sec, const char **inst, int max);
+/* a TR-181 Stats leaf (BytesSent, UnicastPacketsReceived...) of a netdev,
+ * "0" when the kernel keeps no such counter */
+char *dip_stat181(const char *dev, const char *leaf);
+
+/* the leaf's own name: the last segment of refparam */
+#define STATS181_LEAF(refparam)	(strrchr((refparam), '.') ? strrchr((refparam), '.') + 1 : "")
 
 /*
  * The Interface of a TR-181 diagnostic around the product's getter/setter,

@@ -471,3 +471,90 @@ new	-	Device.DynamicDNS.Client.{i}.Hostname.{i}.Enable	A	T7 S4d: device_ddns_mtk
 new	-	Device.DynamicDNS.Client.{i}.Hostname.{i}.Status	A	T7 S4d: device_ddns_mtk.c, the client's domain (with lookup_host, as hal_service.c)
 new	-	Device.DynamicDNS.Client.{i}.Hostname.{i}.Name	A	T7 S4d: device_ddns_mtk.c, the client's domain (with lookup_host, as hal_service.c)
 new	-	Device.DynamicDNS.Client.{i}.Hostname.{i}.LastUpdate	A	T7 S4d: device_ddns_mtk.c, the client's domain (with lookup_host, as hal_service.c)
+new	-	Device.Bridging.MaxBridgeEntries	A	T7 S5a: stack181_mtk.c, 1 + WAN_MAX_ENTRIES
+new	-	Device.Bridging.MaxDBridgeEntries	A	T7 S5a: stack181_mtk.c, 1 + WAN_MAX_ENTRIES
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.LastChange	A	T7 S5a: stack181_mtk.c, uptime of the netifd interface on it, 0 when none
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.BytesSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.BytesReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.PacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.PacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.ErrorsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.ErrorsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.UnicastPacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.UnicastPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.DiscardPacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.DiscardPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.MulticastPacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.MulticastPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.BroadcastPacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.BroadcastPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.Stats.UnknownProtoPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.LastChange	A	T7 S5a: stack181_mtk.c, uptime of the netifd interface on it, 0 when none
+new	-	Device.Ethernet.Link.{i}.Stats.BytesSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.BytesReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.PacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.PacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.ErrorsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.ErrorsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.UnicastPacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.UnicastPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.DiscardPacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.DiscardPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.MulticastPacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.MulticastPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.BroadcastPacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.BroadcastPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.Link.{i}.Stats.UnknownProtoPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.LastChange	A	T7 S5a: stack181_mtk.c, uptime of the netifd interface on it, 0 when none
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.BytesSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.BytesReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.PacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.PacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.ErrorsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.ErrorsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.UnicastPacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.UnicastPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.DiscardPacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.DiscardPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.MulticastPacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.MulticastPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.BroadcastPacketsSent	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.BroadcastPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Ethernet.VLANTermination.{i}.Stats.UnknownProtoPacketsReceived	A	T7 S5a: stack181_mtk.c, the netdev's counters (device_ip_mtk.c dip_stat181)
+new	-	Device.Bridging.Bridge.{i}.Port.{i}.PortState	A	T7 S5a: stack181_mtk.c, brport/state
+new	-	Device.Optical.Interface.{i}.Alias	A	T7 S5a: wan_mtk.c
+new	-	Device.Optical.Interface.{i}.LastChange	A	T7 S5a: wan_mtk.c
+new	-	Device.Optical.Interface.{i}.Upstream	A	T7 S5a: wan_mtk.c
+new	-	Device.Optical.Interface.{i}.OpticalSignalLevel	A	T7 S5a: deviceinfo_mtk.c, ponmgr in Dbm1000
+new	-	Device.Optical.Interface.{i}.TransmitOpticalLevel	A	T7 S5a: deviceinfo_mtk.c, ponmgr in Dbm1000
+new	-	Device.Optical.Interface.{i}.Stats.BytesSent	A	T7 S5a: wan_mtk.c, the pon netdev's counters
+new	-	Device.Optical.Interface.{i}.Stats.BytesReceived	A	T7 S5a: wan_mtk.c, the pon netdev's counters
+new	-	Device.Optical.Interface.{i}.Stats.PacketsSent	A	T7 S5a: wan_mtk.c, the pon netdev's counters
+new	-	Device.Optical.Interface.{i}.Stats.PacketsReceived	A	T7 S5a: wan_mtk.c, the pon netdev's counters
+new	-	Device.Optical.Interface.{i}.Stats.ErrorsSent	A	T7 S5a: wan_mtk.c, the pon netdev's counters
+new	-	Device.Optical.Interface.{i}.Stats.ErrorsReceived	A	T7 S5a: wan_mtk.c, the pon netdev's counters
+new	-	Device.Optical.Interface.{i}.Stats.DiscardPacketsSent	A	T7 S5a: wan_mtk.c, the pon netdev's counters
+new	-	Device.Optical.Interface.{i}.Stats.DiscardPacketsReceived	A	T7 S5a: wan_mtk.c, the pon netdev's counters
+new	-	Device.WiFi.Radio.{i}.Stats.BytesSent	A	T7 S5a: wlan_mtk.c, the sum of the radio's interfaces
+new	-	Device.WiFi.Radio.{i}.Stats.BytesReceived	A	T7 S5a: wlan_mtk.c, the sum of the radio's interfaces
+new	-	Device.WiFi.Radio.{i}.Stats.PacketsSent	A	T7 S5a: wlan_mtk.c, the sum of the radio's interfaces
+new	-	Device.WiFi.Radio.{i}.Stats.PacketsReceived	A	T7 S5a: wlan_mtk.c, the sum of the radio's interfaces
+new	-	Device.WiFi.Radio.{i}.Stats.ErrorsSent	A	T7 S5a: wlan_mtk.c, the sum of the radio's interfaces
+new	-	Device.WiFi.Radio.{i}.Stats.ErrorsReceived	A	T7 S5a: wlan_mtk.c, the sum of the radio's interfaces
+new	-	Device.WiFi.Radio.{i}.Stats.DiscardPacketsSent	A	T7 S5a: wlan_mtk.c, the sum of the radio's interfaces
+new	-	Device.WiFi.Radio.{i}.Stats.DiscardPacketsReceived	A	T7 S5a: wlan_mtk.c, the sum of the radio's interfaces
+new	-	Device.PPP.Interface.{i}.Stats.BytesSent	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.BytesReceived	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.PacketsSent	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.PacketsReceived	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.ErrorsSent	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.ErrorsReceived	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.UnicastPacketsSent	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.UnicastPacketsReceived	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.DiscardPacketsSent	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.DiscardPacketsReceived	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.MulticastPacketsSent	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.MulticastPacketsReceived	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.BroadcastPacketsSent	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.BroadcastPacketsReceived	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)
+new	-	Device.PPP.Interface.{i}.Stats.UnknownProtoPacketsReceived	A	T7 S5a: device_ppp_mtk.c, the counters of the session's netdev (pppoe-<interface>)

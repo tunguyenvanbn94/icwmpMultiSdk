@@ -679,6 +679,43 @@ static int get_dip_unicast_received(char *refparam, struct dmctx *ctx, void *dat
 	return 0;
 }
 
+/* T7 S5a: a TR-181 Stats leaf of any netdev -- the counters of the
+ * Ethernet.Link, VLANTermination, Bridging Port, PPP and Optical rows
+ * (stack181_mtk.c, device_ppp_mtk.c, wan_mtk.c) -- from
+ * /sys/class/net/<dev>/statistics, the same counters as above; unicast is
+ * the packets less multicast and broadcast, as above.  "0" when the
+ * kernel keeps no such counter for the device. */
+char *dip_stat181(const char *dev, const char *leaf)
+{
+	static const struct { const char *leaf, *stat; } map[] = {
+		{ "BytesSent", "tx_bytes" }, { "BytesReceived", "rx_bytes" },
+		{ "PacketsSent", "tx_packets" }, { "PacketsReceived", "rx_packets" },
+		{ "ErrorsSent", "tx_errors" }, { "ErrorsReceived", "rx_errors" },
+		{ "DiscardPacketsSent", "tx_dropped" }, { "DiscardPacketsReceived", "rx_dropped" },
+		{ "MulticastPacketsSent", "tx_multicast" }, { "MulticastPacketsReceived", "multicast" },
+		{ "BroadcastPacketsSent", "tx_broadcast" }, { "BroadcastPacketsReceived", "rx_broadcast" },
+		{ "UnknownProtoPacketsReceived", "rx_nohandler" },
+	};
+	long long v;
+	size_t i;
+
+	if (!dev || !*dev || !leaf)
+		return "0";
+	if (strcmp(leaf, "UnicastPacketsSent") == 0) {
+		v = dip_stat_sys(dev, "tx_packets") - dip_stat_sys(dev, "tx_multicast") - dip_stat_sys(dev, "tx_broadcast");
+		return dip_num(v >= 0 ? v : 0);
+	}
+	if (strcmp(leaf, "UnicastPacketsReceived") == 0) {
+		v = dip_stat_sys(dev, "rx_packets") - dip_stat_sys(dev, "multicast") - dip_stat_sys(dev, "rx_broadcast");
+		return dip_num(v >= 0 ? v : 0);
+	}
+	for (i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
+		if (strcmp(leaf, map[i].leaf) == 0)
+			return dip_num(dip_stat_sys(dev, map[i].stat));
+	}
+	return "0";
+}
+
 /* ------------------------------------------------------------------ */
 /* tables                                                              */
 /* ------------------------------------------------------------------ */

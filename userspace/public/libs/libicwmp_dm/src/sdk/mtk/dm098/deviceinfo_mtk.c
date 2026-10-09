@@ -901,3 +901,62 @@ static const struct dm_module xpon181_mtk_module = {
 	.paths = xpon181_mtk_paths,
 };
 DM_MODULE_REGISTER(xpon181_mtk_module);
+
+/* T7 S5a: Optical.Interface.1 (wan_mtk.c) optical levels, the same ponmgr
+ * reading as X_AIS_GPON (0.1 uW) in the TR-181 Dbm1000 unit: 0.001 dBm, in
+ * steps of 2; -65536 (no light, the bottom of the range) when there is no
+ * reading */
+static int gpon_dbm1000(const char *key, char **value)
+{
+	char *raw = ponmgr_field("phyTransParams", key), *end = NULL;
+	long v = raw ? strtol(raw, &end, 10) : 0, c;
+
+	if (!raw || end == raw || v <= 0) {
+		*value = "-65536";
+		return 0;
+	}
+	c = lround(10000.0 * log10((double)v / 10000.0) / 2.0) * 2;
+	if (c < -65536)
+		c = -65536;
+	if (c > 65534)
+		c = 65534;
+	dmasprintf(value, "%ld", c);
+	return 0;
+}
+
+static int get_optical181_rx(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	return gpon_dbm1000("rxPower", value);
+}
+
+static int get_optical181_tx(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	return gpon_dbm1000("txPower", value);
+}
+
+static DMLEAF tOpticalLevel181Params[] = {
+/* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
+{"OpticalSignalLevel", &DMREAD, DMT_INT, get_optical181_rx, NULL, NULL, NULL},
+{"TransmitOpticalLevel", &DMREAD, DMT_INT, get_optical181_tx, NULL, NULL, NULL},
+{0}
+};
+
+/* browseinstobj left NULL: wan_mtk.c makes Interface.1 */
+static DMOBJ tOpticalLevel181Obj[] = {
+{"Interface", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tOpticalLevel181Params, NULL},
+{0}
+};
+
+static DMOBJ tOpticalLevel181Root[] = {
+{"Optical", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, tOpticalLevel181Obj, NULL, NULL},
+{0}
+};
+
+/* Device.Optical. is wan_mtk.c's claim: the two leaves join it by the merge */
+static const struct dm_module optical_level181_mtk_module = {
+	.name  = "mtk-optical-level-181",
+	.model = DM_MODEL_TR181,
+	.order = DM_ORDER_SDK,
+	.objs  = tOpticalLevel181Root,
+};
+DM_MODULE_REGISTER(optical_level181_mtk_module);

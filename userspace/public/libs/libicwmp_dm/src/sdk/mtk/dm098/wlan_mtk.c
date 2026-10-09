@@ -49,6 +49,7 @@
 #include "dm_registry.h"
 #include "dmmtk.h"
 #include "wlan_mtk.h"
+#include "device_ip_mtk.h"
 
 #define RADIO_DEVICE_2G		"MT7993_1_1"
 #define RADIO_DEVICE_5G		"MT7993_1_2"
@@ -1150,6 +1151,40 @@ MTK_SET_SAME(radio181_band, get_radio181_band)
 MTK_SET_SAME(radio181_basic_rates, get_transmit_rates)
 MTK_SET_SAME(radio181_op_rates, get_transmit_rates)
 
+/* T7 S5a: Radio.{i}.Stats, the sum of the counters of the radio's twelve
+ * interfaces' netdevs of its band (rai* on Radio.2): the MTK driver has no
+ * netdev for the radio itself */
+static int get_radio181_stat(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	const char *leaf = STATS181_LEAF(refparam);
+	long long sum = 0;
+	int i, r = radio181_number(data);
+
+	for (i = 0; i < WLAN_IFACE_COUNT; i++) {
+		if (radio181_number((void *)&wlan_ifaces[i]) == r)
+			sum += strtoll(dip_stat181(wlan_ifaces[i].name, leaf), NULL, 10);
+	}
+	dmasprintf(value, "%lld", sum);
+	return 0;
+}
+
+static DMLEAF tRadio181StatsParam[] = {
+{"BytesSent", &DMREAD, DMT_UNLONG, get_radio181_stat, NULL, NULL, NULL},
+{"BytesReceived", &DMREAD, DMT_UNLONG, get_radio181_stat, NULL, NULL, NULL},
+{"PacketsSent", &DMREAD, DMT_UNLONG, get_radio181_stat, NULL, NULL, NULL},
+{"PacketsReceived", &DMREAD, DMT_UNLONG, get_radio181_stat, NULL, NULL, NULL},
+{"ErrorsSent", &DMREAD, DMT_UNINT, get_radio181_stat, NULL, NULL, NULL},
+{"ErrorsReceived", &DMREAD, DMT_UNINT, get_radio181_stat, NULL, NULL, NULL},
+{"DiscardPacketsSent", &DMREAD, DMT_UNINT, get_radio181_stat, NULL, NULL, NULL},
+{"DiscardPacketsReceived", &DMREAD, DMT_UNINT, get_radio181_stat, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tRadio181Obj[] = {
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tRadio181StatsParam, NULL},
+{0}
+};
+
 static DMLEAF tRadio181Param[] = {
 /* PARAM, permission, type, getvalue, setvalue, forced_inform, notification */
 {"Enable", &DMWRITE, DMT_BOOL, get_radio181_enable, set_radio181_enable, NULL, NULL},
@@ -1228,7 +1263,7 @@ static DMLEAF tWifi181Param[] = {
 };
 
 static DMOBJ tWifi181Obj[] = {
-{"Radio", &DMREAD, NULL, NULL, NULL, browseRadio181Inst, NULL, NULL, NULL, tRadio181Param, NULL},
+{"Radio", &DMREAD, NULL, NULL, NULL, browseRadio181Inst, NULL, NULL, tRadio181Obj, tRadio181Param, NULL},
 {"SSID", &DMREAD, NULL, NULL, NULL, browseWlan181Inst, NULL, NULL, tSsid181Obj, tSsid181Param, NULL},
 {"AccessPoint", &DMREAD, NULL, NULL, NULL, browseWlan181Inst, NULL, NULL, NULL, tAp181Param, NULL},
 {0}

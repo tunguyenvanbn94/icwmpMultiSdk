@@ -59,6 +59,7 @@
 #include <ctype.h>
 
 #include <uci.h>
+#include <json-c/json.h>
 
 #include "dmtr098.h"
 #include "dmmem.h"
@@ -108,6 +109,19 @@ static char *netdev_mac(const char *dev)
 
 	snprintf(path, sizeof(path), "/sys/class/net/%s/address", dev);
 	return mtk_file_line(path);
+}
+
+/* LastChange: the uptime of the netifd interface on the device (the time
+ * it has been up), 0 when none is up -- the kernel keeps no time of a
+ * netdev's last state change */
+static char *iface_uptime(const char *iface)
+{
+	json_object *res = (iface && *iface) ? wan_iface_status(iface) : NULL, *up, *t;
+
+	if (!res || !json_object_object_get_ex(res, "up", &up) || !json_object_get_boolean(up) ||
+	    !json_object_object_get_ex(res, "uptime", &t))
+		return "0";
+	return dmstrdup(json_object_get_string(t));
 }
 
 static int conn_vlan_id(struct wan_entry *e, long *vid)
@@ -389,6 +403,54 @@ ALIAS181(bridge)
 ALIAS181(port)
 ALIAS181(stack)
 
+/* the netifd interface on a link: lan on br-lan, if_wanbr<id> on a bridged
+ * connection's bridge; none on the uplink itself */
+static int get_link_lastchange(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	int inst = LINK(data)->inst;
+	char sec[32];
+
+	if (inst == LINK_LAN)
+		*value = iface_uptime("lan");
+	else if (inst > LINK_UPLINK) {
+		snprintf(sec, sizeof(sec), "if_wanbr%d", inst - LINK_WANBR(0));
+		*value = iface_uptime(sec);
+	} else
+		*value = "0";
+	return 0;
+}
+
+static int get_link_stat(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = dip_stat181(LINK(data)->name, STATS181_LEAF(refparam));
+	return 0;
+}
+
+static DMLEAF tLink181StatsParams[] = {
+{"BytesSent", &DMREAD, DMT_UNLONG, get_link_stat, NULL, NULL, NULL},
+{"BytesReceived", &DMREAD, DMT_UNLONG, get_link_stat, NULL, NULL, NULL},
+{"PacketsSent", &DMREAD, DMT_UNLONG, get_link_stat, NULL, NULL, NULL},
+{"PacketsReceived", &DMREAD, DMT_UNLONG, get_link_stat, NULL, NULL, NULL},
+{"ErrorsSent", &DMREAD, DMT_UNINT, get_link_stat, NULL, NULL, NULL},
+{"ErrorsReceived", &DMREAD, DMT_UNINT, get_link_stat, NULL, NULL, NULL},
+{"UnicastPacketsSent", &DMREAD, DMT_UNLONG, get_link_stat, NULL, NULL, NULL},
+{"UnicastPacketsReceived", &DMREAD, DMT_UNLONG, get_link_stat, NULL, NULL, NULL},
+{"DiscardPacketsSent", &DMREAD, DMT_UNINT, get_link_stat, NULL, NULL, NULL},
+{"DiscardPacketsReceived", &DMREAD, DMT_UNINT, get_link_stat, NULL, NULL, NULL},
+{"MulticastPacketsSent", &DMREAD, DMT_UNLONG, get_link_stat, NULL, NULL, NULL},
+{"MulticastPacketsReceived", &DMREAD, DMT_UNLONG, get_link_stat, NULL, NULL, NULL},
+{"BroadcastPacketsSent", &DMREAD, DMT_UNLONG, get_link_stat, NULL, NULL, NULL},
+{"BroadcastPacketsReceived", &DMREAD, DMT_UNLONG, get_link_stat, NULL, NULL, NULL},
+{"UnknownProtoPacketsReceived", &DMREAD, DMT_UNINT, get_link_stat, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tLink181Obj[] = {
+/* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tLink181StatsParams, NULL},
+{0}
+};
+
 MTK_SET_SAME_BOOL(true181, get_true181)
 MTK_SET_SAME(link_lower, get_link_lower)
 MTK_SET_SAME(link_mac, get_link_mac)
@@ -399,6 +461,7 @@ static DMLEAF tLink181Params[] = {
 {"Status", &DMREAD, DMT_STRING, get_link_status, NULL, NULL, NULL},
 {"Alias", &DMWRITE, DMT_STRING, get_alias_link, set_alias_link, NULL, NULL},
 {"Name", &DMREAD, DMT_STRING, get_link_name, NULL, NULL, NULL},
+{"LastChange", &DMREAD, DMT_UNINT, get_link_lastchange, NULL, NULL, NULL},
 {"LowerLayers", &DMWRITE, DMT_STRING, get_link_lower, set_same_link_lower, NULL, NULL},
 {"MACAddress", &DMWRITE, DMT_STRING, get_link_mac, set_same_link_mac, NULL, NULL},
 {0}
@@ -473,6 +536,46 @@ VLAN_LEAF(enable, "X_AIS_VLANEnable")
 VLAN_LEAF(id, "X_AIS_VLANID")
 VLAN_LEAF(priority, "X_AIS_VLAN8021P")
 
+/* the connection's netifd interface runs on the VLAN */
+static int get_vlan_lastchange(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = conn_vlan_active(VLAN_E(data)) ? iface_uptime(VLAN_E(data)->if4) : "0";
+	return 0;
+}
+
+static int get_vlan_stat(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char *name = NULL;
+
+	get_vlan_name(refparam, ctx, data, instance, &name);
+	*value = dip_stat181(name, STATS181_LEAF(refparam));
+	return 0;
+}
+
+static DMLEAF tVlan181StatsParams[] = {
+{"BytesSent", &DMREAD, DMT_UNLONG, get_vlan_stat, NULL, NULL, NULL},
+{"BytesReceived", &DMREAD, DMT_UNLONG, get_vlan_stat, NULL, NULL, NULL},
+{"PacketsSent", &DMREAD, DMT_UNLONG, get_vlan_stat, NULL, NULL, NULL},
+{"PacketsReceived", &DMREAD, DMT_UNLONG, get_vlan_stat, NULL, NULL, NULL},
+{"ErrorsSent", &DMREAD, DMT_UNINT, get_vlan_stat, NULL, NULL, NULL},
+{"ErrorsReceived", &DMREAD, DMT_UNINT, get_vlan_stat, NULL, NULL, NULL},
+{"UnicastPacketsSent", &DMREAD, DMT_UNLONG, get_vlan_stat, NULL, NULL, NULL},
+{"UnicastPacketsReceived", &DMREAD, DMT_UNLONG, get_vlan_stat, NULL, NULL, NULL},
+{"DiscardPacketsSent", &DMREAD, DMT_UNINT, get_vlan_stat, NULL, NULL, NULL},
+{"DiscardPacketsReceived", &DMREAD, DMT_UNINT, get_vlan_stat, NULL, NULL, NULL},
+{"MulticastPacketsSent", &DMREAD, DMT_UNLONG, get_vlan_stat, NULL, NULL, NULL},
+{"MulticastPacketsReceived", &DMREAD, DMT_UNLONG, get_vlan_stat, NULL, NULL, NULL},
+{"BroadcastPacketsSent", &DMREAD, DMT_UNLONG, get_vlan_stat, NULL, NULL, NULL},
+{"BroadcastPacketsReceived", &DMREAD, DMT_UNLONG, get_vlan_stat, NULL, NULL, NULL},
+{"UnknownProtoPacketsReceived", &DMREAD, DMT_UNINT, get_vlan_stat, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tVlan181Obj[] = {
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tVlan181StatsParams, NULL},
+{0}
+};
+
 MTK_SET_SAME(vlan_lower, get_vlan_lower)
 MTK_SET_SAME(vlan_tpid, get_vlan_tpid)
 
@@ -482,6 +585,7 @@ static DMLEAF tVlan181Params[] = {
 {"Status", &DMREAD, DMT_STRING, get_vlan_status, NULL, NULL, NULL},
 {"Alias", &DMWRITE, DMT_STRING, get_alias_vlan, set_alias_vlan, NULL, NULL},
 {"Name", &DMREAD, DMT_STRING, get_vlan_name, NULL, NULL, NULL},
+{"LastChange", &DMREAD, DMT_UNINT, get_vlan_lastchange, NULL, NULL, NULL},
 {"LowerLayers", &DMWRITE, DMT_STRING, get_vlan_lower, set_same_vlan_lower, NULL, NULL},
 {"VLANID", &DMWRITE, DMT_UNINT, get_vlan_id, set_vlan_id, NULL, NULL},
 {"VLANPriority", &DMWRITE, DMT_INT, get_vlan_priority, set_vlan_priority, NULL, NULL},
@@ -513,8 +617,8 @@ static int get_vlan_count(char *refparam, struct dmctx *ctx, void *data, char *i
 
 static DMOBJ tEthernetStack181Obj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Link", &DMREAD, NULL, NULL, NULL, browse_link181, NULL, NULL, NULL, tLink181Params, NULL},
-{"VLANTermination", &DMREAD, NULL, NULL, NULL, browse_vlan181, NULL, NULL, NULL, tVlan181Params, NULL},
+{"Link", &DMREAD, NULL, NULL, NULL, browse_link181, NULL, NULL, tLink181Obj, tLink181Params, NULL},
+{"VLANTermination", &DMREAD, NULL, NULL, NULL, browse_vlan181, NULL, NULL, tVlan181Obj, tVlan181Params, NULL},
 {0}
 };
 
@@ -721,6 +825,71 @@ static int get_port_mgmt(char *refparam, struct dmctx *ctx, void *data, char *in
 	return 0;
 }
 
+/* the management port is the bridge itself: the netifd interface on it */
+static int get_port_lastchange(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	char sec[32];
+
+	if (PORT(data)->port != PORT_MGMT)
+		*value = "0";
+	else if (PORT(data)->bridge == BRIDGE_LAN)
+		*value = iface_uptime("lan");
+	else {
+		snprintf(sec, sizeof(sec), "if_wanbr%d", PORT(data)->bridge - BRIDGE_WAN(0));
+		*value = iface_uptime(sec);
+	}
+	return 0;
+}
+
+/* /sys/class/net/<port>/brport/state (br_private.h BR_STATE_*); the
+ * management port forwards while the bridge is up */
+static int get_port_state(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	static const char *const st[] = { "Disabled", "Listening", "Learning", "Forwarding", "Blocking" };
+	char path[96], *v;
+	int n;
+
+	if (PORT(data)->port == PORT_MGMT) {
+		*value = strcmp(netdev_status(PORT(data)->name), "Up") == 0 ? "Forwarding" : "Disabled";
+		return 0;
+	}
+	snprintf(path, sizeof(path), "/sys/class/net/%s/brport/state", PORT(data)->name);
+	v = mtk_file_line(path);
+	n = (v && *v) ? atoi(v) : 0;
+	*value = (char *)st[n >= 0 && n <= 4 ? n : 0];
+	return 0;
+}
+
+static int get_port_stat(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	*value = dip_stat181(PORT(data)->name, STATS181_LEAF(refparam));
+	return 0;
+}
+
+static DMLEAF tPort181StatsParams[] = {
+{"BytesSent", &DMREAD, DMT_UNLONG, get_port_stat, NULL, NULL, NULL},
+{"BytesReceived", &DMREAD, DMT_UNLONG, get_port_stat, NULL, NULL, NULL},
+{"PacketsSent", &DMREAD, DMT_UNLONG, get_port_stat, NULL, NULL, NULL},
+{"PacketsReceived", &DMREAD, DMT_UNLONG, get_port_stat, NULL, NULL, NULL},
+{"ErrorsSent", &DMREAD, DMT_UNINT, get_port_stat, NULL, NULL, NULL},
+{"ErrorsReceived", &DMREAD, DMT_UNINT, get_port_stat, NULL, NULL, NULL},
+{"UnicastPacketsSent", &DMREAD, DMT_UNLONG, get_port_stat, NULL, NULL, NULL},
+{"UnicastPacketsReceived", &DMREAD, DMT_UNLONG, get_port_stat, NULL, NULL, NULL},
+{"DiscardPacketsSent", &DMREAD, DMT_UNINT, get_port_stat, NULL, NULL, NULL},
+{"DiscardPacketsReceived", &DMREAD, DMT_UNINT, get_port_stat, NULL, NULL, NULL},
+{"MulticastPacketsSent", &DMREAD, DMT_UNLONG, get_port_stat, NULL, NULL, NULL},
+{"MulticastPacketsReceived", &DMREAD, DMT_UNLONG, get_port_stat, NULL, NULL, NULL},
+{"BroadcastPacketsSent", &DMREAD, DMT_UNLONG, get_port_stat, NULL, NULL, NULL},
+{"BroadcastPacketsReceived", &DMREAD, DMT_UNLONG, get_port_stat, NULL, NULL, NULL},
+{"UnknownProtoPacketsReceived", &DMREAD, DMT_UNINT, get_port_stat, NULL, NULL, NULL},
+{0}
+};
+
+static DMOBJ tPort181Obj[] = {
+{"Stats", &DMREAD, NULL, NULL, NULL, NULL, NULL, NULL, NULL, tPort181StatsParams, NULL},
+{0}
+};
+
 MTK_SET_SAME(bridge_standard, get_bridge_standard)
 MTK_SET_SAME(port_lower, get_port_lower)
 MTK_SET_SAME_BOOL(port_mgmt, get_port_mgmt)
@@ -731,14 +900,16 @@ static DMLEAF tPort181Params[] = {
 {"Status", &DMREAD, DMT_STRING, get_port_status, NULL, NULL, NULL},
 {"Alias", &DMWRITE, DMT_STRING, get_alias_port, set_alias_port, NULL, NULL},
 {"Name", &DMREAD, DMT_STRING, get_port_name, NULL, NULL, NULL},
+{"LastChange", &DMREAD, DMT_UNINT, get_port_lastchange, NULL, NULL, NULL},
 {"LowerLayers", &DMWRITE, DMT_STRING, get_port_lower, set_same_port_lower, NULL, NULL},
 {"ManagementPort", &DMWRITE, DMT_BOOL, get_port_mgmt, set_same_port_mgmt, NULL, NULL},
+{"PortState", &DMREAD, DMT_STRING, get_port_state, NULL, NULL, NULL},
 {0}
 };
 
 static DMOBJ tBridge181Obj[] = {
 /* OBJ, permission, addobj, delobj, checkobj, browseinstobj, forced_inform, notification, nextobj, leaf, linker */
-{"Port", &DMREAD, NULL, NULL, NULL, browse_port181, NULL, NULL, NULL, tPort181Params, NULL},
+{"Port", &DMREAD, NULL, NULL, NULL, browse_port181, NULL, NULL, tPort181Obj, tPort181Params, NULL},
 {0}
 };
 
@@ -767,7 +938,17 @@ static DMOBJ tBridging181Obj[] = {
 {0}
 };
 
+/* br-lan and one bridge per bridged connection: 1 + WAN_MAX_ENTRIES, all
+ * of them 802.1D bridges */
+static int get_bridge_max(char *refparam, struct dmctx *ctx, void *data, char *instance, char **value)
+{
+	dmasprintf(value, "%d", 1 + WAN_MAX_ENTRIES);
+	return 0;
+}
+
 static DMLEAF tBridging181Params[] = {
+{"MaxBridgeEntries", &DMREAD, DMT_UNINT, get_bridge_max, NULL, NULL, NULL},
+{"MaxDBridgeEntries", &DMREAD, DMT_UNINT, get_bridge_max, NULL, NULL, NULL},
 {"BridgeNumberOfEntries", &DMREAD, DMT_UNINT, get_bridge_count, NULL, NULL, NULL},
 {0}
 };
