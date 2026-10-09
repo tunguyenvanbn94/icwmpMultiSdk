@@ -5148,3 +5148,49 @@ DSCP) → B.
 - `tr181-bbf-check`: **type 0**, unknown 0, status 0. Còn access 21 (S3).
 - Cổng tĩnh: lib MTK 69/0; lib BDK 23 file, 4 vấn đề `cmsLog_error` không thấy khai báo, giống hệt trên HEAD trước S2. Cross-gcc
   SDK 69 file, 0 lỗi.
+
+## 81. T7 chuẩn hoá S3: quyền ghi theo TR-181 2.19 (`tr181-0015`) (09/10 10:11–10:16)
+
+Sau S2 còn 21 lá chuẩn `readWrite` mà cây đang để read-only. CPE được phép từ chối một giá trị nó không hỗ trợ (9007), nhưng
+không được báo lá đó là read-only. Thêm vào đó, `IPv4Address.{i}.Alias` đang nhận giá trị rồi bỏ qua
+(`set_accept_and_drop`), cũng sai chuẩn.
+
+**Lá sản phẩm không đổi được** (tham chiếu cố định, hằng số, đặc tính phần cứng). Macro `MTK_SET_SAME(_BOOL)` trong
+`dmmtk.h`: giá trị lá đang đọc thì nhận (không làm gì), giá trị khác trả 9007. Bản `_BOOL` so theo boolean (`1` = `true`).
+Áp cho các lá sau:
+- `DHCPv4.Client.{i}.Interface`, `DHCPv4.Server.Pool.{i}.Interface`, `DNS.Client.Server.{i}.Enable/Interface`,
+  `NAT.InterfaceSetting.{i}.Interface`;
+- `DHCPv6.Server.Pool.{i}.DUID`, `Optical.Interface.{i}.Enable`;
+- `WiFi.Radio.{i}.OperatingFrequencyBand/BasicDataTransmitRates/OperationalDataTransmitRates`, `WiFi.SSID.{i}.LowerLayers`,
+  `WiFi.AccessPoint.{i}.SSIDReference`;
+- `IP.Interface.{i}.LowerLayers` (S4 sẽ thay);
+- `LogicalVolume.{i}.Capacity/PhysicalReference`;
+- `Firewall.Config/Enable` và `IP.IPv4Enable`: bảng `tFirewallParams`, `tDipParams` đang dùng chung, nên có bản TR-181 riêng.
+
+**Ghi thật:**
+- `WiFi.Radio.{i}.Enable` ghi `wireless.<radio>.disabled` (chính option mà `Enable`/`Status` đọc), rồi reload Wi-Fi như các
+  setter Wi-Fi khác.
+- `Alias` của `Ethernet.Interface.{i}`, `IP.Interface.{i}`, `IP.Interface.{i}.IPv4Address.{i}`: kho chung
+  `mtk_alias181_get/set` (`dmmtk.c`).
+  - Khoá lấy từ đường dẫn đầy đủ của lá (`Device.Ethernet.Interface.1.Alias` → `cwmp.tr181_alias.Ethernet_Interface_1`),
+    nên giữ được qua khởi động lại.
+  - Ghi: 1–64 ký tự `[A-Za-z0-9_-]`, mở đầu bằng chữ cái, không trùng instance khác cùng bảng. Không nhận tiền tố `cpe-`
+    (dành cho giá trị CPE tự gán); ghi lại đúng giá trị đang có thì nhận.
+  - Giá trị CPE tự gán khi ACS chưa đặt:
+    - `cpe-Ethernet-<n>`: bản TR-098 của sản phẩm là `Ethernet-<n>`, thiếu tiền tố `cpe-` mà TR-069 đòi;
+    - `cpe-<network section>` cho IP.Interface: alias của sản phẩm suy từ `service_type` (`cpe-internet`…) có thể trùng giữa hai
+      kết nối, còn LAN trước đây rỗng;
+    - IPv4Address: LAN giữ `cpe-ipif1`, kết nối dùng `cpe-ipv4-<n>`.
+  - Ánh xạ: các cặp Alias của LANEthernet/WANIP/WANPPP chuyển sang B; thêm 2 dòng `new`.
+
+**Kiểm (host):**
+- `run.sh tr181` thêm:
+  - Alias mặc định → ghi → đọc lại → có trong uci; trùng port khác / `cpe-x` / `1abc` → 9007; ghi lại giá trị đang có → 0;
+  - IPv4Address Alias ghi được;
+  - `Firewall.Config` High → 0, Low → 9007; NAT `Interface` giá trị hiện tại → 0, khác → 9007; `OperatingFrequencyBand` 5GHz trên
+    radio 2,4 GHz → 9007; `IPv4Enable` 1 → 0, false → 9007;
+  - `Radio.2.Enable` false → `disabled` 1, `Status` Down; true → 0.
+- So cặp 1056 bằng + 2 tham chiếu, B 181, 0 tên thiếu cặp.
+- **`tr181-bbf-check`: RESULT PASS** — 550 tham số, 357 chuẩn, 193 vendor; unknown 0, access 0, type 0, status 0.
+- Cổng tĩnh và cross-gcc SDK 69 file 0 lỗi.
+- `run.sh all` 25/25 (`ALL_RC=0`, 10:27). Commit code `3101a5a`. Chưa nạp board.
