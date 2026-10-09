@@ -5274,3 +5274,50 @@ tham chiếu tới object tầng dưới, và cây chưa có các object đó (`
   `Optical.Interface`/`XPON`, không phải `Ethernet.Interface`. Để S5 hoặc khi có yêu cầu nhà mạng.
 - `VLANTermination.VLANPriority` của kết nối bridged trả 9002, do setter `X_AIS_VLAN8021P` của sản phẩm (điểm 3 đầu
   `wanip_mtk.c`).
+
+## 83. T7 chuẩn hoá S4b: lá đếm khớp đúng bảng (`tr181-0017`) (09/10 10:48–11:03)
+
+Luật TR-181: `X.{i}.` có bao nhiêu dòng thì `XNumberOfEntries` đọc đúng chừng đó. Sau S4 còn hai loại lệch.
+
+**Bảng có mà thiếu lá đếm** (tìm bằng `numEntriesParameter` của XML BBF đối với các bảng có trong dump). Thêm lá đếm,
+đếm bằng chính hàm dựng danh sách mà browse dùng (tách từ browse ra thành `d6_list`, `ra_list`, `ppp_list`). Nhờ vậy số
+đếm và số dòng không thể lệch nhau:
+- `DHCPv6.Server.PoolNumberOfEntries`;
+- `RouterAdvertisement.InterfaceSettingNumberOfEntries` (bảng TR-181 riêng `tRaDevice181Obj`, nhánh TR-098 giữ nguyên);
+- `PPP.InterfaceNumberOfEntries`, kèm `PPP.SupportedNCPs` = `IPCP,IPv6CP`. Verified: `hal_network.c` dựng interface
+  `pppoe` với option `ipv6` theo v6 của kết nối, và `noip` khi không có IPv4;
+- `DeviceInfo.TemperatureStatus.TemperatureSensorNumberOfEntries` = 1 (một cảm biến cố định);
+- `Services.StorageServiceNumberOfEntries`: đây là tham số cấp model của TR-140, gắn vào `Device.Services.`.
+  `tr181-bbf-check.py` trước đây chỉ đọc tham số nằm trong object; nay đọc cả tham số cấp model của service model.
+
+**Lá đếm có mà bảng không có, hoặc đếm khác nguồn** (dò tĩnh trên tên khai báo + so số dòng trong dump):
+
+| Lá | Trước | Sau |
+|---|---|---|
+| `IP.Interface.{i}.IPv4AddressNumberOfEntries` | số địa chỉ netifd báo đang up (host: LAN đọc 0 mà có `IPv4Address.1`) | số dòng `lan_mtk.c` browse ra: LAN và kết nối routed = 1, bridged = 0. Cặp TR-098 → B |
+| `StorageService.{i}.UserAccountNumberOfEntries`, `PhysicalMediumNumberOfEntries`, `LogicalVolume.{i}.FolderNumberOfEntries` | đếm user `/etc/passwd` (host: 19), đĩa, thư mục — không có bảng nào | bỏ khỏi cây TR-181 (bản sao `tSs181Params`), cặp TR-098 → D |
+| `LogicalVolume.{i}.PhysicalReference` | tên device đĩa (`nvme0n1`) | rỗng: TR-140 là tham chiếu tới `PhysicalMedium.{i}`, cây không có bảng đó. Cặp → B |
+
+Còn lại, chưa sửa ở S4b:
+- `IP.Interface.{i}.IPv6AddressNumberOfEntries` / `IPv6PrefixNumberOfEntries` đếm địa chỉ/prefix từ netifd, nhưng chưa có
+  bảng `IPv6Address`/`IPv6Prefix`. Trên host đọc 0 nên kiểm chung không lộ; trên board sẽ khác 0. Bước tiếp S4c dựng hai bảng
+  này.
+- `DynamicDNS.ServerNumberOfEntries` đếm dòng trong file danh sách nhà cung cấp, chưa có bảng `DynamicDNS.Server.{i}`.
+  Ngoài ra `Client.{i}.Server` theo chuẩn là tham chiếu tới bảng đó, còn sản phẩm lưu tên dịch vụ. Bước tiếp S4d. Kiểm
+  chung trong `run.sh` tạm miễn đúng lá này.
+- Đếm hằng 0 của bảng không dựng (`Bridge.{i}.VLAN/VLANPort`, `DHCPv4.Server.Pool.{i}.Option/StaticAddress`, XPON
+  `Transceiver/EthernetUNI/SoftwareImage`): giá trị không sai (0 dòng), giữ nguyên.
+
+**Kiểm (host):**
+- `run.sh tr181` thêm:
+  - giá trị S4b: PPP 1, `IPCP,IPv6CP`, cảm biến 1, StorageService ≥ 1; `IPv4AddressNumberOfEntries` LAN/IPoE/PPP/bridge =
+    `1 1 1 0`; 3 lá StorageService đã bỏ đọc `<none>`, `PhysicalReference` rỗng;
+  - kiểm chung trên dump GPV: **mọi** `…NumberOfEntries` bằng số dòng của bảng trong cùng dump (0 lệch, trừ lá DDNS ở trên).
+- `tr181-map.py check` 630 = 630.
+- **`tr181-bbf-check`: RESULT PASS** — 588 tham số, 395 chuẩn, 193 vendor; unknown/access/type/status 0.
+- Cổng tĩnh lib MTK 70/0, automake 0, cross-gcc SDK 0 lỗi.
+- `run.sh all` 25/25 (`ALL_RC=0`, 11:02). Commit code `772b945`. Chưa nạp board.
+
+`tr181-bbf-check.py` có thêm `--profile <P:v>[,…]` và `--profiles` (dùng cho S5). Lệnh này đi theo `base`/`extends` của
+profile, rồi báo: lá bắt buộc còn thiếu, lá `readWrite` mà ở đây read-only, bảng profile đòi create/delete mà không làm được.
+Bảng không có dòng nào trong dump thì báo là chưa kiểm được.
