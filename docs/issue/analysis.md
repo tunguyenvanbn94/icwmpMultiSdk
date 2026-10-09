@@ -5683,3 +5683,55 @@ Các bảng này có thể làm AddObject/DeleteObject sau này nếu nhà mạn
 - `tr181-map.py check` 844 = 844. Cổng tĩnh lib MTK 71/0, automake 0, cross-gcc SDK 0 lỗi, không cảnh báo ở file đã sửa.
 - Bảng `Process` trên host rất lớn vì container dùng chung PID với máy host; board có vài trăm tiến trình.
 - `run.sh all` 25/25 (`ALL_RC=0`, 15:53). Commit code `fa1adfa`. Chưa nạp board.
+
+## 90. Board: image S5b (`e87c65f`) — kết thúc đợt chuẩn hoá T7 (09/10 15:54–16:06)
+
+**Build:** `ICWMP_IMAGE_RC=0`, `libtr098.so.3.0.0` md5 `22ee9cc7…` (có `icwmp_temp181`, `MLDUnit`, `RekeyingInterval`,
+`SupportedRecordTypes`); `tclinux.bin` `93a34314…` → `.icwmp-images/tclinux_t7s5b_e87c65f_devaccess.bin`.
+
+**G9 image `47c97d5`** (`logs/20261009_g9_soak_image_47c97d5.csv`): 3 mẫu 15:30→15:50, phẳng. Quá ngắn để kết luận; soak dài
+để cho image S5b.
+
+**Nạp** (đường WebUI): md5 trùng, `Model validation successful`, `"valid": true`, `sysupgrade -T` rc 0; `sysupgrade` 16:00:51;
+ping lại lúc kiểm 16:03:55. `libtr098` trên board trùng bản build, agent `up`, 3 phiên success.
+
+**TR-098 parity: PASS** (1735 chung: 1578 bằng, 109 động, 16 đã biết, 32 nháy).
+
+**`tr181_window.sh`** (16:04; log `logs/20261009_t7s5b_board_tr181_window.log`):
+- Dump có 3071 giá trị trong 2 s, tên trong 1 s (bảng Process 110 dòng).
+- So cặp: **PASS**. 1041 bằng + 2 tham chiếu, B 263, secured 12, động 103, D 332.
+- **`tr181-bbf-check`: RESULT PASS** — 734 tham số; unknown/access/type/status/enum/secured đều 0.
+- Kiểm chung lá đếm 0 lệch; `/etc/config` trước và sau giống hệt.
+- **Profile trên dump board: 28/29 không thiếu lá**; Routing:2 thiếu `Routing.RIP` (§89). Create/delete như §89.
+
+**Giá trị thật (Verified trên board):**
+- PPP:
+  - `ConnectionTrigger` AlwaysOn, `IPv6CPEnable` true (`network.if0.ipv6=1`);
+  - `PPPoE.SessionID` 10679 (phiên mới sau reboot); `ACName`/`ServiceName` rỗng (bất kỳ AC);
+  - IPv6CP `::a852:93e8:1e6:88b5` / `::f4:b723`.
+- IP: `ULAPrefix` `fdea:e111:ce6b::/48`, `ULAEnable` true trên LAN.
+- DHCPv6/RA: DHCPv6 server tắt trên board (`dhcpv6` không phải `server`), nên IANA/IAPD false. RA bật, `AdvCurHopLimit` 0,
+  `AdvPreferredRouterFlag` Medium.
+- Ethernet: Interface.3 `Up` 1000, Interface.4 `Up` 100 (mã `link_speed` 1 và 2); 1, 2, 5 `Down` 0.
+- Process: 110 dòng, `Process.1` = PID 1 `/sbin/procd` Sleeping, CPUTime 6920 ms.
+- TemperatureSensor: `cpu-thermal` 57 °C, Min = Max = 57 (lần đọc đầu sau reset 09:05:17Z).
+- Wi-Fi:
+  - Radio 1/2: `MaxBitRate` 344/2882, `ExtensionChannel` Auto (kênh tự động), `GuardInterval` Auto, `MCS` -1,
+    `IEEE80211hEnabled` false/true;
+  - `MLDUnit`: SSID 11/12 = 0 (apmld1 bật), 9/10 = -1 (apmld2 tắt trên board);
+  - AP 1: `WMMEnable`/`UAPSDEnable` true (trước S5b đọc false), `WPS.Enable` true (`wps_state 2`), `RekeyingInterval` 0
+    (`rekey_meth DISABLE`), `RadiusServerPort` 1812.
+- DDNS `Server.2.ServerAddress` = `dynupdate.noip.com` (lỗi §88 đã sửa).
+
+G9 image S5b từ 16:06:24 (pid 25850, VmRSS 5736 kB). Đã dọn file test và image tải lên.
+
+**Tổng kết T7 (chatlog 97):**
+- Cây TR-181 của MTK đúng tên, kiểu, quyền ghi, enum và quy tắc secured của TR-181 2.19 (bbf-check PASS trên board).
+- Tầng interface theo chuẩn (`LowerLayers` là tham chiếu, InterfaceStack).
+- Mọi lá đếm khớp số dòng của bảng.
+- 28/29 profile ứng với chức năng có không thiếu lá; 16 profile khai được.
+- Còn mở:
+  1. NAT `PortMapping.Protocol` `TCP/UDP` (§86) — cần quyết;
+  2. AddObject/DeleteObject của 13 bảng (§89) và RIP — chỉ khi nhà mạng cần;
+  3. tạo kết nối IPoE qua TR-181 — user để sau;
+  4. danh sách tham số nhà mạng dùng thật — chưa có dữ liệu.
