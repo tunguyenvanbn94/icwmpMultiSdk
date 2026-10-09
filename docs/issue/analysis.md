@@ -5194,3 +5194,83 @@ không được báo lá đó là read-only. Thêm vào đó, `IPv4Address.{i}.A
 - **`tr181-bbf-check`: RESULT PASS** — 550 tham số, 357 chuẩn, 193 vendor; unknown 0, access 0, type 0, status 0.
 - Cổng tĩnh và cross-gcc SDK 69 file 0 lỗi.
 - `run.sh all` 25/25 (`ALL_RC=0`, 10:27). Commit code `3101a5a`. Chưa nạp board.
+
+## 82. T7 chuẩn hoá S4: tầng interface TR-181 (`tr181-0016`) (09/10 10:16–10:48)
+
+Yêu cầu (chatlog 97): `LowerLayers` và tham số TR-181 làm theo chuẩn. Trước S4, `IP.Interface.{i}.LowerLayers` đọc tên
+device của sản phẩm (`br-lan`, `pon.10`, `dev_wanbr2`), `PPP.Interface.{i}.LowerLayers` đọc `pon`/`pon.<vid>`. Chuẩn đòi
+tham chiếu tới object tầng dưới, và cây chưa có các object đó (`Ethernet.Link`, `Ethernet.VLANTermination`,
+`Bridging.Bridge`, `InterfaceStack`).
+
+**File mới `sdk/mtk/dm181/stack181_mtk.c`** (+ `stack181_mtk.h`, thêm vào `sdk/mtk/sdk.mk`). Số instance neo vào thứ không
+đổi (id của kết nối, số cổng), để giữ nguyên qua reboot và khi thêm/xoá kết nối khác:
+
+| Object | Instance | Là gì | Nằm trên (`LowerLayers`) |
+|---|---|---|---|
+| `Ethernet.Link.1` | cố định | `br-lan` | `Bridging.Bridge.1.Port.1` |
+| `Ethernet.Link.2` | cố định | uplink `wan_uplink_iface()` (`pon`, `eth1`, `eth0.N`) | `Optical.Interface.1` nếu `pon`, còn lại `Ethernet.Interface.5` |
+| `Ethernet.Link.<id+11>` | id kết nối bridged | bridge của kết nối (`network.dev_wanbr<id>.name`) | `Bridging.Bridge.<id+2>.Port.1` |
+| `Ethernet.VLANTermination.<id+1>` | id kết nối có `vlan_id` | `<uplink>.<vlan_id>` | `Ethernet.Link.2` |
+| `Bridging.Bridge.1` | cố định | `br-lan` | — |
+| `Bridging.Bridge.<id+2>` | id kết nối bridged | bridge của kết nối | — |
+| `Bridge.{i}.Port.1 / k+1 / n+5 / 18` | cố định | port quản lý / cổng LAN k (1..4) / SSID n (1..12) / phía WAN | port quản lý: mọi port còn lại; cổng: `Ethernet.Interface.k`, `WiFi.SSID.n`; phía WAN: VLAN hoặc tầng dưới của uplink |
+| `InterfaceStack.{i}` | đánh số liên tục | một dòng cho mỗi phần tử `LowerLayers` | sinh ra, không lưu |
+
+- `IP.Interface.LowerLayers`: LAN → `Link.1`; kết nối PPP → `PPP.Interface.<ppp_int_instance>`; IPoE → `VLANTermination.<id+1>`
+  khi VLAN đang bật, còn lại `Link.2`; `if<id>_6` → giống `if<id>`; bridged → `Link.<id+11>`. Setter vẫn set-same (S3).
+- `PPP.Interface.LowerLayers`: đọc `Link.2` hoặc `VLANTermination.<id+1>`; ghi hai giá trị đó, chuyển sang giá trị của
+  sản phẩm (`pon`, `pon.<vid>`) rồi gọi đúng setter cũ (`set_ppp_lowerlayers`). Uplink không phải `pon` → 9007, vì setter của
+  sản phẩm chỉ biết `pon`.
+- `VLANTermination.Enable/VLANID/VLANPriority` dùng lại getter/setter `X_AIS_VLANEnable/X_AIS_VLANID/X_AIS_VLAN8021P` của kết
+  nối (`wan181_get/set`). `TPID` 33024 set-same. `VLANPriority` kiểu `int` (-1..7) theo chuẩn.
+- Bridge port của `br-lan`: mọi cổng LAN và SSID, trừ cổng/SSID đã gán cho kết nối bridged (`lan<k>`, `ssid1..8`, `mlo` →
+  SSID 11, 12; SSID 9, 10 không có option gán) và trừ cổng LAN mà uplink chiếm (`clay.opermode.uplink` `eth2..eth4`).
+  Tên interface của SSID lấy từ bảng cố định của `wlan_mtk.c` (hàm mới `wlan_ifname_of_index`): SSID 5 là `rai0`, SSID 10
+  là `ra4`, không phải `ra0..5` rồi `rai0..5`.
+- Lá cố định của sản phẩm là set-same: `Enable` của Link/Bridge/Port, `LowerLayers` (trừ PPP), `ManagementPort`, `Standard`
+  (`802.1D-2004`), `TPID`, `MACAddress` (sysfs, chữ thường). `Status` từ `operstate` (`Up`/`Down`, không có netdev →
+  `NotPresent`). `Alias` qua kho Alias của S3; khoá `Bridging_Bridge_<b>_Port_<p>` nên duy nhất theo từng bridge.
+- Module: `mtk-stack-181` claim `Device.Bridging.`, `Device.InterfaceStack.`, `Device.InterfaceStackNumberOfEntries`;
+  `mtk-ethernet-stack-181` không claim, gộp `Link`, `VLANTermination` và hai lá đếm vào `Device.Ethernet.` mà `laneth`
+  claim.
+- Ánh xạ: `IP.Interface.{i}.LowerLayers`, `PPP.Interface.{i}.LowerLayers` → B. `LANHostConfigManagement.MACAddress`
+  (trước là D vì chưa có `Ethernet.Link`) → B tới `Ethernet.Link.1.MACAddress`. Thêm 35 dòng `new`.
+- Cổng tĩnh: `check-c-sanity.py` thêm include `sdk/%(sdk)s/dm181` (`check-cc-syntax.py` dùng chung danh sách này). Trước khi
+  sửa, cross-gcc báo `stack181_mtk.h: No such file` ở `device_ip_mtk.c`, `device_ppp_mtk.c`, dù build thật có
+  `-I../sdk/mtk/dm181/` trong `sdk.mk`.
+
+**Fixture host đổi:** `clay.opermode.uplink=pon` (thêm `clay` vào `TR181_CONFIGS`); `config device 'dev_wanbr2'` tên
+`br-wan2`; kết nối bridged id 2 có VLAN 20, `lan4`, `mlo`. Check cũ "WAN port Name" đổi `eth0` → `pon`: trước đây nó dựa vào
+`clay` chưa có, `wan_uplink_iface()` rơi về `eth0`.
+
+**Kiểm (host) — Verified trên host:**
+- `run.sh tr181` thêm:
+  - `LowerLayers` của 4 `IP.Interface`: `Link.1`, `VLANTermination.1`, `PPP.Interface.<p>`, `Link.13`;
+  - `Link` 1/2/13 (tên, tầng dưới), `VLANTermination` 1/3 (tên, VLANID, Enable, TPID);
+  - `Bridge.1` 14 port (thiếu cổng LAN 4, SSID 11, 12), `Bridge.4` 5 port, port quản lý liệt kê đủ port còn lại;
+  - `InterfaceStack`: số dòng = `InterfaceStackNumberOfEntries`, 15 cặp mong đợi có mặt, mọi tham chiếu đều là object có trong
+    cây (0 tham chiếu treo);
+  - set-same: `Link.LowerLayers` khác → 9007, `TPID` 34984 → 9007 / 33024 → 0, `ManagementPort` → 9007, `Bridge.Enable 1` → 0;
+  - Alias port trùng trong cùng bridge → 9007, ở bridge khác → 0;
+  - `PPP.LowerLayers`: `Link.1` → 9007, `Link.2` → 0; với `vlan_id=30`, `VLANTermination.2` → 0, `vlan_active` 1,
+    `network.if1.device` `pon.30`, đọc lại `VLANTermination.2`; về `Link.2` → `vlan_active` 0, device `pon`.
+- So cặp: equal 1051 + 2 tham chiếu, B 187, 0 tên thiếu cặp.
+- **`tr181-bbf-check`: RESULT PASS** — 585 tham số, 392 chuẩn, 193 vendor; unknown 0, access 0, type 0, status 0.
+- Cổng tĩnh: lib MTK 70/0, automake 0, `tr181-map.py check` 627 = 627; cross-gcc SDK `2_src` lib 70 file, app 17 file, 0 lỗi,
+  không cảnh báo ở file đã sửa.
+- `run.sh all` 25/25 (`ALL_RC=0`, 10:47). Commit code `82ec57f`. Chưa nạp board.
+
+**Chưa chứng minh được (Not established) — cần board:**
+- Thành viên bridge thật: S4 suy ra từ option của `wan.@entry` (cách `hal_network.c` dựng bridge), chưa đối chiếu
+  `/sys/class/net/*/brif` trên board. `tr181_window.sh` đã thêm ghi `bridge_members.txt`, `netdevs.txt`,
+  `network_devices.txt` để so.
+- Tên netdev bridge của kết nối bridged (`network.dev_wanbr<id>.name`): chỉ dựa vào chú thích của `wanip_mtk.c`
+  (`stat_of`), board hiện chưa có kết nối bridged để xem.
+- `PPP.Interface` chưa được browse lần nào thì chưa có `ppp_int_instance`: `IP.Interface.LowerLayers` của kết nối PPP đó đọc
+  rỗng cho tới lần browse đầu (browse của `device_ppp_mtk.c` gán số và commit).
+
+**Phát hiện phụ (không sửa trong S4):**
+- `Ethernet.Interface.5` (cổng WAN, `wan_mtk.c`) có `Name` = `pon` khi uplink là PON. Theo TR-181, PON thuộc
+  `Optical.Interface`/`XPON`, không phải `Ethernet.Interface`. Để S5 hoặc khi có yêu cầu nhà mạng.
+- `VLANTermination.VLANPriority` của kết nối bridged trả 9002, do setter `X_AIS_VLAN8021P` của sản phẩm (điểm 3 đầu
+  `wanip_mtk.c`).
