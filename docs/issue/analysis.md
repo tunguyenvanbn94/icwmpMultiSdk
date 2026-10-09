@@ -5321,3 +5321,50 @@ Còn lại, chưa sửa ở S4b:
 `tr181-bbf-check.py` có thêm `--profile <P:v>[,…]` và `--profiles` (dùng cho S5). Lệnh này đi theo `base`/`extends` của
 profile, rồi báo: lá bắt buộc còn thiếu, lá `readWrite` mà ở đây read-only, bảng profile đòi create/delete mà không làm được.
 Bảng không có dòng nào trong dump thì báo là chưa kiểm được.
+
+## 84. T7 chuẩn hoá S4c: `IPv6Address` / `IPv6Prefix` (`tr181-0018`) (09/10 11:03–11:16)
+
+Sau S4b, `IP.Interface.{i}.IPv6AddressNumberOfEntries` / `IPv6PrefixNumberOfEntries` vẫn đếm địa chỉ/prefix từ netifd mà
+không có bảng tương ứng. File mới `sdk/mtk/dm181/ipv6_181_mtk.c` (+ `.h`, thêm vào `sdk.mk`) dựng hai bảng từ đúng các
+mảng mà lá đếm vẫn đếm (`ipv6181_count`, lá đếm TR-181 của `device_ip_mtk.c` gọi hàm này):
+
+| Bảng | Dòng (theo thứ tự, đánh số 1..n) | Origin |
+|---|---|---|
+| `IPv6Address` | `ipv6-address` trừ link-local `fe80:`, rồi `local-address` của mỗi `ipv6-prefix-assignment` | địa chỉ của assignment: `AutoConfigured` (CPE tự tạo từ prefix được cấp); còn lại: `Static` trên interface `static`, `DHCPv6` trên các interface khác |
+| `IPv6Prefix` | `ipv6-prefix` (prefix được cấp cho CPE), rồi `ipv6-prefix-assignment` (prefix CPE cấp ra trên interface này) | được cấp: `PrefixDelegation` (`Static` trên interface `static`); assignment: `Child`, `ParentPrefix` trỏ tới prefix được cấp của interface khác có chứa nó |
+
+- `IPAddressStatus`/`PrefixStatus`: `Preferred` khi preferred > 0, `Deprecated` khi chỉ còn valid > 0, còn lại `Invalid`.
+- `PreferredLifetime`/`ValidLifetime`: netifd cho số giây còn lại → giờ hiện tại + số giây (UTC). netifd bỏ trường này khi
+  lifetime là vô hạn → `9999-12-31T23:59:59Z`.
+- `IPv6Address.Prefix`: dòng `IPv6Prefix` của cùng interface có chứa địa chỉ, không có thì rỗng.
+- `OnLink`/`Autonomous`: assignment là `true`. `Autonomous` là `false` khi `dhcp.<section>.ra_slaac` = 0. Prefix được cấp
+  là `false`.
+- Sản phẩm không có IPv6 tĩnh riêng: mọi lá ghi được (`Enable`, `IPAddress`, `Prefix`, lifetime, `Anycast`, `StaticType`,
+  `ParentPrefix`, `ChildPrefixBits`, `OnLink`, `Autonomous`) là set-same; hai bảng không có AddObject/DeleteObject.
+  `Alias` qua kho Alias (`cpe-v6addr-<n>`, `cpe-v6prefix-<n>`).
+- Module không claim, gộp vào `Device.IP.Interface` mà `device_ip_mtk.c` claim, giống cách `lan_mtk.c` thêm `IPv4Address`.
+- `check-c-sanity.py`: thêm `gmtime_r`, `json_object_get_int64` vào danh sách tên thư viện. Hai lỗi nó báo là dương tính giả,
+  cross-gcc không báo khai báo ngầm.
+
+**Bằng chứng:**
+- Conditional: `DHCPv6` là Origin của mọi địa chỉ không phải assignment trên interface không tĩnh. netifd không cho biết
+  địa chỉ đến từ IA_NA hay từ SLAAC.
+- Not established trên board: lab hiện không có IPv6 global. `network.interface dump` lúc 10:55 chỉ có link-local: `if0`
+  pppoe `fe80::…`, `if0_6` dhcpv6 không có địa chỉ, `lan` `fe80::1`. Bảng IPv6 trên board sẽ rỗng; đúng giá trị chỉ kiểm được
+  bằng fixture host.
+
+**Kiểm (host):** fixture ubus: `if0` có `fe80::10`, `2001:db8:ff::10/128` (3600/7200) và prefix được cấp `2001:db8:10::/56`
+(preferred 0, valid vô hạn); `lan` (proto static) có assignment `2001:db8:10:1::/64` với địa chỉ `::1`.
+- `run.sh tr181` thêm:
+  - đếm IPoE/LAN `1 1 1 1`;
+  - địa chỉ WAN `DHCPv6 Preferred`, `Prefix` rỗng;
+  - prefix được cấp `PrefixDelegation Inapplicable Deprecated`, valid `9999-12-31T23:59:59Z`, `OnLink false`;
+  - LAN `AutoConfigured`, `Prefix` = `IPv6Prefix.1` của LAN, prefix `Child` với `ParentPrefix` = prefix được cấp của
+    IPoE, `OnLink`/`Autonomous` `true`;
+  - lifetime đúng dạng dateTime;
+  - set-same: địa chỉ khác, `Anycast true`, `Prefix` khác → 9007.
+- Kiểm chung "mọi NumberOfEntries = số dòng" vẫn 0 lệch, giờ có cả dòng IPv6.
+- So cặp PASS (lá đếm IPv6 TR-098/TR-181 cùng mảng nên vẫn bằng nhau). `tr181-map.py check` 653 = 653.
+- **`tr181-bbf-check`: RESULT PASS** — 611 tham số, 418 chuẩn; unknown/access/type/status 0.
+- Cổng tĩnh lib MTK 71/0, automake 0, cross-gcc SDK lib 71 file 0 lỗi.
+- `run.sh all` 25/25 (`ALL_RC=0`, 11:15). Commit code `177f327`.
