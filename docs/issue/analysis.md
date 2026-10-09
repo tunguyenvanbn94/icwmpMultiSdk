@@ -5316,7 +5316,7 @@ Còn lại, chưa sửa ở S4b:
 - `tr181-map.py check` 630 = 630.
 - **`tr181-bbf-check`: RESULT PASS** — 588 tham số, 395 chuẩn, 193 vendor; unknown/access/type/status 0.
 - Cổng tĩnh lib MTK 70/0, automake 0, cross-gcc SDK 0 lỗi.
-- `run.sh all` 25/25 (`ALL_RC=0`, 11:02). Commit code `772b945`. Chưa nạp board.
+- `run.sh all` 25/25 (`ALL_RC=0`, 11:03). Commit code `772b945`. Chưa nạp board.
 
 `tr181-bbf-check.py` có thêm `--profile <P:v>[,…]` và `--profiles` (dùng cho S5). Lệnh này đi theo `base`/`extends` của
 profile, rồi báo: lá bắt buộc còn thiếu, lá `readWrite` mà ở đây read-only, bảng profile đòi create/delete mà không làm được.
@@ -5367,7 +5367,7 @@ mảng mà lá đếm vẫn đếm (`ipv6181_count`, lá đếm TR-181 của `de
 - So cặp PASS (lá đếm IPv6 TR-098/TR-181 cùng mảng nên vẫn bằng nhau). `tr181-map.py check` 653 = 653.
 - **`tr181-bbf-check`: RESULT PASS** — 611 tham số, 418 chuẩn; unknown/access/type/status 0.
 - Cổng tĩnh lib MTK 71/0, automake 0, cross-gcc SDK lib 71 file 0 lỗi.
-- `run.sh all` 25/25 (`ALL_RC=0`, 11:15). Commit code `177f327`.
+- `run.sh all` 25/25 (`ALL_RC=0`, 11:16). Commit code `177f327`.
 
 ## 85. Board: image S3+S4+S4b (`a302687`) (09/10 11:03–11:24)
 
@@ -5421,7 +5421,7 @@ G9 image mới từ 11:24:21 (pid 26150, VmRSS 5828 kB, failure 2 / starts 4 do 
 
 ## 86. T7 chuẩn hoá S4d: DynamicDNS, tên năng lực TR-140, lá secured (`tr181-0019`) (09/10 11:25–15:00)
 
-Phiên bị dừng vì hết usage lúc `run.sh all` đang chạy (11:4x). Phiên tiếp theo (chatlog 98, 14:59) đọc kết quả: 25/25
+Phiên bị dừng vì hết usage trong lúc `run.sh all` đang chạy (log của nó kết thúc 11:43). Phiên tiếp theo (chatlog 98, 14:59) đọc kết quả: 25/25
 `ALL_RC=0`, cây làm việc đúng như lúc dừng. Sau đó commit.
 
 **`tr181-bbf-check.py` có thêm hai loại kiểm trên dump GPV:**
