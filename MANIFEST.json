@@ -450,7 +450,7 @@
     "userspace/public/libs/libicwmp_dm/src/sdk/bdk/dm098/wandevice_bdk.c": "78339a66942afe79e044f1c6ff548d7bfd3faab70b1f6fdd10ca7e7b3aec209a",
     "userspace/public/libs/libicwmp_dm/src/sdk/bdk/dm098/wandevice_bdk.h": "fe2af385a3f375cdadbb30cc67e5b5560dae552a4809a860b3c0dc36c9b03319",
     "userspace/public/libs/libicwmp_dm/src/sdk/bdk/dmbdk.h": "f44bf2231717495fc622b39df66e1a5c832d5635e00843fa96c6fcd3f3e6ede6",
-    "userspace/public/libs/libicwmp_dm/src/sdk/bdk/dmplatform_bdk.c": "c4e2da18c131f2268fb7842592fd58382d96abd3aee7a1d4c021e09b90d4fecb",
+    "userspace/public/libs/libicwmp_dm/src/sdk/bdk/dmplatform_bdk.c": "ee548f1a9fd0ca61ec567faa0e56bfbe31c76741aace387475fa524036393f50",
     "userspace/public/libs/libicwmp_dm/src/sdk/bdk/dmproxy_bdk.c": "3d4b8575900dc654d8facfad398a577675727967e991f7ccaf9573c43ad9a7a3",
     "userspace/public/libs/libicwmp_dm/src/sdk/bdk/sdk.m4": "f4053c5b6ee8b67369fdc7018590bf71ef10542d637f5864ad50f67c39ffeb9c",
     "userspace/public/libs/libicwmp_dm/src/sdk/bdk/sdk.mk": "958a7b6beb5799ddceeaea2d58d23fba3a32c04fb604c6fe828b57e21524bdc1",

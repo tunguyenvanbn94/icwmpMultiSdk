@@ -268,6 +268,19 @@ int bdk_add_object(const char *objpath, unsigned int *newinst)
 		cmsLog_error("addObject %s failed ret=%d", objpath, ret);
 		return bdk_fault_from_ret(ret);
 	}
+	/* The SDK names the nft rules of a port mapping after its Description
+	 * ("<Description>_<proto>_<port>"); left empty it is "(null)_..." and
+	 * deleting the object leaves both rules behind (board, analysis 94).
+	 * A new one, from either model, gets a Description of its own; the ACS
+	 * can still write another. */
+	if (strcmp(objpath, "Device.NAT.PortMapping.") == 0) {
+		char path[96], desc[32];
+
+		snprintf(path, sizeof(path), "Device.NAT.PortMapping.%u.Description", (unsigned int)inst);
+		snprintf(desc, sizeof(desc), "PortMapping%u", (unsigned int)inst);
+		if (bdk_set_value_now(path, NULL, desc))
+			cmsLog_error("addObject %s: cannot set %s", objpath, path);
+	}
 	if (newinst)
 		*newinst = inst;
 	return 0;
