@@ -5807,3 +5807,19 @@ từng byte với cây `2_src` đã build image `c3be28a` (§91). Tag local.
   `release/icwmp_bdk_tr181_7f46319.tar.gz` sha256 `b715605a…`. Chưa có board BDK (PH7).
 - Ghi chú MTK: hook reload của MTK đọc DeviceId trước khi chốt model; trên MTK hai cây đọc identity từ cùng nguồn (easycwmp
   config), nên không đổi sau tag.
+
+## 93. BDK: apply + build `tr181-0023` (`7f46319`) (10/10 09:33–09:37)
+
+Bundle `export.py --sdk bdk` tại `7f46319` (sha256 `b715605a…`, `sha256sum -c` trên máy build OK), stage tạm trong `tunv/` (đã
+xoá), lệnh qua tmux `bdk1` (container `vtanh-brcm`) vào cây `tunv/2_src/bcm963xx`, profile `MO77300EB`:
+
+| Bước | Kết quả |
+|---|---|
+| `apply.py --sdk bdk --sdk-only` | rc 0, backup `.icwmp-backups/20261010-023348-q31jmij5`, `.icwmp-release.json` = `7f46319` |
+| microxml, uci, libicwmp_dm (clean + build), icwmp (clean + build) | rc 0 cả 6 |
+| `make PROFILE=MO77300EB` | rc 0 ngay lần đầu, "Image MO77300EB has been built" |
+| Lỗi compile/link | 0; cảnh báo ở file đã sửa: chỉ `"/*" within comment` có sẵn ở đầu `dmproxy_bdk.c`; `icwmp_bdk.c` không cảnh báo |
+
+Sản phẩm: `libtr098.so.3.0.0` `94f46d88…` (có `dm_entry_model`), `icwmpd` `e303bee6…` (gọi `dm_entry_load_model`),
+`bcmMO77300EB_emmc_squashfs_update.pkgtb` 57.050.860 B `d2b44859…`. Log bước: workspace `logs/20261010_bdk_build_7f46319.log`.
+**Chưa nạp board BDK** — user tự thử hai model sau ([../bdk/icwmp_bdk_debug_guide.md](../bdk/icwmp_bdk_debug_guide.md)).
