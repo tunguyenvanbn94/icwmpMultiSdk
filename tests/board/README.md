@@ -25,6 +25,8 @@ put back before the ACS is opened again.  It stops the agent, so start it detach
 then `python3 docs/issue/tr181-map.py equiv <dir>/tr098.gpv <dir>/tr181.gpv` on the host.
 Step by step, with the expected output of each command:
 [docs/handover/icwmp_mtk_build_verify_guide.md](../../docs/handover/icwmp_mtk_build_verify_guide.md).
+The whole build, flash, boot-check and board-test loop on both lab boards:
+[docs/handover/icwmp_lab_dev_loop_guide.md](../../docs/handover/icwmp_lab_dev_loop_guide.md).
 
 `bdk_apply_check.sh` (Broadcom BDK, MO77300EB) checks that configuration written through the data model reaches
 the running system, in both models: WAN MTU (stored in the MDM; the SDK does not apply a new MTU to a running

@@ -11,6 +11,8 @@ SDK đích. Lệnh sử dụng và build ở [README repo](../README.md).
    tích hợp SDK, quy ước tên.
 2. [Đã làm gì, đang ở đâu, còn gì](handover/icwmp_progress_matrix.md): bảng tiến độ, gate board PH0, known
    issue, việc để đóng PH0, lộ trình PH1–PH8.
+3. [Vòng dev trên lab](handover/icwmp_lab_dev_loop_guide.md): kết nối board/máy build tự động, build MTK và BDK,
+   kiểm image, nạp an toàn, chờ boot, test trên board và cách đọc PASS/FAIL.
 
 Từ 2026-10-06, mọi tài liệu về kế hoạch, tiến độ và trạng thái được cập nhật **trong `docs/` của repo này**:
 bằng chứng ở [issue/analysis.md](issue/analysis.md) (mục mới nhất ở cuối, hiện §67), trạng thái ở

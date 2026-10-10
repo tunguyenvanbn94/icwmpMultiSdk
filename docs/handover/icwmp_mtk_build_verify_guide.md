@@ -49,7 +49,7 @@ flowchart LR
 | `SDK` | cây build MTK | `/home/nvtu/workspace/openwrt/1_src/2025q3` |
 | `OWRT` | thư mục OpenWrt trong SDK | `$SDK/openwrt-21.02/openwrt-21.02.1_dev` |
 | Container build | docker có toolchain của SDK | `nvtu-openwrt`, user `nvtu` (đường dẫn trong container giống ngoài) |
-| Board | HP2236B | `192.168.1.1`, cắm qua card USB-Ethernet của máy build |
+| Board | HP2236B | `192.168.1.1` lúc giao 08/10; **từ 10/10 là `192.168.10.1`** (`192.168.1.1` nay là board BDK), cắm qua card USB-Ethernet của máy build |
 | Tài khoản SSH board | chỉ có trên image lab có patch dev-access | `DEV_USER`/`DEV_PASS` trong patch của workspace `projects/mtk_openwrt_wifi7/patches/20261005_board_dev_access_feature/` (không ghi ở đây) |
 | ACS | GenieACS của lab | `172.16.0.15`: CWMP `7547`, NBI `7557`. Chỉ tới được từ board |
 
@@ -59,7 +59,7 @@ flowchart LR
 export REPO=$HOME/icwmpMultiSdk          # đổi theo nơi bạn clone
 export SDK=/home/nvtu/workspace/openwrt/1_src/2025q3
 export OWRT=$SDK/openwrt-21.02/openwrt-21.02.1_dev
-export BOARD=192.168.1.1
+export BOARD=192.168.10.1                 # lab từ 10/10 (trước đó 192.168.1.1)
 ```
 
 ## 2. Bản giao này có gì
@@ -355,4 +355,5 @@ wget -q -T 5 -O - "http://172.16.0.15:7557/faults/?query=%7B%22_id%22%3A%7B%22%2
   §65 (tắt shell, K28).
 - Tiến độ và việc còn lại: [icwmp_progress_matrix.md](icwmp_progress_matrix.md).
 - Kiến trúc source: [icwmp_architecture_guide.md](icwmp_architecture_guide.md).
+- Cùng vòng này chạy tự động (askpass, nạp BDK, chờ boot, test board): [icwmp_lab_dev_loop_guide.md](icwmp_lab_dev_loop_guide.md).
 - Test: [../../tests/host/README.md](../../tests/host/README.md), [../../tests/board/README.md](../../tests/board/README.md).
