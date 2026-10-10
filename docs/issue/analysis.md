@@ -5823,3 +5823,36 @@ xoá), lệnh qua tmux `bdk1` (container `vtanh-brcm`) vào cây `tunv/2_src/bcm
 Sản phẩm: `libtr098.so.3.0.0` `94f46d88…` (có `dm_entry_model`), `icwmpd` `e303bee6…` (gọi `dm_entry_load_model`),
 `bcmMO77300EB_emmc_squashfs_update.pkgtb` 57.050.860 B `d2b44859…`. Log bước: workspace `logs/20261010_bdk_build_7f46319.log`.
 **Chưa nạp board BDK** — user tự thử hai model sau ([../bdk/icwmp_bdk_debug_guide.md](../bdk/icwmp_bdk_debug_guide.md)).
+
+## 94. BDK: cấu hình WAN/LAN/Wi-Fi/NAT ghi qua hai model có xuống hệ thống không (`tr181-0024`) (10/10 16:36–17:15)
+
+User (chatlog 105): trước khi release base BDK cho tr181 + tr098, phải chắc ghi cấu hình WAN/LAN/Wi-Fi apply xuống và chạy tốt.
+Board MO77300EB `192.168.1.1` (Wi-Fi của máy host), image `7f46319` (§93), ACS bị blackhole trong lúc thử.
+
+**Công cụ:** `tests/board/bdk_apply_check.sh` — trên board, `tr181` rồi `tr098` (đổi bằng config reload), mỗi ca: đọc → ghi qua
+`ubus call tr069 dm set` (cùng đường SPV của ACS, có cuối session: MDM, RCL, lưu flash) → chờ → kiểm runtime → ghi lại giá trị
+cũ → kiểm lại. Board thiếu `head/wc/base64/iptables/nohup`; script chạy tách bằng `( trap '' HUP; sh … ) &`, đẩy lên bằng heredoc
+qua PTY của CLI CMS (bỏ TAB), so md5 hai đầu.
+
+**Kết quả** (lần 2, `logs/20261010_bdk_apply_check_7f46319.log` của workspace; 83 PASS, 4 FAIL = NAT):
+
+| Ca | tr181 | tr098 | Runtime kiểm |
+|---|---|---|---|
+| LAN pool MinAddress + lease | PASS | PASS | `/var/udhcpd/udhcpd.conf` `start`, `option lease`; dhcpd chạy |
+| Wi-Fi guest 2.4 GHz (`wl2.3`): SSID, passphrase, Enable | PASS | PASS | nvram `wl2.3_ssid`/`_wpa_psk`, `wl ssid`, `wl bss up`; passphrase đọc `""` (secured); tắt lại thì interface bị gỡ |
+| Kênh 2.4 GHz cố định 11 (20 MHz) | PASS | PASS (độ rộng qua `X_MARUSYS_COM_Device.WiFi.Radio.3`) | `wl -i wl2 chanspec` 11 suốt 120 s, `acsd` mode `coex`; trả `Auto` → `select` |
+| WAN `MaxMTUSize` | PASS (MDM lưu) | PASS (MDM lưu) | `eth1.1` vẫn 1500, kể cả sau `IP.Interface.Reset` |
+| NAT PortMapping add/set/del | FAIL | FAIL | add: 2 rule nft (DNAT + forward); del: **rule còn lại** |
+
+**Đã xác định:**
+- **NAT** [Verified trên board]: SDK đặt tên rule nft `"<Description>_<proto>_<port>"`. Description rỗng → `"(null)_tcp_40001"`,
+  DeleteObject trả 0 nhưng hai rule ở lại (cả hai model, vì cùng xuống MDM). Có Description (`icwmptest`) thì xoá gỡ hết sau 10 s.
+  **Sửa (`tr181-0024`):** `bdk_add_object()` (dùng chung cho proxy TR-181 và AddObject `WANxxxConnection.PortMapping` TR-098)
+  ghi `Description = PortMapping<n>` ngay sau khi tạo. Image `253ff6f` build đạt; **chưa nạp board**.
+- **Kênh 2.4 GHz** [Verified]: với `OperatingChannelBandwidth=Auto` + `ExtensionChannel=BelowControlChannel`, SDK ghi chanspec
+  `11l` (40 MHz); `obss_coex`/acsd đưa radio sang 13 rồi 1. Đặt 20 MHz thì giữ kênh. Đây là hành vi SDK/driver, không đổi trong
+  icwmp; ACS muốn kênh cố định trên 2.4 GHz nên đặt độ rộng 20 MHz cùng lúc.
+- **WAN MTU** [Verified trên board]: MDM nhận và lưu, netdev không đổi cả sau Reset; WebUI cũng không có đường áp MTU cho WAN
+  đang chạy (`ethMtu` của `cms_dal` chỉ là mặc định). RCL của IP.Interface không có trong cây source local. Áp lúc boot hay lúc tạo
+  WAN: **Not established**.
+- Chặn ACS bằng `ip route add blackhole <acs>/32` (board không có iptables; firewall là nft).
