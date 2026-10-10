@@ -26,6 +26,13 @@ then `python3 docs/issue/tr181-map.py equiv <dir>/tr098.gpv <dir>/tr181.gpv` on 
 Step by step, with the expected output of each command:
 [docs/handover/icwmp_mtk_build_verify_guide.md](../../docs/handover/icwmp_mtk_build_verify_guide.md).
 
+`bdk_apply_check.sh` (Broadcom BDK, MO77300EB) checks that configuration written through the data model reaches
+the running system, in both models: WAN MTU (stored in the MDM; the SDK does not apply a new MTU to a running
+WAN), LAN DHCP pool (`udhcpd.conf`), a 2.4 GHz guest SSID with its passphrase (nvram, `wl`), a fixed 2.4 GHz
+channel at 20 MHz (`wl chanspec`) and a port mapping add/delete (`nft`).  Every value is put back, the ACS is
+blackholed for the run.  The board's SSH lands in the CMS CLI: `sh`, then push the script with a heredoc (tabs
+expanded) and run it detached, see the header (analysis section 94).
+
 `parity.py` sorts each difference into: equal, dynamic (counters and clocks
 read seconds apart), known (deliberate, each with the place it is written
 down), quote (the shell printed the quotes of an `echo \"...\"` getter) or

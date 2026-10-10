@@ -5856,3 +5856,27 @@ qua PTY của CLI CMS (bỏ TAB), so md5 hai đầu.
   đang chạy (`ethMtu` của `cms_dal` chỉ là mặc định). RCL của IP.Interface không có trong cây source local. Áp lúc boot hay lúc tạo
   WAN: **Not established**.
 - Chặn ACS bằng `ip route add blackhole <acs>/32` (board không có iptables; firewall là nft).
+
+## 95. BDK: nạp image `253ff6f`, kiểm cấu hình hai model PASS — base BDK (10/10 17:40–18:02)
+
+User (chatlog 106) cho nạp nếu không làm hỏng mạch, giống đường WebUI.
+
+**Nạp an toàn** (dual bank, khác WebUI ở chỗ thử một lần):
+- Trước: `bcm_bootstate` booted First seq 968 (image `7f46319`, commit 1), Second seq 967. Sao lưu `/data/.kernel_nvram.setting`,
+  `/mnt/nvram/nvram.nvm`, `nvram show` về máy host (ngoài git), md5 khớp.
+- Image thường `bcmMO77300EB_emmc_squashfs_update.pkgtb` (`a1ee65cb…`; thư viện flash của sản phẩm nhận cả image thường lẫn
+  `.enc` Marusys, `bcm_imgutil.c` `validateEncryptedImage` là nhánh sau) chuyển lên `/tmp` bằng `nc -l` trên board, md5 khớp.
+  Không dùng file `_loader`.
+- `bcm_flasher`: compat `flash=emmc;chip=6765;model=MO77300EB;…;fstype=squashfs`, ghi bootfs + rootfs bank 2, metadata seq 969.
+- `bcm_bootstate 3` → `BOOT_SET_PART2_IMAGE_ONCE` (boot bank mới một lần, lỗi thì U-Boot về First). WebUI dùng
+  `BOOT_SET_NEW_IMAGE` (chuyển hẳn).
+- Sau reboot (3 phút): booted Second seq 969, **tự commit** (`BOOT_SET_PART2_IMAGE`), `libtr098` `bee0d38f…`, NVRAM md5 không
+  đổi, model `tr181`, phiên ACS success. First (image `7f46319`) còn nguyên để quay về (`bcm_bootstate 5`).
+
+**`bdk_apply_check.sh` trên image `253ff6f`: RESULT PASS** (87 PASS, 0 FAIL; workspace `logs/20261010_bdk_apply_check_253ff6f.log`):
+LAN pool/lease, Wi-Fi guest SSID/passphrase/enable, kênh 2.4 GHz cố định ở 20 MHz, WAN MTU lưu trong MDM, port mapping tự có
+`Description` (`PortMapping6` tr181, `PortMapping7` tr098) và xoá gỡ hết rule nft — cả `tr181` lẫn `tr098`. Board sau kiểm:
+không còn rule thử, ACS mở, cấu hình như trước.
+
+**Base BDK:** tag `release/bdk-tr181-tr098-20261010`. Giới hạn của SDK đã biết (không sửa trong icwmp): MTU mới không áp cho WAN
+đang chạy; kênh cố định 2.4 GHz cần độ rộng 20 MHz; cây TR-181 của MDM lệch chuẩn (22 tên lạ, 12 access, 23 status — `logs/20261010_bdk_tr181_bbf_check.txt`).
