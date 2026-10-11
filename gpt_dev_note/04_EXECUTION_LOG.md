@@ -36,3 +36,10 @@
 - Source branch: origin/dev_181 (fetched immediately before branch creation)
 - Code runtime: no changes
 - Status: ready to commit documentation
+
+## Phase PH-G1 — imported preflight on actual checkout
+- Base: 76eb0f543fd72f08a71460345cd80db088c2eb45
+- Unit tests: PASS (see reports/phase_g1_unit_tests.txt)
+- Static advisory check: DONE (see reports/phase_g1_preflight.md)
+- Important: outstanding severity ERROR/WARN requires manual triage; this phase only adds a read-only guard.
+- SDK build and board runtime: NOT RUN

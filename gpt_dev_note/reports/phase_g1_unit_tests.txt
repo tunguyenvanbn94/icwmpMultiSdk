@@ -1,0 +1,12 @@
+test_bdk_sample_active_vs_comment (test_check_multisdk_gates.PreflightTests.test_bdk_sample_active_vs_comment) ... ok
+test_clean_layout (test_check_multisdk_gates.PreflightTests.test_clean_layout) ... ok
+test_cli_strict_fails_and_report_generated (test_check_multisdk_gates.PreflightTests.test_cli_strict_fails_and_report_generated) ... ok
+test_missing_app_sdk_is_error (test_check_multisdk_gates.PreflightTests.test_missing_app_sdk_is_error) ... ok
+test_required_sdk_missing (test_check_multisdk_gates.PreflightTests.test_required_sdk_missing) ... ok
+test_root_platform_hook_warning (test_check_multisdk_gates.PreflightTests.test_root_platform_hook_warning) ... ok
+test_sdk_macro_comment_ignored (test_check_multisdk_gates.PreflightTests.test_sdk_macro_comment_ignored) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.037s
+
+OK

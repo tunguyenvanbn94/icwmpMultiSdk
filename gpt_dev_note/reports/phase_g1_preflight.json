@@ -1,0 +1,37 @@
+{
+  "root": ".",
+  "findings": [
+    {
+      "code": "BDK_SAMPLE_IN_BUILD",
+      "severity": "ERROR",
+      "file": "userspace/public/libs/libicwmp_dm/src/sdk/bdk/sdk.mk",
+      "line": 19,
+      "detail": "BDK_SAMPLE_OBJECT is enabled in SDK compile flags",
+      "action": "Move behind an explicit non-production debug/developer build profile"
+    },
+    {
+      "code": "ROOT_SELECTED_BY_SDK_HOOK",
+      "severity": "WARN",
+      "file": "userspace/public/libs/libicwmp_dm/src/dmentry.c",
+      "line": 120,
+      "detail": "DM runtime still references platform root selection",
+      "action": "Review central model resolver and fail-fast unsupported-model behavior"
+    },
+    {
+      "code": "PRODUCT_MODULE_IN_PLATFORM",
+      "severity": "INFO",
+      "file": "userspace/public/libs/libicwmp_dm/src/sdk/mtk/dm098/x_ais_3rdagent_mtk.c",
+      "line": 0,
+      "detail": "17 platform C source(s) look operator/product-specific",
+      "action": "Classify by product capability and migrate only with ACS parity tests"
+    },
+    {
+      "code": "SDK_MACRO_IN_SHARED_MODEL",
+      "severity": "WARN",
+      "file": "userspace/public/libs/libicwmp_dm/src/tr098/managementserver.c",
+      "line": 238,
+      "detail": "Shared TR-098 binding branches on SDK name",
+      "action": "Move platform behavior to service/SDK hook after verifying semantics"
+    }
+  ]
+}
