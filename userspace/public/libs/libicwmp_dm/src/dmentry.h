@@ -17,9 +17,10 @@ int dm_entry_param_method(struct dmctx *ctx, int cmd, char *inparam, char *arg1,
 int dm_entry_apply(struct dmctx *ctx, int cmd, char *arg1, char *arg2);
 int dm_entry_load_enabled_notify(unsigned int dm_type, unsigned int amd_version, int instance_mode, void (*add_list_value_change)(char *param_name, char *param_data, char *param_type), void (*send_active_value_change)(void));
 int dm_entry_reload_enabled_notify(unsigned int dm_type, unsigned int amd_version, int instance_mode);
-/* cwmp.cpe.datamodel latched for the next contexts: DM_MODEL_TR098 (0) or
- * DM_MODEL_TR181 (1, only if this build has TR-181 modules); call it
- * between sessions (start, config reload).  dm_entry_model() reads it. */
+/* Validate cwmp.cpe.datamodel against linked model modules and latch it.
+ * Return DM_MODEL_TR098 (0), DM_MODEL_TR181 (1), or -1 on invalid/unsupported
+ * config. An error leaves the previously selected model unchanged; callers
+ * must propagate startup/reload failure. Missing option defaults to TR-098. */
 int dm_entry_load_model(void);
 int dm_entry_model(void);
 int adm_entry_get_linker_param(struct dmctx *ctx, char *param, char *linker, char **value);

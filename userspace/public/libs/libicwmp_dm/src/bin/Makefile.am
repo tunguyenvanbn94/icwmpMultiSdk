@@ -16,6 +16,7 @@ libtr098_la_SOURCES =	\
 	../dmuci.c			\
 	../dmcommon.c		\
 	../dm_registry.c		\
+	../dm_model_policy.c	\
 	../wepkey.c
 
 # Portable data model modules: no SDK specific call, every SDK may link them.

@@ -16,3 +16,10 @@
 | Commit | SDK | Model | Check | Level | Result | Log/image/source | Outstanding issue |
 |---|---|---|---|---|---|---|---|
 | *pending real checkout* | — | — | static guard 7 test fixtures | UNIT | PASS locally | `tests/test_check_multisdk_gates.py` | Real code + production sample flags pending |
+
+## PH-G2a acceptance status (11 Oct 2026)
+
+| Commit | SDK | Model | Check | Level | Result | Evidence | Outstanding |
+|---|---|---|---|---|---|---|---|
+| This PH-G2a commit | any | TR098/TR181 | production `dm_model_policy.c` test | ISOLATED HOST C | **37 assertions PASS** | `gpt_dev_note/tests/run_dm_model_policy.sh` | Integration host / SDK / board still required |
+| This PH-G2a commit | MTK/BDK/UCI | both | startup/reload + ACS regression | SDK/BOARD | **NOT RUN** | `07_MODEL_RESOLVER_POLICY.md` | Do not mark phase DONE |

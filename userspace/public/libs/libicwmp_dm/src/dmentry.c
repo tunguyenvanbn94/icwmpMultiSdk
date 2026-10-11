@@ -17,6 +17,7 @@
 #include "sdk/sdk.h"
 #include "root.h"
 #include "dm_registry.h"
+#include "dm_model_policy.h"
 #include "wepkey.h"
 #include <unistd.h>
 #include <sys/wait.h>
@@ -474,39 +475,60 @@ int dm_entry_reload_enabled_notify(unsigned int dm_type, unsigned int amd_versio
 	return 0;
 }
 
-/* Data model the agent serves, latched from cwmp.cpe.datamodel.  icwmpd
- * calls dm_entry_load_model() at start and at every config reload, i.e.
- * between sessions, so a DataModel the ACS writes (X_HNI_Icwmp.DataModel)
- * takes effect at the next session, never half way through one.  The SDK's
- * dm_platform_select_root() follows it (mtk, and bdk through
- * bdk_proxy_load_mode()).  "tr181" needs TR-181 modules in this
- * build: without them TR-098 stays and the log says why. */
+/* ACS-visible model is selected from a validated UCI option and compiled
+ * registry modules.  On a bad/unsupported explicit setting, return -1 and
+ * preserve the previous latch; callers must fail startup/reload, not silently
+ * expose InternetGatewayDevice. in place of Device.  Missing option retains
+ * the legacy product default TR-098 until per-product profiles are introduced.
+ */
 static int dm_latched_model = DM_MODEL_TR098;
 
 int dm_entry_load_model(void)
 {
-	/* a private UCI context, same default confdir as uci_ctx: no dm
-	 * context, so this is safe while another thread walks the tree (the
-	 * reload after "ubus call tr069 dm set" runs outside mutex_session_send) */
 	struct uci_context *c = uci_alloc_context();
 	struct uci_ptr ptr = {0};
 	char key[] = "cwmp.cpe.datamodel";
-	int m = DM_MODEL_TR098;
+	const char *requested = NULL;
+	enum dm_model_policy_choice selected = DM_MODEL_POLICY_TR098;
+	enum dm_model_policy_status status;
+	unsigned int available = 0;
+	int rc, result = -1;
 
-	if (c) {
-		if (uci_lookup_ptr(c, &ptr, key, true) == UCI_OK && (ptr.flags & UCI_LOOKUP_COMPLETE) &&
-		    ptr.o && ptr.o->type == UCI_TYPE_STRING && ptr.o->v.string &&
-		    strcasecmp(ptr.o->v.string, "tr181") == 0) {
-			if (dm_registry_count(DM_MODEL_TR181) > 0)
-				m = DM_MODEL_TR181;
-			else
-				fprintf(stderr, "libtr098: cwmp.cpe.datamodel=tr181 but this build has no TR-181 tree, "
-				        "serving TR-098\n");
-		}
-		uci_free_context(c);
+	if (!c) {
+		fprintf(stderr, "libtr098: cannot allocate UCI context for data-model selection\n");
+		return -1;
 	}
-	dm_latched_model = m;
-	return m;
+
+	rc = uci_lookup_ptr(c, &ptr, key, true);
+	if (rc == UCI_OK && (ptr.flags & UCI_LOOKUP_COMPLETE)) {
+		if (!ptr.o || ptr.o->type != UCI_TYPE_STRING || !ptr.o->v.string) {
+			fprintf(stderr, "libtr098: cwmp.cpe.datamodel must be a string\n");
+			goto out;
+		}
+		requested = ptr.o->v.string;
+	} else if (rc != UCI_OK && rc != UCI_ERR_NOTFOUND) {
+		fprintf(stderr, "libtr098: cannot read cwmp.cpe.datamodel (UCI error %d)\n", rc);
+		goto out;
+	}
+
+	if (dm_registry_count(DM_MODEL_TR098) > 0)
+		available |= DM_MODEL_CAP_TR098;
+	if (dm_registry_count(DM_MODEL_TR181) > 0)
+		available |= DM_MODEL_CAP_TR181;
+	status = dm_model_policy_resolve(requested, DM_MODEL_POLICY_TR098,
+	                                 available, &selected);
+	if (status != DM_MODEL_POLICY_OK) {
+		fprintf(stderr, "libtr098: cwmp.cpe.datamodel rejected (%s), "
+		                "keeping previously selected model\n",
+		        dm_model_policy_status_name(status));
+		goto out;
+	}
+
+	dm_latched_model = selected == DM_MODEL_POLICY_TR181 ? DM_MODEL_TR181 : DM_MODEL_TR098;
+	result = dm_latched_model;
+out:
+	uci_free_context(c);
+	return result;
 }
 
 int dm_entry_model(void)

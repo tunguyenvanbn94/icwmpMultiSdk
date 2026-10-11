@@ -43,3 +43,14 @@
 - Static advisory check: DONE (see reports/phase_g1_preflight.md)
 - Important: outstanding severity ERROR/WARN requires manual triage; this phase only adds a read-only guard.
 - SDK build and board runtime: NOT RUN
+
+## 2026-10-11 — PH-G2a — central model selection validation
+
+- Connected GitHub read/write; observed `dev_gpt` HEAD `29d314a`, base `dev_181` `76eb0f5`. No change to upstream branches.
+- Read current runtime source, both SDK hooks, UCI reference, build source list, registry and existing host tests.
+- Added platform-neutral C model policy and changed all three app SDK hooks to propagate validation failure.
+- Local isolated C policy test: 37 assertions PASS (`-Wall -Wextra -Werror -pedantic`).
+- Static patch anchors: 11 existing files, all matched exactly against connected GitHub file contents.
+- Host `tests/host/run.sh all`: NOT RUN here (SDK/host deps unavailable).
+- MTK/BDK SDK build, board, ACS, soak: NOT RUN. PH-G2a remains PENDING final integration acceptance.
+- Follow-up: verify invalid model error paths, valid TR-098/TR-181 ACS sessions and profile defaults on both boards before enabling production.

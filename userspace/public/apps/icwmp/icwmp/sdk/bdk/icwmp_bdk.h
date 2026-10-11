@@ -72,7 +72,7 @@ int  icwmp_bdk_sync_uci_only_to_mdm(void);
 /* cwmp.cpe.datamodel: 1 = tr181 (libtr098 root Device., generic HAL
  * passthrough), 0 = tr098 (InternetGatewayDevice. tree).  Read at init. */
 int  icwmp_bdk_tr181_mode(void);
-void icwmp_bdk_load_mode(void);        /* (re)read it: init, cwmp_config_reload() */
+int  icwmp_bdk_load_mode(void);        /* -1 on invalid/unsupported model */
 
 /* actions used by external_bdk.c */
 void icwmp_bdk_reboot(const char *requestor);

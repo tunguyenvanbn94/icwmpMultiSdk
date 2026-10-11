@@ -79,6 +79,12 @@ wait_done() {	# wait_done <seconds>
 alive() { kill -0 "$(cat "$RUN/icwmpd.pid" 2>/dev/null)" 2>/dev/null; }
 
 do_unit() {
+	if "$HOST_DIR/../../gpt_dev_note/tests/run_dm_model_policy.sh" > "$RUN/dm_model_policy.unit" 2>&1; then
+		pass "unit: model policy (compiled production module)"
+	else
+		cat "$RUN/dm_model_policy.unit"
+		bad "unit: model policy"
+	fi
 	H=$HOST_DIR/harness
 	CF="-std=gnu11 -g -Wno-comment -DDM_SDK_MTK=1 -DDM_PLATFORM_MTK=1 -DDM_MTK_SCRIPT_COMPAT=1 -DCUSTOM_PREFIX=\"X_HNI_\" -DTR098_VERSION=\"3\""
 	INC="-I$LIB_SRC -I$LIB_SRC/tr098 -I$LIB_SRC/tr098/common -I$LIB_SRC/upnp -I$LIB_SRC/sdk/mtk -I$LIB_SRC/sdk/mtk/dm098 -I$PREFIX/include -I$RUN"

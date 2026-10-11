@@ -93,28 +93,30 @@ int icwmp_bdk_tr181_mode(void)
 	return bdkTr181;
 }
 
-/* init and every config reload ("ubus call tr069 command reload", end of a
- * session that changed the ACS config): the model is latched here for
- * libtr098 as well (dm_entry_load_model(); dmproxy_bdk.c follows
- * dm_entry_model()), so both sides switch together, between sessions, and a
- * switch needs no restart.  "tr181" without a TR-181 module stays TR-098. */
-void icwmp_bdk_load_mode(void)
+/* The app and lib must use the same validated model latch. A rejected
+ * change leaves both bdkTr181 and dm_entry_model() at the previous value. */
+int icwmp_bdk_load_mode(void)
 {
 	struct uci_context *c = uci_alloc_context();
 	char v[32] = "";
 	int was = bdkTr181;
+	int model;
 
 	if (c) {
 		uci_get_str(c, "cwmp.cpe.datamodel", v, sizeof(v));
 		uci_free_context(c);
 	}
-	bdkTr181 = dm_entry_load_model() ? 1 : 0;
+	model = dm_entry_load_model();
+	if (model < 0) {
+		cmsLog_error("invalid/unsupported cwmp.cpe.datamodel; retaining previous model");
+		return -1;
+	}
+	bdkTr181 = model ? 1 : 0;
 	if (bdkTr181 != was)
 		cmsLog_notice("data model: %s (cwmp.cpe.datamodel='%s')",
 		              bdkTr181 ? "TR-181 Device." : "TR-098 InternetGatewayDevice.", v);
-	/* cwmp.cpe.log_severity may have changed too (icwmp re-reads it in
-	 * global_conf_init); the CMS log level of the BDK glue follows it */
 	bdk_set_cms_log_level();
+	return 0;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -352,7 +354,10 @@ int icwmp_bdk_init(void)
 	}
 
 	bdkTr181 = -1;                 /* force the notice on the first load */
-	icwmp_bdk_load_mode();
+	if (icwmp_bdk_load_mode() != 0) {
+		icwmp_bdk_cleanup();
+		return -1;
+	}
 
 	/* ManagementServer: MDM (WebUI / tr69_mdmcli) wins where it has a value,
 	 * a value only present in UCI (uci set ... + commit on the board) is kept
@@ -907,7 +912,7 @@ int icwmp_platform_config_reload(void)
 	return 0;
 }
 
-void icwmp_platform_config_reloaded(struct cwmp *cwmp)
+int icwmp_platform_config_reloaded(struct cwmp *cwmp)
 {
 	/* the Inform DeviceId is cached at init; on BDK it can be overridden
 	 * from UCI (cwmp.cpe.manufacturer/oui/product_class/serial_number, see
@@ -916,13 +921,15 @@ void icwmp_platform_config_reloaded(struct cwmp *cwmp)
 	/* cwmp.cpe.datamodel may have been switched (tr098 <-> tr181): latch it
 	 * first, so the identity below is read from the model the next session
 	 * serves (libtr098 follows the latch, dmproxy_bdk.c) */
-	icwmp_bdk_load_mode();
+	if (icwmp_bdk_load_mode() != 0)
+		return -1;
 	FREE(cwmp->deviceid.manufacturer);
 	FREE(cwmp->deviceid.oui);
 	FREE(cwmp->deviceid.serialnumber);
 	FREE(cwmp->deviceid.productclass);
 	FREE(cwmp->deviceid.softwareversion);
 	cwmp_get_deviceid(cwmp);
+	return 0;
 }
 
 int icwmp_platform_uloop_register(void)

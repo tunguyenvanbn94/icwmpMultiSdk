@@ -13,6 +13,11 @@ the easycwmp function library.  Board testing is still needed.
 
 ## Use
 
+PH-G2a: `tests/host/run.sh unit` now compiles and tests the production
+`dm_model_policy.c` directly. Independently, `gpt_dev_note/tests/run_dm_model_policy.sh`
+checks the same policy without SDK dependencies. Full init/reload regression,
+MTK/BDK image builds and board tests are required before PH-G2a is DONE.
+
 In a **throwaway** Linux container (setup overwrites `/etc/config`,
 `/usr/sbin/icwmp`, … and starts ubusd), Debian/Ubuntu packages:
 `build-essential cmake autoconf automake libtool pkg-config rsync git python3

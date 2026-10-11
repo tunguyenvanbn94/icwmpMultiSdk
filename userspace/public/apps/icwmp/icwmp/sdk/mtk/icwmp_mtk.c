@@ -255,7 +255,14 @@ int icwmp_platform_init(void)
 	}
 	icwmp_mtk_sync_easycwmp_to_cwmp();
 	/* TR-098 or TR-181 (cwmp.cpe.datamodel), latched until the next reload */
-	CWMP_LOG(INFO, "data model: %s", dm_entry_load_model() ? "TR-181 Device." : "TR-098 InternetGatewayDevice.");
+	{
+		int model = dm_entry_load_model();
+		if (model < 0) {
+			CWMP_LOG(ERROR, "invalid or unsupported cwmp.cpe.datamodel at startup");
+			return -1;
+		}
+		CWMP_LOG(INFO, "data model: %s", model ? "TR-181 Device." : "TR-098 InternetGatewayDevice.");
+	}
 	return 0;
 }
 
@@ -264,8 +271,14 @@ int icwmp_platform_config_reload(void)
 	return icwmp_mtk_sync_easycwmp_to_cwmp();
 }
 
-void icwmp_platform_config_reloaded(struct cwmp *cwmp)
+int icwmp_platform_config_reloaded(struct cwmp *cwmp)
 {
+	int model = dm_entry_load_model();
+
+	if (model < 0) {
+		CWMP_LOG(ERROR, "model change rejected; keeping previous model");
+		return -1;
+	}
 	/* easycwmp.@device[0].* (identity) may have been refreshed by the init
 	 * script or overridden in cwmp.cpe.*: rebuild the cached DeviceId */
 	FREE(cwmp->deviceid.manufacturer);
@@ -276,7 +289,8 @@ void icwmp_platform_config_reloaded(struct cwmp *cwmp)
 	cwmp_get_deviceid(cwmp);
 	/* cwmp.cpe.datamodel may have been switched (ACS X_HNI_Icwmp.DataModel,
 	 * WebUI, uci): the next session serves the new root */
-	CWMP_LOG(INFO, "data model: %s", dm_entry_load_model() ? "TR-181 Device." : "TR-098 InternetGatewayDevice.");
+	CWMP_LOG(INFO, "data model: %s", model ? "TR-181 Device." : "TR-098 InternetGatewayDevice.");
+	return 0;
 }
 
 int icwmp_platform_uloop_register(void)

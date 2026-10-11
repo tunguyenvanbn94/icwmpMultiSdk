@@ -57,9 +57,10 @@ int icwmp_platform_init(void);
  * record.  Returns 1 when something changed (informative). */
 int icwmp_platform_config_reload(void);
 
-/* after global_conf_init() at reload: the platform may have changed the
- * identity (DeviceId of the Inform) or the data model root */
-void icwmp_platform_config_reloaded(struct cwmp *cwmp);
+/* After global_conf_init() at reload: validate and latch the requested
+ * data model before refreshing DeviceId. Return nonzero on invalid model;
+ * do not change the running model when validation fails. */
+int icwmp_platform_config_reloaded(struct cwmp *cwmp);
 
 /* uloop thread, before uloop_run(): platform fds/events */
 int icwmp_platform_uloop_register(void);

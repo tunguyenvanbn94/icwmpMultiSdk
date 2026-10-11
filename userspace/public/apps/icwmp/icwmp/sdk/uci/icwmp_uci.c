@@ -9,10 +9,11 @@
  */
 #include "cwmp.h"
 #include "sdk/sdk.h"
+#include <icwmp_dm/dmentry.h>
 
 int icwmp_platform_init(void)
 {
-	return 0;
+	return dm_entry_load_model() < 0 ? -1 : 0;
 }
 
 int icwmp_platform_config_reload(void)
@@ -20,9 +21,10 @@ int icwmp_platform_config_reload(void)
 	return 0;
 }
 
-void icwmp_platform_config_reloaded(struct cwmp *cwmp)
+int icwmp_platform_config_reloaded(struct cwmp *cwmp)
 {
 	(void)cwmp;
+	return dm_entry_load_model() < 0 ? -1 : 0;
 }
 
 int icwmp_platform_uloop_register(void)

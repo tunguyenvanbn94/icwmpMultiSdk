@@ -1420,7 +1420,8 @@ int cwmp_config_reload(struct cwmp *cwmp)
      * easycwmp.@device[0] at start, so a "ubus call tr069 command reload"
      * must pick the new identity up as well; bdk also re-reads
      * cwmp.cpe.datamodel (tr098 <-> tr181) */
-    icwmp_platform_config_reloaded(cwmp);
+    if ((error = icwmp_platform_config_reloaded(cwmp)))
+        return error;
     dm_entry_reload_enabled_notify(DM_CWMP, cwmp->conf.amd_version, cwmp->conf.instance_mode);
     return CWMP_OK;
 }
